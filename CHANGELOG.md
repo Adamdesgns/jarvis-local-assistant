@@ -1,5 +1,30 @@
 # JARVIS Changelog
 
+## 0.8.0 — July 13, 2026
+
+Phase 3 of the roadmap: the smarter local brain.
+
+### Added
+- Structured tool calling: the local Ollama model can use a documented set
+  of safe tools (add tasks, list tasks, save and search notes, search
+  files, open approved apps, read the clock) — capped at two tool rounds.
+  Destructive and approval-gated actions are deliberately not callable by
+  the model; they remain deterministic router commands with approval cards.
+- Conversation sessions: follow-up questions work, kept per project; say
+  "new conversation" to clear the context. The active project is part of
+  the model's context.
+- Streaming replies: local answers appear as they generate, with a STOP
+  button (or Escape) that cancels cleanly.
+- Model size presets: Small (qwen3:4b), Balanced (qwen3:8b), Advanced
+  (qwen3:14b), or a custom model name.
+- Document Q&A: "Ask my documents: what preheat does P91 need?" retrieves
+  excerpts from approved folders and answers only from them, citing the
+  source filenames.
+
+### Verification
+- 25 automated tests pass; syntax checks pass; audit reports 0
+  vulnerabilities.
+
 ## 0.7.0 — July 13, 2026
 
 Phase 2 of the roadmap: the daily-assistant release.
