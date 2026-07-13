@@ -1,8 +1,21 @@
 # JARVIS Roadmap and Claude Handoff
 
-Updated: July 12, 2026  
-Current release: 0.6.0  
+Updated: July 13, 2026  
+Current release: 0.8.1  
 Primary user: Adam — a programming novice. Explain every manual step in plain English, one action at a time.
+
+## Queued for the next session (agreed July 13, 2026)
+
+1. Work through Adam's morning test feedback on 0.8.1 first — bugs before features.
+2. Add **Anthropic Claude as a third Cloud Brain option** beside OpenAI and
+   Ollama: encrypted key storage via safeStorage, model picker, SAVE KEY &
+   TEST button, and honest prepaid-credit guidance, mirroring the OpenAI
+   card in Settings. (Adam approved this on July 13.)
+3. Then the Phase 4 decisions: local vision model download (~4–6 GB) for
+   "look at my screen", and whether bundling Playwright's size cost is
+   acceptable for the giveaway installer.
+
+Note: Phases 1–3 below are complete as of 0.8.1 (see CHANGELOG.md).
 
 ## The goal
 
