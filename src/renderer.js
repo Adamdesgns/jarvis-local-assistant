@@ -538,7 +538,7 @@ async function executeCommand(command) {
   else setCoreState('processing', 'ROUTING LOCAL COMMAND');
   setResponse(`› ${text}`);
   try {
-    const result = await window.jarvis.submitCommand(text);
+    const result = await window.jarvis.submitCommand(text, state.activeProject);
     setResponse(result.response);
     if (result.tasks) renderTasks(result.tasks);
     if (result.memories || result.source === 'memory') renderMemories(await window.jarvis.memories.list());

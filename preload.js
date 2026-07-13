@@ -9,7 +9,7 @@ function on(channel, callback) {
 contextBridge.exposeInMainWorld('jarvis', {
   bootstrap: () => ipcRenderer.invoke('bootstrap'),
   telemetry: () => ipcRenderer.invoke('telemetry'),
-  submitCommand: (text) => ipcRenderer.invoke('command:submit', text),
+  submitCommand: (text, project) => ipcRenderer.invoke('command:submit', { text, project }),
   resolveApproval: (id, approved) => ipcRenderer.invoke('approval:resolve', { id, approved }),
   recentActivity: (limit) => ipcRenderer.invoke('activity:recent', limit),
   transcribe: (bytes, mimeType) => ipcRenderer.invoke('voice:transcribe', { bytes, mimeType }),

@@ -16,6 +16,7 @@ const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService } = require('./core/local-voice-service');
 const { FolderWatchService } = require('./core/folder-watch');
+const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
 
 let mainWindow;
@@ -308,7 +309,11 @@ function setupIpc() {
     version: app.getVersion()
   }));
   ipcMain.handle('telemetry', collectTelemetry);
-  ipcMain.handle('command:submit', (_event, text) => router.handle(text));
+  ipcMain.handle('command:submit', (_event, payload) => {
+    const text = typeof payload === 'string' ? payload : payload?.text;
+    const project = typeof payload === 'object' && payload ? payload.project : 'general';
+    return router.handle(text, project);
+  });
   ipcMain.handle('approval:resolve', (_event, payload) => router.resolveApproval(payload.id, Boolean(payload.approved)));
   ipcMain.handle('activity:recent', (_event, limit) => log.recent(Math.min(100, Number(limit) || 20)));
   ipcMain.handle('voice:transcribe', (_event, payload) => localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType));
@@ -421,7 +426,7 @@ app.whenReady().then(async () => {
   tasks = new TaskStore(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });
   documents = new DocumentService({ config, shell, emit: sendEverywhere });
-  ai = new AIService(config);
+  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config }));
   ollama = new OllamaService({ config, emit: sendEverywhere });
   router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log });
   folderWatch = new FolderWatchService({

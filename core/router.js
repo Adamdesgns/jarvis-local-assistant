@@ -54,7 +54,7 @@ class CommandRouter {
     this.pending = new Map();
   }
 
-  async handle(rawText) {
+  async handle(rawText, project = 'general') {
     const text = cleanTarget(rawText);
     if (!text) return this.#result('I didn’t catch a command.', 'local-core');
     const security = classifyCommand(text);
@@ -130,6 +130,9 @@ class CommandRouter {
       const note = text.match(/^(?:remember(?: that)?|make a note(?: that)?|note(?: that)?)\s+(.+)/i)[1];
       this.memory.add(note, detectProject(note, settings.projects));
       result = this.#result(`Remembered: ${note}`, 'memory');
+    } else if (/^(?:new|start a new|reset(?: the)?)\s+(?:conversation|chat|session)$/i.test(text)) {
+      this.ai.resetSession?.(project);
+      result = this.#result('Fresh conversation started. Earlier chat context is cleared.', 'local-core');
     } else if (/^forget\s+(?:that\s+|about\s+)?(.+)/i.test(text)) {
       const query = text.match(/^forget\s+(?:that\s+|about\s+)?(.+)/i)[1];
       const forgotten = this.memory.forget(query);
@@ -291,7 +294,7 @@ class CommandRouter {
       result = this.#result('Local core, task manager, memory, file tools, and safety controls are responding.', 'local-core');
     } else {
       const memories = this.memory.search(text, 4);
-      const aiResult = await this.ai.reply(text, { memories, tasks: this.tasks.list({ status: 'open' }).slice(0, 10) });
+      const aiResult = await this.ai.reply(text, { memories, project, tasks: this.tasks.list({ status: 'open' }).slice(0, 10) });
       result = this.#result(aiResult.text, aiResult.source, { detail: aiResult.detail, success: aiResult.ok });
     }
     this.#log(text, result);

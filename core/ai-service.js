@@ -1,6 +1,27 @@
+const { toolSpecs, executeToolCall } = require('./tool-registry');
+
 class AIService {
-  constructor(config) {
+  constructor(config, registry = null) {
     this.config = config;
+    this.registry = registry;
+    // Rolling conversation history per project so follow-up questions work.
+    this.sessions = new Map();
+  }
+
+  #history(project) {
+    const key = String(project || 'general').toLowerCase();
+    if (!this.sessions.has(key)) this.sessions.set(key, []);
+    return this.sessions.get(key);
+  }
+
+  #remember(project, userText, assistantText) {
+    const history = this.#history(project);
+    history.push({ role: 'user', content: userText }, { role: 'assistant', content: assistantText });
+    while (history.length > 12) history.shift();
+  }
+
+  resetSession(project) {
+    this.sessions.delete(String(project || 'general').toLowerCase());
   }
 
   prompt(settings, context = {}) {
@@ -9,11 +30,12 @@ class AIService {
     return [
       `You are ${settings.assistantName || 'JARVIS'}, ${settings.profileName || 'the user'}'s desktop assistant.`,
       settings.personality,
+      context.project && context.project !== 'general' ? `The user is currently working on the ${context.project} project.` : '',
       'Keep spoken answers concise. Help with organization, files, tasks, reminders, and desktop assistance.',
       'Never claim that a computer action happened unless a local tool result confirms it.',
       `Relevant memory:\n${memories}`,
       `Open tasks:\n${tasks}`
-    ].join('\n');
+    ].filter(Boolean).join('\n');
   }
 
   async cloudReply(text, context = {}) {
@@ -41,6 +63,7 @@ class AIService {
         .flatMap((item) => item.content || [])
         .find((item) => item.type === 'output_text')?.text;
       if (!String(output || '').trim()) throw new Error('OpenAI returned no text.');
+      this.#remember(context.project, text, String(output).trim());
       return { ok: true, source: 'openai', text: String(output).trim() };
     } finally {
       clearTimeout(timeout);
@@ -62,24 +85,44 @@ class AIService {
         || installed.find((item) => !/embed/i.test(String(item.name || item.model || '')))
         || installed[0];
       if (!selected) throw new Error('Ollama is running, but it has no model installed.');
-      const response = await fetch(`${baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: String(selected.name || selected.model), stream: false,
-          messages: [
-            { role: 'system', content: this.prompt(settings, context) },
-            { role: 'user', content: text }
-          ],
-          options: { temperature: 0.35, num_ctx: 4096 }
-        }),
-        signal: controller.signal
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error || `Local model returned ${response.status}.`);
-      const output = payload?.message?.content?.trim();
+      const model = String(selected.name || selected.model);
+      const messages = [
+        { role: 'system', content: this.prompt(settings, context) },
+        ...this.#history(context.project),
+        { role: 'user', content: text }
+      ];
+      const chat = async (withTools) => {
+        const response = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model, stream: false, messages,
+            ...(withTools && this.registry ? { tools: toolSpecs(this.registry) } : {}),
+            options: { temperature: 0.35, num_ctx: 4096 }
+          }),
+          signal: controller.signal
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || `Local model returned ${response.status}.`);
+        return payload?.message || {};
+      };
+
+      let message = await chat(true);
+      let usedTools = [];
+      // At most two tool rounds: enough to act and confirm, never a loop.
+      for (let round = 0; round < 2 && Array.isArray(message.tool_calls) && message.tool_calls.length; round += 1) {
+        messages.push(message);
+        for (const call of message.tool_calls.slice(0, 3)) {
+          const outcome = await executeToolCall(this.registry, call);
+          usedTools.push(call.function?.name);
+          messages.push({ role: 'tool', content: JSON.stringify(outcome) });
+        }
+        message = await chat(round === 0);
+      }
+      const output = String(message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
       if (!output) throw new Error('The local model returned no text.');
-      return { ok: true, source: 'ollama', text: output };
+      this.#remember(context.project, text, output);
+      return { ok: true, source: 'ollama', text: output, usedTools };
     } finally {
       clearTimeout(timeout);
     }

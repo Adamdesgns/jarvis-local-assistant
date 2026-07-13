@@ -145,6 +145,43 @@ test('saved routines open their apps and folders', async () => {
   assert.match(alias.response, /opened/i);
 });
 
+test('tool registry exposes only safe tools and executes them', async () => {
+  const { buildToolRegistry, toolSpecs, executeToolCall } = require('../core/tool-registry');
+  const added = [];
+  const registry = buildToolRegistry({
+    tools: { searchFiles: async () => [{ name: 'a.pdf', path: 'C:\\a.pdf', score: 5 }], openApplication: async (name) => ({ ok: true, message: `Opening ${name}.` }) },
+    tasks: { add: (input) => { added.push(input); return input; }, list: () => [] },
+    memory: { add: (text) => ({ text }), search: () => [] },
+    config: {}
+  });
+  const names = registry.map((tool) => tool.name);
+  // Destructive or approval-gated actions must never be model-callable.
+  for (const banned of ['delete', 'trash', 'move', 'rename', 'organize', 'shutdown', 'power', 'shell', 'exec']) {
+    assert.ok(!names.some((name) => name.includes(banned)), `registry must not expose ${banned}`);
+  }
+  assert.equal(new Set(names).size, names.length);
+  const specs = toolSpecs(registry);
+  assert.ok(specs.every((spec) => spec.type === 'function' && spec.function.name && spec.function.parameters));
+  const result = await executeToolCall(registry, { function: { name: 'add_task', arguments: '{"title":"Order fittings"}' } });
+  assert.equal(result.ok, true);
+  assert.equal(added[0].title, 'Order fittings');
+  const unknown = await executeToolCall(registry, { function: { name: 'run_shell', arguments: '{}' } });
+  assert.equal(unknown.ok, false);
+});
+
+test('AI service keeps per-project sessions and resets them', () => {
+  const { AIService } = require('../core/ai-service');
+  const ai = new AIService({ getSettings: () => ({}), getSecret: () => '' });
+  ai.resetSession('anvil');
+  const history = (project) => ai.sessions.get(project) || [];
+  ai.sessions.set('anvil', [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }]);
+  assert.equal(history('anvil').length, 2);
+  ai.resetSession('anvil');
+  assert.equal(history('anvil').length, 0);
+  const prompt = ai.prompt({ personality: 'calm' }, { project: 'anvil', memories: [], tasks: [] });
+  assert.match(prompt, /anvil project/);
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());
