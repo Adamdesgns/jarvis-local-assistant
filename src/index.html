@@ -173,6 +173,12 @@
           <section>
             <h3>LOCAL BRAIN</h3>
             <div class="setup-status"><i id="ollama-light"></i><div><b id="ollama-title">CHECKING OLLAMA</b><span id="ollama-detail">No API key or credits required.</span></div></div>
+            <label>MODEL SIZE<select id="setting-ollama-preset">
+              <option value="qwen3:4b">SMALL · FASTEST · ~3 GB</option>
+              <option value="qwen3:8b">BALANCED · RECOMMENDED · ~5 GB</option>
+              <option value="qwen3:14b">ADVANCED · NEEDS 10+ GB OR RUNS SLOW</option>
+              <option value="custom">CUSTOM MODEL NAME</option>
+            </select></label>
             <label>OLLAMA MODEL<input id="setting-ollama-model" value="qwen3:8b"></label>
             <button type="button" id="connect-ollama" class="primary-action">CONNECT / REPAIR OLLAMA</button>
             <button type="button" id="get-ollama" class="outline-action">INSTALL OLLAMA FOR WINDOWS</button>

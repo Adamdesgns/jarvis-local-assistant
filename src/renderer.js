@@ -604,6 +604,8 @@ function updateFolderLabels() {
 
 function openSettings() {
   $('setting-ollama-model').value = state.settings.ollamaModel || 'qwen3:8b';
+  const presets = ['qwen3:4b', 'qwen3:8b', 'qwen3:14b'];
+  $('setting-ollama-preset').value = presets.includes($('setting-ollama-model').value) ? $('setting-ollama-model').value : 'custom';
   $('setting-ai-mode').value = state.settings.aiMode || 'local';
   $('setting-openai-model').value = state.settings.openaiModel || 'gpt-5-mini';
   $('setting-openai-key').value = '';
@@ -828,6 +830,14 @@ function bindEvents() {
   $('settings-button').addEventListener('click', openSettings);
   document.querySelectorAll('[data-close-settings]').forEach((button) => button.addEventListener('click', () => $('settings-modal').close()));
   $('settings-form').addEventListener('submit', saveSettings);
+  $('setting-ollama-preset').addEventListener('change', () => {
+    const preset = $('setting-ollama-preset').value;
+    if (preset !== 'custom') $('setting-ollama-model').value = preset;
+  });
+  $('setting-ollama-model').addEventListener('input', () => {
+    const presets = ['qwen3:4b', 'qwen3:8b', 'qwen3:14b'];
+    $('setting-ollama-preset').value = presets.includes($('setting-ollama-model').value.trim()) ? $('setting-ollama-model').value.trim() : 'custom';
+  });
   $('install-local-voice').addEventListener('click', async () => { const result = await window.jarvis.setupLocalVoice(); showToast(result.message, 5000); });
   $('open-voice-diagnostics').addEventListener('click', openVoiceDiagnostics);
   $('close-diagnostics').addEventListener('click', () => { finishWakeTest(false); $('voice-diagnostics-modal').close(); });
