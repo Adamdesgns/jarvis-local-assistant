@@ -196,6 +196,29 @@ test('stream accumulator collects text and tool calls; cancel is safe when idle'
   assert.equal(ai.cancelledByUser, true);
 });
 
+test('ask my documents retrieves excerpts and demands cited answers', async () => {
+  let prompted = '';
+  const router = new CommandRouter({
+    config: { getSettings: () => ({ projects: {} }) },
+    tools: {},
+    documents: {
+      searchContents: async () => [
+        { name: 'weld-specs.pdf', path: 'C:\\Docs\\weld-specs.pdf', snippet: 'Preheat to 250F before welding P91 pipe.', score: 4, extension: 'pdf', modifiedAt: new Date().toISOString() }
+      ]
+    },
+    ai: { reply: async (text) => { prompted = text; return { ok: true, source: 'ollama', text: 'Preheat to 250F [weld-specs.pdf].' }; } },
+    memory: { search: () => [] },
+    tasks: {},
+    log: { write: () => {} }
+  });
+  const result = await router.handle('Ask my documents: what preheat does P91 need?');
+  assert.match(prompted, /ONLY these document excerpts/);
+  assert.match(prompted, /weld-specs\.pdf/);
+  assert.match(prompted, /Preheat to 250F/);
+  assert.equal(result.files[0].name, 'weld-specs.pdf');
+  assert.match(result.response, /\[weld-specs\.pdf\]/);
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());

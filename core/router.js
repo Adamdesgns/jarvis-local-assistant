@@ -145,6 +145,24 @@ class CommandRouter {
       result = memories.length
         ? this.#result(memories.map((item) => item.text).join(' • '), 'memory', { memories })
         : this.#result(`I don’t have a saved memory matching “${query}” yet.`, 'memory');
+    } else if (this.documents && /^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)/i.test(text)) {
+      const question = text.match(/^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)/i)[1];
+      const hits = await this.documents.searchContents(question, 5);
+      if (!hits.length) {
+        result = this.#result(`I couldn’t find anything about “${question}” in your approved documents.`, 'documents', { files: [] });
+      } else {
+        const sources = hits.map((hit, index) => `[${index + 1}] ${hit.name}: "${hit.snippet}"`).join('\n');
+        const grounded = [
+          `Answer the question using ONLY these document excerpts. After each fact, cite the source filename in brackets, like [${hits[0].name}].`,
+          'If the excerpts do not contain the answer, say that plainly.',
+          `Question: ${question}`,
+          `Excerpts:\n${sources}`
+        ].join('\n');
+        const aiResult = await this.ai.reply(grounded, { memories: [], project, onChunk: stream.onChunk, onReset: stream.onReset, tasks: [] });
+        result = this.#result(aiResult.text, aiResult.ok ? 'documents' : aiResult.source, {
+          files: hits, query: question, detail: aiResult.detail, success: aiResult.ok
+        });
+      }
     } else if (this.documents && /^(?:search|find|look)\s+(?:inside|through)\s+(?:my\s+)?documents?\s+(?:for\s+)?(.+)/i.test(text)) {
       const query = text.match(/^(?:search|find|look)\s+(?:inside|through)\s+(?:my\s+)?documents?\s+(?:for\s+)?(.+)/i)[1];
       const files = await this.documents.searchContents(query);
