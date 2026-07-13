@@ -12,6 +12,23 @@ const { AIService } = require('../core/ai-service');
 const { buildDiagnosticReport } = require('../core/local-voice-service');
 const layoutEngine = require('../src/layout-engine.js');
 
+test('file explorer hides broken junctions it can never open', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-explorer-'));
+  try {
+    fs.writeFileSync(path.join(base, 'notes.txt'), 'hello');
+    const target = path.join(base, 'doomed');
+    fs.mkdirSync(target);
+    fs.symlinkSync(target, path.join(base, 'broken-junction'), 'junction');
+    fs.rmdirSync(target);
+    const svc = new ToolService({ config: { getSettings: () => ({}) }, shell: null, app: null });
+    const items = await svc.listDirectory(base);
+    assert.ok(items.some((item) => item.name === 'notes.txt'));
+    assert.ok(!items.some((item) => item.name === 'broken-junction'));
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('layout engine keeps modules inside the workspace at any size', () => {
   const { clampRect, resizeRect, findOpenSpace, nextZ } = layoutEngine;
   // Dragged past every boundary → pulled back inside.

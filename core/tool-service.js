@@ -98,10 +98,14 @@ class ToolService {
       .map(async (entry) => {
         const fullPath = path.join(directory, entry.name);
         let stats;
-        try { stats = await fs.promises.stat(fullPath); } catch {}
+        try { stats = await fs.promises.stat(fullPath); } catch {
+          // Windows junctions such as Documents\My Music deny access and can
+          // never be opened; showing them only produces dead folders.
+          return null;
+        }
         return fileInfo(fullPath, entry, stats);
       }));
-    return items.sort((a, b) => {
+    return items.filter(Boolean).sort((a, b) => {
       if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
       return a.name.localeCompare(b.name);
     });

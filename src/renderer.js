@@ -718,11 +718,17 @@ function bindEvents() {
     renderModuleVisibility(); scheduleLayoutSave(); showToast('Default layout restored.');
   });
 
-  $('file-up').addEventListener('click', () => {
+  $('file-up').addEventListener('click', async () => {
     if (!state.currentDirectory) return showFileRoots();
-    const separator = state.currentDirectory.includes('\\') ? '\\' : '/';
-    const parent = state.currentDirectory.split(separator).slice(0, -1).join(separator);
-    if (parent && parent !== state.currentDirectory) browseDirectory(parent); else showFileRoots();
+    const roots = (await window.jarvis.files.roots()).map((root) => root.replace(/[\\/]+$/, '').toLowerCase());
+    const current = state.currentDirectory.replace(/[\\/]+$/, '');
+    // Navigation stops at the approved roots: going up from a root shows the
+    // roots list instead of erroring on a folder outside the allowed area.
+    if (roots.includes(current.toLowerCase())) return showFileRoots();
+    const separator = current.includes('\\') ? '\\' : '/';
+    const parent = current.split(separator).slice(0, -1).join(separator);
+    const parentAllowed = roots.some((root) => parent.toLowerCase() === root || parent.toLowerCase().startsWith(`${root}${separator}`));
+    if (parent && parentAllowed) browseDirectory(parent); else showFileRoots();
   });
   $('file-close-search').addEventListener('click', () => finishSearchExperience(true));
   $('copy-document-output').addEventListener('click', async () => {
