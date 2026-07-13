@@ -1,5 +1,12 @@
 # JARVIS Changelog
 
+## 0.8.1 — July 13, 2026
+
+- The assistant brain now follows a Fable-style working prompt: lead with
+  the outcome, plain honest sentences, never claim unconfirmed actions,
+  check tools before guessing, and route destructive requests to the
+  approval-carded commands.
+
 ## 0.8.0 — July 13, 2026
 
 Phase 3 of the roadmap: the smarter local brain.
