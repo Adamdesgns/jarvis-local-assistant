@@ -98,6 +98,22 @@ class CommandRouter {
         'tasks',
         { task, tasks: this.tasks.list({ status: 'open' }) }
       );
+    } else if (/^(?:good morning|(?:morning|daily) briefing|brief me|what(?:'s| is) my day)/i.test(text)) {
+      const os = require('node:os');
+      const summary = this.tasks.summary();
+      const today = new Intl.DateTimeFormat([], { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
+      const lines = [`Good ${new Date().getHours() < 12 ? 'morning' : 'afternoon'}. It's ${today}.`];
+      if (!summary.open) lines.push('Your task list is clear.');
+      else {
+        lines.push(`You have ${summary.open} open task${summary.open === 1 ? '' : 's'}${summary.overdue ? `, ${summary.overdue} overdue` : ''}.`);
+        const soon = summary.tasks.filter((task) => task.dueAt).slice(0, 3);
+        for (const task of soon) lines.push(`• ${task.title} — due ${new Intl.DateTimeFormat([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(task.dueAt))}`);
+      }
+      const notes = this.memory.list(2);
+      if (notes.length) lines.push(`Latest note: ${notes[0].text}`);
+      const usedGb = ((os.totalmem() - os.freemem()) / 1024 ** 3).toFixed(1);
+      lines.push(`PC status: ${usedGb} GB memory in use, up ${Math.floor(os.uptime() / 3600)} hours. Calendar is not connected yet.`);
+      result = this.#result(lines.join('\n'), 'tasks', { tasks: this.tasks.list({ status: 'open' }) });
     } else if (/^(?:show|list|what are|what(?:'s| is))\s+(?:on\s+)?my tasks|what do i need to do/i.test(text)) {
       const taskList = this.tasks.list({ status: 'open' });
       result = taskList.length

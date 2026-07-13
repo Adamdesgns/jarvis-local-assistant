@@ -34,6 +34,25 @@ test('completing a repeating task schedules the next occurrence', () => {
   }
 });
 
+test('morning briefing reports tasks, notes, and PC status without AI', async () => {
+  const router = new CommandRouter({
+    config: { getSettings: () => ({ projects: {} }) },
+    tools: {},
+    ai: {},
+    memory: { list: () => [{ text: 'Bench articles need a dek' }], search: () => [] },
+    tasks: {
+      summary: () => ({ open: 2, overdue: 1, tasks: [{ title: 'Call supplier', dueAt: new Date().toISOString() }] }),
+      list: () => []
+    },
+    log: { write: () => {} }
+  });
+  const briefing = await router.handle('Morning briefing');
+  assert.match(briefing.response, /2 open tasks, 1 overdue/);
+  assert.match(briefing.response, /Call supplier/);
+  assert.match(briefing.response, /Bench articles need a dek/);
+  assert.match(briefing.response, /PC status/);
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());
