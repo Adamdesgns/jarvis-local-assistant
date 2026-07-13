@@ -54,7 +54,7 @@ class CommandRouter {
     this.pending = new Map();
   }
 
-  async handle(rawText, project = 'general') {
+  async handle(rawText, project = 'general', stream = {}) {
     const text = cleanTarget(rawText);
     if (!text) return this.#result('I didn’t catch a command.', 'local-core');
     const security = classifyCommand(text);
@@ -294,7 +294,7 @@ class CommandRouter {
       result = this.#result('Local core, task manager, memory, file tools, and safety controls are responding.', 'local-core');
     } else {
       const memories = this.memory.search(text, 4);
-      const aiResult = await this.ai.reply(text, { memories, project, tasks: this.tasks.list({ status: 'open' }).slice(0, 10) });
+      const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, tasks: this.tasks.list({ status: 'open' }).slice(0, 10) });
       result = this.#result(aiResult.text, aiResult.source, { detail: aiResult.detail, success: aiResult.ok });
     }
     this.#log(text, result);

@@ -534,6 +534,8 @@ async function executeCommand(command) {
   const text = String(command || '').trim();
   if (!text) return;
   $('command-input').value = '';
+  state.streamBuffer = '';
+  document.body.classList.add('busy');
   if (looksLikeFileSearch(text)) startSearchExperience(text);
   else setCoreState('processing', 'ROUTING LOCAL COMMAND');
   setResponse(`› ${text}`);
@@ -567,6 +569,9 @@ async function executeCommand(command) {
   } catch (error) {
     const message = friendlyError(error); setResponse(message); showToast(message); setCoreState('error', 'LOCAL COMMAND FAILED');
     if (state.searchActive) setTimeout(() => finishSearchExperience(), 1200);
+  } finally {
+    document.body.classList.remove('busy');
+    state.streamBuffer = '';
   }
 }
 
@@ -900,6 +905,19 @@ function bindEvents() {
   window.jarvis.onWakeDetected(() => {
     if (diagnostics.wakeTimer) return finishWakeTest(true);
     startRecording('wake');
+  });
+  $('ai-stop').addEventListener('click', () => window.jarvis.cancelAI());
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && document.body.classList.contains('busy')) window.jarvis.cancelAI();
+  });
+  window.jarvis.onAIStream(({ piece }) => {
+    state.streamBuffer = (state.streamBuffer || '') + piece;
+    setResponse(state.streamBuffer);
+    setCoreState('speaking', 'LOCAL MODEL RESPONDING');
+  });
+  window.jarvis.onAIStreamReset(() => {
+    state.streamBuffer = '';
+    setResponse('Working with local tools…');
   });
   window.jarvis.onVoiceSetupProgress(({ line }) => {
     $('diag-repair').disabled = true;

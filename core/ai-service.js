@@ -1,5 +1,14 @@
 const { toolSpecs, executeToolCall } = require('./tool-registry');
 
+// Folds one parsed NDJSON chunk from Ollama's streaming chat API into an
+// accumulator of { content, toolCalls }. Exported for tests.
+function accumulateStreamChunk(state, chunk) {
+  const message = chunk?.message || {};
+  if (typeof message.content === 'string' && message.content) state.content += message.content;
+  if (Array.isArray(message.tool_calls)) state.toolCalls.push(...message.tool_calls);
+  return state;
+}
+
 class AIService {
   constructor(config, registry = null) {
     this.config = config;
@@ -22,6 +31,12 @@ class AIService {
 
   resetSession(project) {
     this.sessions.delete(String(project || 'general').toLowerCase());
+  }
+
+  cancel() {
+    this.cancelledByUser = true;
+    try { this.activeController?.abort(); } catch {}
+    this.activeController = null;
   }
 
   prompt(settings, context = {}) {
@@ -74,7 +89,9 @@ class AIService {
     const settings = this.config.getSettings();
     const baseUrl = 'http://127.0.0.1:11434';
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    this.activeController = controller;
+    this.cancelledByUser = false;
+    const timeout = setTimeout(() => controller.abort(), 120000);
     try {
       const tagsResponse = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal });
       if (!tagsResponse.ok) throw new Error(`Ollama connection returned ${tagsResponse.status}.`);
@@ -91,32 +108,65 @@ class AIService {
         ...this.#history(context.project),
         { role: 'user', content: text }
       ];
+      const onChunk = typeof context.onChunk === 'function' ? context.onChunk : null;
       const chat = async (withTools) => {
         const response = await fetch(`${baseUrl}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model, stream: false, messages,
+            model, stream: true, messages,
             ...(withTools && this.registry ? { tools: toolSpecs(this.registry) } : {}),
             options: { temperature: 0.35, num_ctx: 4096 }
           }),
           signal: controller.signal
         });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload?.error || `Local model returned ${response.status}.`);
-        return payload?.message || {};
+        if (!response.ok) {
+          let detail = '';
+          try { detail = (await response.json())?.error; } catch {}
+          throw new Error(detail || `Local model returned ${response.status}.`);
+        }
+        const state = { content: '', toolCalls: [] };
+        let buffered = '';
+        let insideThink = false;
+        const handleLine = (line) => {
+          if (!line) return;
+          let parsed;
+          try { parsed = JSON.parse(line); } catch { return; }
+          const before = state.content.length;
+          accumulateStreamChunk(state, parsed);
+          if (onChunk && state.content.length > before) {
+            // Do not stream the model's <think> scratchpad to the screen.
+            const addition = state.content.slice(before);
+            if (addition.includes('<think>')) insideThink = true;
+            if (!insideThink) onChunk(addition);
+            if (addition.includes('</think>')) insideThink = false;
+          }
+        };
+        for await (const piece of response.body) {
+          buffered += Buffer.from(piece).toString('utf8');
+          let index;
+          while ((index = buffered.indexOf('\n')) >= 0) {
+            handleLine(buffered.slice(0, index).trim());
+            buffered = buffered.slice(index + 1);
+          }
+        }
+        // A final chunk without a trailing newline must still count.
+        handleLine(buffered.trim());
+        return { content: state.content, tool_calls: state.toolCalls };
       };
 
       let message = await chat(true);
       let usedTools = [];
       // At most two tool rounds: enough to act and confirm, never a loop.
       for (let round = 0; round < 2 && Array.isArray(message.tool_calls) && message.tool_calls.length; round += 1) {
-        messages.push(message);
+        messages.push({ role: 'assistant', content: message.content || '', tool_calls: message.tool_calls });
         for (const call of message.tool_calls.slice(0, 3)) {
           const outcome = await executeToolCall(this.registry, call);
           usedTools.push(call.function?.name);
           messages.push({ role: 'tool', content: JSON.stringify(outcome) });
         }
+        // Partial text from the tool-deciding round is superseded.
+        context.onReset?.();
         message = await chat(round === 0);
       }
       const output = String(message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -159,9 +209,10 @@ class AIService {
     }
     try { return await this.localReply(text, context); }
     catch (error) {
+      if (this.cancelledByUser) return { ok: true, source: 'local-core', text: 'Stopped.', cancelled: true };
       return { ok: false, source: 'local-core', text: `I could not reach the local Ollama model. ${error.name === 'AbortError' ? 'The request timed out.' : error.message}`, detail: error.message };
     }
   }
 }
 
-module.exports = { AIService };
+module.exports = { AIService, accumulateStreamChunk };

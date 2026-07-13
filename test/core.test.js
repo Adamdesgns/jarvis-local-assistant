@@ -182,6 +182,20 @@ test('AI service keeps per-project sessions and resets them', () => {
   assert.match(prompt, /anvil project/);
 });
 
+test('stream accumulator collects text and tool calls; cancel is safe when idle', () => {
+  const { accumulateStreamChunk, AIService } = require('../core/ai-service');
+  const state = { content: '', toolCalls: [] };
+  accumulateStreamChunk(state, { message: { content: 'Hel' } });
+  accumulateStreamChunk(state, { message: { content: 'lo' } });
+  accumulateStreamChunk(state, { message: { tool_calls: [{ function: { name: 'add_task', arguments: '{}' } }] } });
+  accumulateStreamChunk(state, {});
+  assert.equal(state.content, 'Hello');
+  assert.equal(state.toolCalls.length, 1);
+  const ai = new AIService({ getSettings: () => ({}), getSecret: () => '' });
+  ai.cancel(); // no active request: must not throw
+  assert.equal(ai.cancelledByUser, true);
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());

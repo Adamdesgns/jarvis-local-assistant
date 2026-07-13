@@ -312,8 +312,12 @@ function setupIpc() {
   ipcMain.handle('command:submit', (_event, payload) => {
     const text = typeof payload === 'string' ? payload : payload?.text;
     const project = typeof payload === 'object' && payload ? payload.project : 'general';
-    return router.handle(text, project);
+    return router.handle(text, project, {
+      onChunk: (piece) => sendEverywhere('ai:stream', { piece }),
+      onReset: () => sendEverywhere('ai:stream-reset', {})
+    });
   });
+  ipcMain.on('ai:cancel', () => ai.cancel());
   ipcMain.handle('approval:resolve', (_event, payload) => router.resolveApproval(payload.id, Boolean(payload.approved)));
   ipcMain.handle('activity:recent', (_event, limit) => log.recent(Math.min(100, Number(limit) || 20)));
   ipcMain.handle('voice:transcribe', (_event, payload) => localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType));
