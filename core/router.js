@@ -130,6 +130,12 @@ class CommandRouter {
       const note = text.match(/^(?:remember(?: that)?|make a note(?: that)?|note(?: that)?)\s+(.+)/i)[1];
       this.memory.add(note, detectProject(note, settings.projects));
       result = this.#result(`Remembered: ${note}`, 'memory');
+    } else if (/^forget\s+(?:that\s+|about\s+)?(.+)/i.test(text)) {
+      const query = text.match(/^forget\s+(?:that\s+|about\s+)?(.+)/i)[1];
+      const forgotten = this.memory.forget(query);
+      result = forgotten
+        ? this.#result(`Forgotten: ${forgotten.text}`, 'memory', { memories: this.memory.list(30) })
+        : this.#result(`I don’t have a saved memory matching “${query}.”`, 'memory');
     } else if (/what do you remember about\s+(.+)/i.test(text)) {
       const query = text.match(/what do you remember about\s+(.+)/i)[1];
       const memories = this.memory.search(query);

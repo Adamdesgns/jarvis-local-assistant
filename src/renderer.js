@@ -281,12 +281,39 @@ function renderMemories(memories = state.memories) {
   state.memories = memories;
   const list = $('memory-list');
   list.replaceChildren();
-  if (!memories.length) { list.innerHTML = '<div class="empty-state">NO SAVED MEMORIES</div>'; return; }
-  for (const memory of memories.slice(0, 30)) {
+  const filter = ($('memory-search')?.value || '').trim().toLowerCase();
+  const visible = filter
+    ? memories.filter((memory) => memory.text.toLowerCase().includes(filter))
+    : memories;
+  if (!visible.length) { list.innerHTML = `<div class="empty-state">${filter ? 'NO MATCHING MEMORIES' : 'NO SAVED MEMORIES'}</div>`; return; }
+  for (const memory of visible.slice(0, 30)) {
     const row = document.createElement('div'); row.className = 'memory-item';
     const text = document.createElement('b'); text.textContent = memory.text;
+    text.title = 'Click to edit';
+    text.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.className = 'task-edit';
+      input.value = memory.text;
+      text.replaceWith(input);
+      input.focus();
+      const commit = async () => {
+        const value = input.value.trim();
+        if (value && value !== memory.text) await window.jarvis.memories.update(memory.id, value);
+        renderMemories(await window.jarvis.memories.list());
+      };
+      input.addEventListener('keydown', (event) => { if (event.key === 'Enter') input.blur(); if (event.key === 'Escape') { input.value = memory.text; input.blur(); } });
+      input.addEventListener('blur', commit);
+    });
+    const forget = document.createElement('button');
+    forget.className = 'task-delete';
+    forget.textContent = '×';
+    forget.title = 'Forget this memory';
+    forget.addEventListener('click', async () => {
+      await window.jarvis.memories.remove(memory.id);
+      renderMemories(await window.jarvis.memories.list());
+    });
     const meta = document.createElement('span'); meta.textContent = `${memory.project || 'general'} · ${new Date(memory.createdAt).toLocaleDateString()}`;
-    row.append(text, meta); list.append(row);
+    row.append(text, forget, meta); list.append(row);
   }
 }
 
@@ -722,6 +749,7 @@ function bindEvents() {
   document.querySelectorAll('[data-task-filter]').forEach((button) => button.addEventListener('click', () => {
     state.taskFilter = button.dataset.taskFilter; document.querySelectorAll('[data-task-filter]').forEach((item) => item.classList.toggle('active', item === button)); renderTasks();
   }));
+  $('memory-search').addEventListener('input', () => renderMemories());
   $('memory-form').addEventListener('submit', async (event) => {
     event.preventDefault(); const text = $('memory-input').value.trim(); if (!text) return;
     await window.jarvis.memories.add(text, state.activeProject); $('memory-input').value = ''; renderMemories(await window.jarvis.memories.list());

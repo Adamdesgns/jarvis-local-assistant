@@ -341,6 +341,8 @@ function setupIpc() {
   ipcMain.handle('tasks:remove', (_event, id) => tasks.remove(id));
   ipcMain.handle('memory:list', () => memory.list(100));
   ipcMain.handle('memory:add', (_event, { text, project }) => memory.add(text, project));
+  ipcMain.handle('memory:update', (_event, { id, text }) => memory.update(id, text));
+  ipcMain.handle('memory:remove', (_event, id) => memory.remove(id));
 
   ipcMain.handle('files:roots', () => config.getSettings().searchRoots || []);
   ipcMain.handle('files:list', async (_event, directory) => {

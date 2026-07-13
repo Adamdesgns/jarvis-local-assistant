@@ -30,7 +30,9 @@ contextBridge.exposeInMainWorld('jarvis', {
   },
   memories: {
     list: () => ipcRenderer.invoke('memory:list'),
-    add: (text, project) => ipcRenderer.invoke('memory:add', { text, project })
+    add: (text, project) => ipcRenderer.invoke('memory:add', { text, project }),
+    update: (id, text) => ipcRenderer.invoke('memory:update', { id, text }),
+    remove: (id) => ipcRenderer.invoke('memory:remove', id)
   },
   files: {
     roots: () => ipcRenderer.invoke('files:roots'),

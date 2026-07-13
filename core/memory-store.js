@@ -50,6 +50,28 @@ class MemoryStore {
   list(limit = 8) {
     return this.items.slice(0, limit);
   }
+
+  update(id, text) {
+    const item = this.items.find((entry) => entry.id === id);
+    if (!item || !String(text || '').trim()) return null;
+    item.text = String(text).trim();
+    this.#persist();
+    return item;
+  }
+
+  remove(id) {
+    const before = this.items.length;
+    this.items = this.items.filter((entry) => entry.id !== id);
+    if (this.items.length !== before) this.#persist();
+    return this.items.length !== before;
+  }
+
+  forget(query) {
+    const match = this.search(query, 1)[0];
+    if (!match) return null;
+    this.remove(match.id);
+    return match;
+  }
 }
 
 module.exports = { MemoryStore };

@@ -125,3 +125,8 @@ dialog{color:var(--text)}dialog::backdrop{background:rgba(0,3,5,.8);backdrop-fil
 .task-priority.high{border-color:#ff665c;color:#ff8d85}
 .task-priority.low{opacity:.55}
 .task-edit{background:rgba(0,0,0,.5);border:1px solid rgba(255,178,31,.4);color:#dcebe9;font:inherit;padding:2px 6px;width:100%}
+
+.memory-search{margin:6px 0 4px;width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,178,31,.2);color:#dcebe9;font-size:11px;padding:5px 8px}
+.memory-item{position:relative}
+.memory-item .task-delete{position:absolute;top:4px;right:4px}
+.memory-item b{cursor:text;padding-right:18px;display:block}

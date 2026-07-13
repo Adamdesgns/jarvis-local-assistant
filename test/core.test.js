@@ -53,6 +53,23 @@ test('morning briefing reports tasks, notes, and PC status without AI', async ()
   assert.match(briefing.response, /PC status/);
 });
 
+test('memory supports edit and forget', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-memory-'));
+  try {
+    const { MemoryStore } = require('../core/memory-store');
+    const store = new MemoryStore(dir);
+    const saved = store.add('Bench articles need a dek');
+    store.add('Anvil invoices go out on Fridays');
+    assert.ok(store.update(saved.id, 'Bench articles need a dek and a companion post'));
+    const forgotten = store.forget('invoices Fridays');
+    assert.match(forgotten.text, /invoices/);
+    assert.equal(store.list(10).length, 1);
+    assert.match(store.list(10)[0].text, /companion post/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());
