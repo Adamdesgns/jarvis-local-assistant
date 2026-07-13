@@ -160,6 +160,7 @@ function applyModuleLayout(name) {
   module.style.top = `${layout.y}%`;
   module.style.width = `${layout.w}%`;
   module.style.height = `${layout.h}%`;
+  module.style.zIndex = String(layout.z || 1);
 }
 
 function renderModuleVisibility() {
@@ -189,50 +190,25 @@ function toggleModule(name, visible) {
   const shouldShow = visible ?? currentlyHidden;
   if (shouldShow) state.hiddenModules = state.hiddenModules.filter((item) => item !== name);
   else if (!currentlyHidden) state.hiddenModules.push(name);
+  if (shouldShow && state.engine) {
+    const rect = state.layout[name] || RESET_LAYOUT[name] || { x: 30, y: 12, w: 32, h: 44 };
+    const visible = Object.entries(state.layout).filter(([key]) => key !== name && !state.hiddenModules.includes(key)).map(([, value]) => value);
+    const covered = visible.reduce((sum, other) => sum + window.JarvisLayout.overlapArea(rect, other), 0);
+    if (!state.layout[name] || covered > rect.w * rect.h * 0.6) state.engine.place(name, { w: rect.w, h: rect.h });
+  }
   renderModuleVisibility();
   scheduleLayoutSave();
   if (name === 'file-explorer' && shouldShow) showFileRoots();
 }
 
 function bindModuleLayout() {
-  document.querySelectorAll('.module').forEach((module) => {
-    const name = module.dataset.module;
-    const header = module.querySelector('.drag-handle');
-    const resize = module.querySelector('.resize-handle');
-
-    header.addEventListener('pointerdown', (event) => {
-      if (!state.editing || event.target.closest('button')) return;
-      const layer = $('module-layer').getBoundingClientRect();
-      const start = { x: event.clientX, y: event.clientY, ...state.layout[name] };
-      header.setPointerCapture(event.pointerId);
-      const move = (moveEvent) => {
-        const dx = (moveEvent.clientX - start.x) / layer.width * 100;
-        const dy = (moveEvent.clientY - start.y) / layer.height * 100;
-        state.layout[name].x = Math.max(0, Math.min(100 - start.w, start.x + dx));
-        state.layout[name].y = Math.max(0, Math.min(100 - start.h, start.y + dy));
-        applyModuleLayout(name);
-      };
-      const up = () => { header.removeEventListener('pointermove', move); header.removeEventListener('pointerup', up); scheduleLayoutSave(); };
-      header.addEventListener('pointermove', move);
-      header.addEventListener('pointerup', up);
-    });
-
-    resize.addEventListener('pointerdown', (event) => {
-      if (!state.editing) return;
-      event.stopPropagation();
-      const layer = $('module-layer').getBoundingClientRect();
-      const start = { x: event.clientX, y: event.clientY, ...state.layout[name] };
-      resize.setPointerCapture(event.pointerId);
-      const move = (moveEvent) => {
-        state.layout[name].w = Math.max(18, Math.min(100 - start.x, start.w + (moveEvent.clientX - start.x) / layer.width * 100));
-        state.layout[name].h = Math.max(22, Math.min(100 - start.y, start.h + (moveEvent.clientY - start.y) / layer.height * 100));
-        applyModuleLayout(name);
-      };
-      const up = () => { resize.removeEventListener('pointermove', move); resize.removeEventListener('pointerup', up); scheduleLayoutSave(); };
-      resize.addEventListener('pointermove', move);
-      resize.addEventListener('pointerup', up);
-    });
+  state.engine = window.JarvisLayout.createEngine({
+    layer: $('module-layer'),
+    layout: state.layout,
+    apply: applyModuleLayout,
+    save: scheduleLayoutSave
   });
+  document.querySelectorAll('.module').forEach((module) => state.engine.attach(module));
 }
 
 function formatDate(value) {
@@ -737,7 +713,8 @@ function bindEvents() {
   document.querySelectorAll('[data-collapse]').forEach((button) => button.addEventListener('click', () => button.closest('.module').classList.toggle('collapsed')));
   $('reset-layout').addEventListener('click', () => {
     state.hiddenModules = ['performance','memory','activity','quick-commands','projects','file-explorer','document-viewer'];
-    state.layout = JSON.parse(JSON.stringify(RESET_LAYOUT));
+    for (const key of Object.keys(state.layout)) delete state.layout[key];
+    Object.assign(state.layout, JSON.parse(JSON.stringify(RESET_LAYOUT)));
     renderModuleVisibility(); scheduleLayoutSave(); showToast('Default layout restored.');
   });
 
@@ -841,7 +818,8 @@ async function initialize() {
     state.memories = bootstrap.memories;
     state.activity = bootstrap.recentActivity;
     state.hiddenModules = [...(state.settings.hiddenModules || [])];
-    state.layout = JSON.parse(JSON.stringify(state.settings.moduleLayout || {}));
+    // Mutate, never reassign: the layout engine holds a reference to this object.
+    Object.assign(state.layout, JSON.parse(JSON.stringify(state.settings.moduleLayout || {})));
     state.voiceStatus = bootstrap.voiceStatus;
     state.cloudConfigured = Boolean(bootstrap.cloudConfigured);
     $('app-version').textContent = `VERSION ${bootstrap.version}`;

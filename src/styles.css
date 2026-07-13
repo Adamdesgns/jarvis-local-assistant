@@ -107,3 +107,16 @@ dialog{color:var(--text)}dialog::backdrop{background:rgba(0,3,5,.8);backdrop-fil
 #diagnostic-result{margin:10px 0 0;min-height:32px;font-size:12px;color:#ffd98f}
 .diagnostic-actions{display:flex;flex-wrap:wrap;gap:8px;padding:8px 20px 20px}
 .diagnostic-actions button{cursor:pointer}
+
+.module .drag-handle{cursor:move;touch-action:none}
+.edge-grip{position:absolute;z-index:5;touch-action:none}
+.edge-grip.edge-n{top:-3px;left:12px;right:12px;height:7px;cursor:ns-resize}
+.edge-grip.edge-s{bottom:-3px;left:12px;right:12px;height:7px;cursor:ns-resize}
+.edge-grip.edge-e{right:-3px;top:12px;bottom:12px;width:7px;cursor:ew-resize}
+.edge-grip.edge-w{left:-3px;top:12px;bottom:12px;width:7px;cursor:ew-resize}
+.edge-grip.edge-ne{top:-4px;right:-4px;width:14px;height:14px;cursor:nesw-resize}
+.edge-grip.edge-sw{bottom:-4px;left:-4px;width:14px;height:14px;cursor:nesw-resize}
+.edge-grip.edge-nw{top:-4px;left:-4px;width:14px;height:14px;cursor:nwse-resize}
+.edge-grip.edge-se{bottom:-4px;right:-4px;width:14px;height:14px;cursor:nwse-resize}
+.layout-editing .edge-grip{background:rgba(255,178,31,.22)}
+.layout-editing .module{outline:1px dashed rgba(255,178,31,.5)}

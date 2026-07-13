@@ -10,6 +10,25 @@ const { CommandRouter, cleanTarget, parseDueDate, extractFileQuery } = require('
 const { ToolService } = require('../core/tool-service');
 const { AIService } = require('../core/ai-service');
 const { buildDiagnosticReport } = require('../core/local-voice-service');
+const layoutEngine = require('../src/layout-engine.js');
+
+test('layout engine keeps modules inside the workspace at any size', () => {
+  const { clampRect, resizeRect, findOpenSpace, nextZ } = layoutEngine;
+  // Dragged past every boundary → pulled back inside.
+  assert.deepEqual(clampRect({ x: -20, y: 130, w: 30, h: 40 }), { x: 0, y: 60, w: 30, h: 40 });
+  // Resizing from the west edge cannot shrink below minimum or walk the module.
+  const shrunk = resizeRect({ x: 40, y: 10, w: 30, h: 40 }, 'w', 25, 0);
+  assert.equal(shrunk.w, layoutEngine.MIN_W);
+  assert.equal(shrunk.x + shrunk.w, 70);
+  // Resizing from the north-east corner grows both axes.
+  const grown = resizeRect({ x: 10, y: 30, w: 30, h: 40 }, 'ne', 10, -10);
+  assert.deepEqual({ w: grown.w, h: grown.h, y: grown.y }, { w: 40, h: 50, y: 20 });
+  // A new module lands in empty space instead of on top of an existing one.
+  const spot = findOpenSpace({ w: 24, h: 30 }, [{ x: 0, y: 0, w: 50, h: 100 }]);
+  assert.ok(spot.x >= 50);
+  // Bring-to-front always yields a higher stacking order.
+  assert.equal(nextZ({ a: { z: 3 }, b: { z: 7 } }), 8);
+});
 
 test('voice diagnostic report states every check and omits secrets', () => {
   const report = buildDiagnosticReport({
