@@ -180,6 +180,11 @@ test('AI service keeps per-project sessions and resets them', () => {
   assert.equal(history('anvil').length, 0);
   const prompt = ai.prompt({ personality: 'calm' }, { project: 'anvil', memories: [], tasks: [] });
   assert.match(prompt, /anvil project/);
+  // The Fable-style behavior rules must stay in the brain prompt.
+  assert.match(prompt, /Lead with the answer/);
+  assert.match(prompt, /Never claim a computer action happened/);
+  assert.match(prompt, /Never invent file names/);
+  assert.match(prompt, /approval card/);
 });
 
 test('stream accumulator collects text and tool calls; cancel is safe when idle', () => {
