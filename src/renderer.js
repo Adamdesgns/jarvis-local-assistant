@@ -411,6 +411,7 @@ async function browseDirectory(directory) {
     $('scan-label').textContent = 'BROWSING LOCAL FILES';
     $('scan-path').textContent = directory;
     $('file-pin').textContent = (state.settings.pinnedFolders || []).includes(directory) ? '★' : '☆';
+    $('file-watch').classList.toggle('active', (state.settings.watchedFolders || []).some((entry) => entry.path === directory));
     renderFileRows(await window.jarvis.files.list(directory));
   } catch (error) { showToast(friendlyError(error)); }
 }
@@ -873,6 +874,15 @@ function bindEvents() {
   $('add-search-root').addEventListener('click', async () => {
     const selected = await window.jarvis.chooseFolder('Add a folder JARVIS may search');
     if (selected && !state.settings.searchRoots.includes(selected)) { state.settings.searchRoots.push(selected); renderSearchRoots(); }
+  });
+  $('file-watch').addEventListener('click', async () => {
+    if (!state.currentDirectory) return showToast('Open a folder first, then watch it.');
+    const watched = [...(state.settings.watchedFolders || [])];
+    const index = watched.findIndex((entry) => entry.path === state.currentDirectory);
+    if (index >= 0) watched.splice(index, 1); else watched.unshift({ path: state.currentDirectory, pattern: '*' });
+    state.settings = await window.jarvis.saveSettings({ watchedFolders: watched.slice(0, 6) });
+    $('file-watch').classList.toggle('active', index < 0);
+    showToast(index >= 0 ? 'Stopped watching this folder.' : 'Watching this folder. You will get a notification when files change.');
   });
   $('approval-deny').addEventListener('click', () => resolveApproval(false));
   $('approval-accept').addEventListener('click', () => resolveApproval(true));

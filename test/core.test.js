@@ -93,6 +93,32 @@ test('opening a file records it in recent files, folders are not recorded', asyn
   }
 });
 
+test('folder watch notifies once for a burst of matching changes', async () => {
+  const { FolderWatchService, matchesPattern } = require('../core/folder-watch');
+  assert.ok(matchesPattern('report.pdf', '*.pdf'));
+  assert.ok(!matchesPattern('report.docx', '*.pdf'));
+  assert.ok(matchesPattern('anything.txt', '*'));
+  assert.ok(matchesPattern('Invoice-July.xlsx', 'invoice'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-watch-'));
+  try {
+    const notifications = [];
+    const svc = new FolderWatchService({
+      config: { getSettings: () => ({ watchedFolders: [{ path: dir, pattern: '*' }] }) },
+      notify: (title, body) => notifications.push(body),
+      emit: () => {}
+    });
+    assert.equal(svc.start(), 1);
+    fs.writeFileSync(path.join(dir, 'new-drawing.pdf'), 'x');
+    fs.writeFileSync(path.join(dir, 'second.pdf'), 'x');
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    svc.stop();
+    assert.equal(notifications.length, 1);
+    assert.match(notifications[0], /changed in/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());

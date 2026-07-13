@@ -15,6 +15,7 @@ const { DocumentService } = require('./core/document-service');
 const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService } = require('./core/local-voice-service');
+const { FolderWatchService } = require('./core/folder-watch');
 const { CommandRouter } = require('./core/router');
 
 let mainWindow;
@@ -30,6 +31,7 @@ let documents;
 let ai;
 let ollama;
 let localVoice;
+let folderWatch;
 let router;
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
@@ -371,6 +373,9 @@ function setupIpc() {
       localVoice.stop();
       setTimeout(() => localVoice.start(), 1700);
     }
+    if (JSON.stringify(previous.watchedFolders || []) !== JSON.stringify(updated.watchedFolders || [])) {
+      folderWatch.start();
+    }
     return updated;
   });
   ipcMain.handle('dialog:folder', async (_event, title) => {
@@ -419,6 +424,13 @@ app.whenReady().then(async () => {
   ai = new AIService(config);
   ollama = new OllamaService({ config, emit: sendEverywhere });
   router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log });
+  folderWatch = new FolderWatchService({
+    config,
+    emit: sendEverywhere,
+    notify: (title, body) => {
+      if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
+    }
+  });
   localVoice = new LocalVoiceService({
     voiceRoot: voiceDataRoot(),
     scriptPath: packagedScript('local_voice.py'),
@@ -437,6 +449,7 @@ app.whenReady().then(async () => {
   createTray();
   applyLoginSetting(config.getSettings().startWithWindows);
   localVoice.start();
+  folderWatch.start();
   setInterval(checkTaskReminders, 30000);
 });
 

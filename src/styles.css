@@ -133,3 +133,5 @@ dialog{color:var(--text)}dialog::backdrop{background:rgba(0,3,5,.8);backdrop-fil
 
 .file-section{padding:8px 10px 3px;font:600 8px var(--tech);letter-spacing:.14em;color:var(--amber);opacity:.85}
 #file-pin{min-width:26px}
+
+#file-watch{min-width:26px}#file-watch.active{color:#61efb2;border-color:rgba(97,239,178,.5)}
