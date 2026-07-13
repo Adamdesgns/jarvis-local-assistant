@@ -119,6 +119,32 @@ test('folder watch notifies once for a burst of matching changes', async () => {
   }
 });
 
+test('saved routines open their apps and folders', async () => {
+  const opened = [];
+  const router = new CommandRouter({
+    config: {
+      getSettings: () => ({
+        projects: { anvil: 'C:\\Anvil' },
+        routines: { 'start work': { apps: ['chrome'], folders: ['anvil'] } }
+      })
+    },
+    tools: {
+      openApplication: async (name) => { opened.push(name); return { ok: true, message: 'ok' }; },
+      openPath: async (target) => { opened.push(target); return { ok: true, message: 'ok' }; },
+      resolveApplication: () => null
+    },
+    ai: {},
+    memory: { search: () => [] },
+    tasks: {},
+    log: { write: () => {} }
+  });
+  const result = await router.handle('Start work');
+  assert.match(result.response, /start work routine/i);
+  assert.deepEqual(opened, ['chrome', 'C:\\Anvil']);
+  const alias = await router.handle('Run my start work routine');
+  assert.match(alias.response, /opened/i);
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());

@@ -11,6 +11,7 @@ function mergeSettings(defaults, saved) {
   result.projects = { ...clone(defaults.projects), ...((saved || {}).projects || {}) };
   result.applications = { ...clone(defaults.applications), ...((saved || {}).applications || {}) };
   result.moduleLayout = { ...clone(defaults.moduleLayout), ...((saved || {}).moduleLayout || {}) };
+  result.routines = { ...clone(defaults.routines || {}), ...((saved || {}).routines || {}) };
   if (Number(saved?.settingsVersion || 0) < 5) {
     result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'document-viewer'])];
   }
@@ -66,7 +67,7 @@ class ConfigStore {
       'voiceEnabled', 'localVoiceEnabled', 'localVoiceModel', 'wakeWordEnabled',
       'wakeSensitivity', 'startWithWindows', 'minimizeToOrb', 'orbAlwaysOnTop',
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',
-      'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders'
+      'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {

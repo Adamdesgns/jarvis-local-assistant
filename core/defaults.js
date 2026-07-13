@@ -55,6 +55,9 @@ const DEFAULT_SETTINGS = {
     claude: { command: 'claude.exe', aliases: ['claude desktop'] }
   },
   focusApps: ['chrome', 'vs code'],
+  routines: {
+    'start work': { apps: ['chrome'], folders: ['anvil'] }
+  },
   personality: 'Calm, concise, capable, lightly witty, and never theatrical at the expense of clarity.'
 };
 

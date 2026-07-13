@@ -221,6 +221,26 @@ class CommandRouter {
       } catch (error) {
         result = this.#result(error.message, 'documents', { success: false });
       }
+    } else if (this.#matchRoutine(text, settings)) {
+      const { name, routine } = this.#matchRoutine(text, settings);
+      const opened = [];
+      const failed = [];
+      for (const appName of routine.apps || []) {
+        const action = await this.tools.openApplication(appName);
+        (action.ok ? opened : failed).push(appName);
+      }
+      for (const folder of routine.folders || []) {
+        const target = (settings.projects || {})[folder] || folder;
+        const action = await this.tools.openPath(target);
+        (action.ok ? opened : failed).push(folder);
+      }
+      result = this.#result(
+        opened.length
+          ? `${name} routine: opened ${opened.join(', ')}${failed.length ? `. Could not open ${failed.join(', ')} — check Settings.` : '.'}`
+          : `The ${name} routine is saved but nothing could be opened. Assign its folders and apps in Settings.`,
+        'windows',
+        { success: opened.length > 0 }
+      );
     } else if (/\b(?:activate|start|enter|turn on)\s+focus mode\b/i.test(text)) {
       const action = await this.tools.openFocusMode();
       result = this.#result(action.message, 'windows', { success: action.ok });
@@ -301,6 +321,16 @@ class CommandRouter {
       }
     }
     return this.#result('That action is not available.', 'safety', { success: false });
+  }
+
+  #matchRoutine(text, settings) {
+    const routines = settings.routines || {};
+    const lower = text.toLowerCase().trim();
+    const candidates = [lower, lower.replace(/^(?:run|begin|start)\s+(?:my\s+)?/, ''), lower.replace(/\s+routine$/, '').replace(/^(?:run|begin|start)\s+(?:my\s+)?/, '')];
+    for (const name of Object.keys(routines)) {
+      if (candidates.includes(name.toLowerCase())) return { name, routine: routines[name] };
+    }
+    return null;
   }
 
   #result(response, source, extra = {}) {
