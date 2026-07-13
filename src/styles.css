@@ -120,3 +120,8 @@ dialog{color:var(--text)}dialog::backdrop{background:rgba(0,3,5,.8);backdrop-fil
 .edge-grip.edge-se{bottom:-4px;right:-4px;width:14px;height:14px;cursor:nwse-resize}
 .layout-editing .edge-grip{background:rgba(255,178,31,.22)}
 .layout-editing .module{outline:1px dashed rgba(255,178,31,.5)}
+
+.task-priority{margin:2px 0;padding:1px 6px;width:max-content;border:1px solid rgba(255,178,31,.3);background:none;font:600 7px var(--tech);letter-spacing:.12em;color:#ffd98f;cursor:pointer}
+.task-priority.high{border-color:#ff665c;color:#ff8d85}
+.task-priority.low{opacity:.55}
+.task-edit{background:rgba(0,0,0,.5);border:1px solid rgba(255,178,31,.4);color:#dcebe9;font:inherit;padding:2px 6px;width:100%}

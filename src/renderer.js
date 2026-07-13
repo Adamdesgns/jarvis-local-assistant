@@ -222,7 +222,11 @@ function renderTasks(tasks = state.tasks) {
   list.replaceChildren();
   const openCount = state.tasks.filter((task) => task.status === 'open').length;
   $('task-count').textContent = `${openCount} OPEN`;
-  const visible = state.taskFilter === 'all' ? state.tasks : state.tasks.filter((task) => task.status === 'open');
+  const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
+  const visible = (state.taskFilter === 'all' ? state.tasks : state.tasks.filter((task) => task.status === 'open'))
+    .filter((task) => state.taskFilter !== 'today' || (task.dueAt && new Date(task.dueAt) <= endOfToday))
+    .filter((task) => state.taskFilter !== 'project' || task.project === state.activeProject)
+    .sort((a, b) => ({ high: 0, normal: 1, low: 2 }[a.priority || 'normal']) - ({ high: 0, normal: 1, low: 2 }[b.priority || 'normal']));
   if (!visible.length) {
     list.innerHTML = '<div class="empty-state">NOTHING PENDING.<br>YOUR HEAD IS CLEAR.</div>';
     return;
@@ -240,8 +244,32 @@ function renderTasks(tasks = state.tasks) {
     const copy = document.createElement('div');
     copy.className = 'task-copy';
     const title = document.createElement('b'); title.textContent = task.title;
-    const meta = document.createElement('span'); meta.textContent = `${task.project} · ${formatDate(task.dueAt)}`;
-    copy.append(title, meta);
+    title.title = 'Click to edit';
+    title.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.className = 'task-edit';
+      input.value = task.title;
+      title.replaceWith(input);
+      input.focus();
+      const commit = async () => {
+        const value = input.value.trim();
+        if (value && value !== task.title) await window.jarvis.tasks.update(task.id, { title: value });
+        renderTasks(await window.jarvis.tasks.list());
+      };
+      input.addEventListener('keydown', (event) => { if (event.key === 'Enter') input.blur(); if (event.key === 'Escape') { input.value = task.title; input.blur(); } });
+      input.addEventListener('blur', commit);
+    });
+    const priority = document.createElement('button');
+    priority.className = `task-priority ${task.priority || 'normal'}`;
+    priority.textContent = (task.priority || 'normal').toUpperCase();
+    priority.title = 'Click to change priority';
+    priority.addEventListener('click', async () => {
+      const next = { low: 'normal', normal: 'high', high: 'low' }[task.priority || 'normal'];
+      await window.jarvis.tasks.update(task.id, { priority: next });
+      renderTasks(await window.jarvis.tasks.list());
+    });
+    const meta = document.createElement('span'); meta.textContent = `${task.project} · ${formatDate(task.dueAt)}${task.repeat ? ` · repeats ${task.repeat}` : ''}`;
+    copy.append(title, priority, meta);
     const remove = document.createElement('button'); remove.className = 'task-delete'; remove.textContent = '×';
     remove.addEventListener('click', async () => { await window.jarvis.tasks.remove(task.id); renderTasks(await window.jarvis.tasks.list()); });
     row.append(check, copy, remove);
