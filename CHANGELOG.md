@@ -1,5 +1,34 @@
 # JARVIS Changelog
 
+## 0.7.0 — July 13, 2026
+
+Phase 2 of the roadmap: the daily-assistant release.
+
+### Added
+- Recurring tasks: "Remind me to X every day/week/month". Completing a
+  repeating task schedules the next occurrence in the future.
+- Morning briefing ("Good morning" or the START BRIEFING quick button):
+  open and overdue tasks, next due items, latest note, and PC status.
+- Task editing: click a title to edit it in place, click the priority chip
+  to cycle low/normal/high, and TODAY / PROJECT filters.
+- Searchable memory with click-to-edit notes, forget buttons, and the
+  "forget about X" voice command.
+- File Explorer home view with pinned folders (star button) and the last
+  files opened through JARVIS.
+- Watch folders (eye button): a Windows notification fires when files in a
+  watched folder change, debounced to one notice per real change.
+- Saved routines: "Start work" opens the routine's approved apps and
+  project folders.
+
+### Fixed
+- Broken Windows junctions (Documents\My Music etc.) no longer appear in
+  the File Explorer as dead folders.
+- The explorer Up button stops at approved roots instead of erroring.
+
+### Verification
+- 21 automated tests pass; syntax checks pass; audit reports 0
+  vulnerabilities.
+
 ## 0.6.1 — July 13, 2026
 
 The 0.6.0 release was built in a cloud workspace that was lost before its
