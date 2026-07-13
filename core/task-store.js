@@ -2,6 +2,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
+const REPEAT_STEPS = { daily: 1, weekly: 7, monthly: 30 };
+
+function nextDueDate(dueAt, repeat, from = new Date()) {
+  if (!REPEAT_STEPS[repeat]) return null;
+  const next = new Date(dueAt || from);
+  // Roll forward until the next occurrence is in the future, so a task
+  // completed days late does not immediately come back overdue.
+  while (next <= from) {
+    if (repeat === 'monthly') next.setMonth(next.getMonth() + 1);
+    else next.setDate(next.getDate() + REPEAT_STEPS[repeat]);
+  }
+  return next.toISOString();
+}
+
 class TaskStore {
   constructor(userDataPath) {
     this.filePath = path.join(userDataPath, 'tasks.json');
@@ -28,6 +42,7 @@ class TaskStore {
       title: String(input.title || '').trim(),
       project: String(input.project || 'general').toLowerCase(),
       priority: input.priority || 'normal',
+      repeat: REPEAT_STEPS[input.repeat] ? input.repeat : null,
       dueAt: input.dueAt || null,
       status: 'open',
       notified: false,
@@ -54,10 +69,23 @@ class TaskStore {
   update(id, patch) {
     const task = this.items.find((item) => item.id === id);
     if (!task) return null;
-    for (const key of ['title', 'project', 'priority', 'dueAt', 'status', 'notified']) {
+    for (const key of ['title', 'project', 'priority', 'dueAt', 'status', 'notified', 'repeat']) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) task[key] = patch[key];
     }
-    if (patch.status === 'done') task.completedAt = new Date().toISOString();
+    if (patch.status === 'done') {
+      task.completedAt = new Date().toISOString();
+      // A completed repeating task schedules its own next occurrence.
+      if (task.repeat) {
+        this.add({
+          title: task.title,
+          project: task.project,
+          priority: task.priority,
+          repeat: task.repeat,
+          dueAt: nextDueDate(task.dueAt, task.repeat)
+        });
+        task.repeat = null;
+      }
+    }
     if (patch.status === 'open') task.completedAt = null;
     this.#persist();
     return task;
@@ -94,4 +122,4 @@ class TaskStore {
   }
 }
 
-module.exports = { TaskStore };
+module.exports = { TaskStore, nextDueDate };

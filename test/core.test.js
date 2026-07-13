@@ -11,6 +11,35 @@ const { ToolService } = require('../core/tool-service');
 const { AIService } = require('../core/ai-service');
 const { buildDiagnosticReport } = require('../core/local-voice-service');
 const layoutEngine = require('../src/layout-engine.js');
+const { TaskStore, nextDueDate } = require('../core/task-store');
+
+test('completing a repeating task schedules the next occurrence', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-tasks-'));
+  try {
+    const store = new TaskStore(dir);
+    const due = new Date(Date.now() - 3 * 86400000).toISOString(); // 3 days overdue
+    const task = store.add({ title: 'Check the compressor', repeat: 'daily', dueAt: due });
+    store.update(task.id, { status: 'done' });
+    const open = store.list({ status: 'open' });
+    assert.equal(open.length, 1);
+    assert.equal(open[0].title, 'Check the compressor');
+    assert.equal(open[0].repeat, 'daily');
+    // The next occurrence is in the future, not stacked up in the past.
+    assert.ok(new Date(open[0].dueAt) > new Date());
+    // The completed copy no longer repeats, so it cannot double-spawn.
+    const done = store.list({ status: 'done' });
+    assert.equal(done[0].repeat, null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('nextDueDate rolls weekly and monthly forward past today', () => {
+  const from = new Date('2026-07-13T09:00:00Z');
+  assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());
+  assert.ok(new Date(nextDueDate(null, 'monthly', from)) > from);
+  assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'yearly', from), null);
+});
 
 test('file explorer hides broken junctions it can never open', async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-explorer-'));

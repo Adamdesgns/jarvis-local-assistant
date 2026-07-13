@@ -85,10 +85,19 @@ class CommandRouter {
     } else if (/^(?:add (?:a )?task(?: to my list)?|remind me to)\s+(.+)/i.test(text)) {
       let title = text.match(/^(?:add (?:a )?task(?: to my list)?|remind me to)\s+(.+)/i)[1];
       const project = detectProject(title, settings.projects);
-      const dueAt = parseDueDate(title);
-      title = title.replace(/\b(today|tomorrow|morning|afternoon|evening)\b/gi, '').replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, '').replace(/\s+/g, ' ').trim();
-      const task = this.tasks.add({ title, project, dueAt });
-      result = this.#result(`Added to ${project === 'general' ? 'your task list' : project}: ${task.title}`, 'tasks', { task, tasks: this.tasks.list({ status: 'open' }) });
+      const repeatMatch = title.match(/\b(?:every|each)\s+(day|morning|week|month)\b|\b(daily|weekly|monthly)\b/i);
+      const repeat = repeatMatch
+        ? { day: 'daily', morning: 'daily', week: 'weekly', month: 'monthly' }[repeatMatch[1]?.toLowerCase()] || repeatMatch[2].toLowerCase()
+        : null;
+      const dueAt = parseDueDate(title) || (repeat ? new Date(Date.now() + 86400000).toISOString() : null);
+      title = title.replace(/\b(?:every|each)\s+(?:day|morning|week|month)\b|\b(?:daily|weekly|monthly)\b/gi, '')
+        .replace(/\b(today|tomorrow|morning|afternoon|evening)\b/gi, '').replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, '').replace(/\s+/g, ' ').trim();
+      const task = this.tasks.add({ title, project, dueAt, repeat });
+      result = this.#result(
+        `Added to ${project === 'general' ? 'your task list' : project}: ${task.title}${repeat ? ` — repeats ${repeat}` : ''}`,
+        'tasks',
+        { task, tasks: this.tasks.list({ status: 'open' }) }
+      );
     } else if (/^(?:show|list|what are|what(?:'s| is))\s+(?:on\s+)?my tasks|what do i need to do/i.test(text)) {
       const taskList = this.tasks.list({ status: 'open' });
       result = taskList.length
