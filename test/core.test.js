@@ -70,6 +70,29 @@ test('memory supports edit and forget', () => {
   }
 });
 
+test('opening a file records it in recent files, folders are not recorded', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-recent-'));
+  try {
+    const filePath = path.join(dir, 'report.pdf');
+    fs.writeFileSync(filePath, 'x');
+    let saved = {};
+    const svc = new ToolService({
+      config: {
+        getSettings: () => ({ recentFiles: saved.recentFiles || [] }),
+        updateSettings: (patch) => { saved = { ...saved, ...patch }; }
+      },
+      shell: { openPath: async () => '' },
+      app: null
+    });
+    await svc.openPath(filePath);
+    await svc.openPath(dir);
+    assert.equal(saved.recentFiles.length, 1);
+    assert.equal(saved.recentFiles[0].name, 'report.pdf');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('nextDueDate rolls weekly and monthly forward past today', () => {
   const from = new Date('2026-07-13T09:00:00Z');
   assert.equal(nextDueDate('2026-07-06T09:00:00Z', 'weekly', from), new Date('2026-07-20T09:00:00Z').toISOString());

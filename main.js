@@ -345,6 +345,14 @@ function setupIpc() {
   ipcMain.handle('memory:remove', (_event, id) => memory.remove(id));
 
   ipcMain.handle('files:roots', () => config.getSettings().searchRoots || []);
+  ipcMain.handle('files:home', () => {
+    const settings = config.getSettings();
+    return {
+      roots: settings.searchRoots || [],
+      pinned: (settings.pinnedFolders || []).filter((folder) => fs.existsSync(folder)),
+      recent: (settings.recentFiles || []).filter((item) => fs.existsSync(item.path))
+    };
+  });
   ipcMain.handle('files:list', async (_event, directory) => {
     if (!isAllowedPath(directory)) throw new Error('That folder is outside your approved search locations.');
     return tools.listDirectory(directory);

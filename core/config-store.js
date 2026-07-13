@@ -66,7 +66,7 @@ class ConfigStore {
       'voiceEnabled', 'localVoiceEnabled', 'localVoiceModel', 'wakeWordEnabled',
       'wakeSensitivity', 'startWithWindows', 'minimizeToOrb', 'orbAlwaysOnTop',
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',
-      'focusApps', 'personality'
+      'focusApps', 'personality', 'pinnedFolders', 'recentFiles'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {

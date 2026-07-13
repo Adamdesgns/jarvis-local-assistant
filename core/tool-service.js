@@ -71,10 +71,22 @@ class ToolService {
       if (!fs.existsSync(targetPath)) return { ok: false, message: `I can't find ${targetPath}. Update it in Settings.` };
       const error = await this.shell.openPath(targetPath);
       if (error) return { ok: false, message: error };
+      this.#recordRecentFile(targetPath);
       return { ok: true, message: `Opening ${path.basename(targetPath) || targetPath}.`, path: targetPath };
     } catch (error) {
       return { ok: false, message: `I couldn't open that location: ${error.message}` };
     }
+  }
+
+  #recordRecentFile(targetPath) {
+    try {
+      if (!fs.statSync(targetPath).isFile()) return;
+      const recent = (this.config.getSettings().recentFiles || [])
+        .filter((item) => item.path !== targetPath)
+        .slice(0, 9);
+      recent.unshift({ name: path.basename(targetPath), path: targetPath, openedAt: new Date().toISOString() });
+      this.config.updateSettings({ recentFiles: recent });
+    } catch {}
   }
 
   async openFocusMode() {

@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   },
   files: {
     roots: () => ipcRenderer.invoke('files:roots'),
+    home: () => ipcRenderer.invoke('files:home'),
     list: (directory) => ipcRenderer.invoke('files:list', directory),
     open: (target) => ipcRenderer.invoke('path:open', target)
   },

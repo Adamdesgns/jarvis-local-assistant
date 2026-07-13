@@ -347,10 +347,7 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 ** index).toFixed(index > 1 ? 1 : 0)} ${units[index]}`;
 }
 
-function renderFileRows(files, matching = false) {
-  const list = $('file-browser-list'); list.replaceChildren();
-  if (!files.length) { list.innerHTML = '<div class="empty-state">NO FILES TO DISPLAY</div>'; return; }
-  for (const file of files) {
+function buildFileRow(file, matching = false) {
     const row = document.createElement('button'); row.className = `file-row ${matching ? 'match' : ''}`;
     const name = document.createElement('div'); name.className = 'file-name';
     const icon = document.createElement('i'); icon.textContent = file.type === 'folder' ? '▱' : '◇';
@@ -368,17 +365,42 @@ function renderFileRows(files, matching = false) {
         showToast(result.ok ? `Opening ${file.name}` : result.message);
       }
     });
-    list.append(row);
-  }
+  return row;
+}
+
+function renderFileRows(files, matching = false) {
+  const list = $('file-browser-list'); list.replaceChildren();
+  if (!files.length) { list.innerHTML = '<div class="empty-state">NO FILES TO DISPLAY</div>'; return; }
+  for (const file of files) list.append(buildFileRow(file, matching));
+}
+
+function folderEntry(folder) {
+  return { name: folder.split(/[\\/]/).filter(Boolean).pop() || folder, path: folder, type: 'folder', modifiedAt: null, size: 0 };
 }
 
 async function showFileRoots() {
   try {
-    const roots = await window.jarvis.files.roots();
+    const home = await window.jarvis.files.home();
     state.currentDirectory = '';
     $('file-breadcrumb').textContent = 'APPROVED LOCATIONS';
-    const files = roots.map((root) => ({ name: root.split(/[\\/]/).filter(Boolean).pop() || root, path: root, type: 'folder', modifiedAt: null, size: 0 }));
-    renderFileRows(files);
+    $('file-pin').textContent = '☆';
+    const list = $('file-browser-list'); list.replaceChildren();
+    const section = (label) => {
+      const heading = document.createElement('div');
+      heading.className = 'file-section';
+      heading.textContent = label;
+      list.append(heading);
+    };
+    if (home.pinned.length) {
+      section('★ PINNED FOLDERS');
+      for (const folder of home.pinned) list.append(buildFileRow(folderEntry(folder)));
+    }
+    section('APPROVED LOCATIONS');
+    for (const root of home.roots) list.append(buildFileRow(folderEntry(root)));
+    if (home.recent.length) {
+      section('RECENT FILES');
+      for (const item of home.recent) list.append(buildFileRow({ name: item.name, path: item.path, type: 'file', modifiedAt: item.openedAt, size: 0 }));
+    }
   } catch (error) { showToast(friendlyError(error)); }
 }
 
@@ -388,6 +410,7 @@ async function browseDirectory(directory) {
     $('file-breadcrumb').textContent = directory;
     $('scan-label').textContent = 'BROWSING LOCAL FILES';
     $('scan-path').textContent = directory;
+    $('file-pin').textContent = (state.settings.pinnedFolders || []).includes(directory) ? '★' : '☆';
     renderFileRows(await window.jarvis.files.list(directory));
   } catch (error) { showToast(friendlyError(error)); }
 }
@@ -787,6 +810,15 @@ function bindEvents() {
     if (parent && parentAllowed) browseDirectory(parent); else showFileRoots();
   });
   $('file-close-search').addEventListener('click', () => finishSearchExperience(true));
+  $('file-pin').addEventListener('click', async () => {
+    if (!state.currentDirectory) return showToast('Open a folder first, then pin it.');
+    const pinned = [...(state.settings.pinnedFolders || [])];
+    const index = pinned.indexOf(state.currentDirectory);
+    if (index >= 0) pinned.splice(index, 1); else pinned.unshift(state.currentDirectory);
+    state.settings = await window.jarvis.saveSettings({ pinnedFolders: pinned.slice(0, 8) });
+    $('file-pin').textContent = index >= 0 ? '☆' : '★';
+    showToast(index >= 0 ? 'Folder unpinned.' : 'Folder pinned to the top of the explorer.');
+  });
   $('copy-document-output').addEventListener('click', async () => {
     await window.jarvis.writeClipboard($('document-output').textContent);
     showToast('Document summary copied.');
