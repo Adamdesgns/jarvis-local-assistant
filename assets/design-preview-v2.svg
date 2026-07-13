@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <radialGradient id="bg"><stop stop-color="#101d1d"/><stop offset=".38" stop-color="#061015"/><stop offset="1" stop-color="#010406"/></radialGradient>
+    <radialGradient id="core"><stop stop-color="#fffce6"/><stop offset=".13" stop-color="#ffd466"/><stop offset=".35" stop-color="#ff9d00" stop-opacity=".8"/><stop offset="1" stop-color="#ff7100" stop-opacity="0"/></radialGradient>
+    <linearGradient id="panel" x2="1" y2="1"><stop stop-color="#0a171d" stop-opacity=".96"/><stop offset="1" stop-color="#03090d" stop-opacity=".9"/></linearGradient>
+    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#54d7ea" stroke-opacity=".05"/></pattern>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="24"/></filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/><rect width="1600" height="1000" fill="url(#grid)"/>
+  <path d="M0 64H1600" stroke="#ffb21f" stroke-opacity=".32"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <circle cx="34" cy="32" r="17" fill="none" stroke="#ffb21f"/><circle cx="34" cy="32" r="8" fill="#ffb21f" filter="url(#glow)"/>
+    <text x="63" y="29" fill="#fff0ca" font-size="17" font-weight="700" letter-spacing="5">JARVIS</text><text x="63" y="45" fill="#526c75" font-size="7" font-weight="700" letter-spacing="2">PRIVATE LOCAL ASSISTANT</text>
+    <circle cx="790" cy="31" r="4" fill="#61efb2"/><text x="804" y="35" fill="#7d969d" font-size="8" font-weight="700" letter-spacing="2">LOCAL CORE ONLINE</text>
+    <rect x="1200" y="15" width="105" height="34" fill="#081218" stroke="#688996" stroke-opacity=".25"/><text x="1253" y="36" fill="#82989f" font-size="8" font-weight="700" text-anchor="middle">＋ MODULES</text>
+    <rect x="1312" y="15" width="130" height="34" fill="#081218" stroke="#688996" stroke-opacity=".25"/><text x="1377" y="36" fill="#82989f" font-size="8" font-weight="700" text-anchor="middle">⌘ EDIT LAYOUT</text>
+    <text x="1474" y="37" fill="#82989f" font-size="18">⚙</text><text x="1518" y="36" fill="#82989f" font-size="18">—</text><text x="1555" y="36" fill="#82989f" font-size="18">□</text><text x="1584" y="36" fill="#82989f" font-size="20">×</text>
+  </g>
+  <g transform="translate(665 470)">
+    <circle r="360" fill="#ff9400" fill-opacity=".035" filter="url(#soft)"/>
+    <circle r="325" fill="none" stroke="#ffb21f" stroke-opacity=".14" stroke-dasharray="3 18"/>
+    <ellipse rx="335" ry="122" fill="none" stroke="#ffb21f" stroke-opacity=".43" stroke-width="2" stroke-dasharray="34 14 5 12" transform="rotate(-12)" filter="url(#glow)"/>
+    <ellipse rx="306" ry="148" fill="none" stroke="#ffb21f" stroke-opacity=".27" stroke-dasharray="8 15" transform="rotate(39)"/>
+    <ellipse rx="310" ry="105" fill="none" stroke="#ffb21f" stroke-opacity=".31" stroke-dasharray="4 11" transform="rotate(-56)"/>
+    <ellipse rx="276" ry="205" fill="none" stroke="#ffb21f" stroke-opacity=".18" stroke-dasharray="24 15" transform="rotate(17)"/>
+    <circle r="245" fill="none" stroke="#ffb21f" stroke-opacity=".15" stroke-dasharray="3 11"/>
+    <circle r="194" fill="none" stroke="#ffb21f" stroke-opacity=".2" stroke-dasharray="12 9"/>
+    <g stroke="#ffb21f" stroke-opacity=".14"><path d="M-265-95L235 140M-240 145L267-90M0-278V279M-282 0H282M-193-193L193 193M193-193L-193 193"/></g>
+    <circle r="145" fill="#ff9700" fill-opacity=".11" filter="url(#soft)"/><circle r="88" fill="url(#core)" filter="url(#glow)"/><circle r="64" fill="none" stroke="#ffd771" stroke-width="2" stroke-dasharray="12 8"/><circle r="27" fill="#fff9de" filter="url(#glow)"/>
+    <g fill="#ffc551" filter="url(#glow)"><circle cx="-248" cy="-91" r="3"/><circle cx="216" cy="-129" r="2"/><circle cx="273" cy="70" r="3"/><circle cx="-158" cy="222" r="2"/><circle cx="81" cy="252" r="2"/><circle cx="-296" cy="35" r="2"/></g>
+  </g>
+  <g font-family="Segoe UI,Arial,sans-serif" text-anchor="middle"><text x="665" y="438" fill="#ffd67b" font-size="8" font-weight="700" letter-spacing="4">AWAITING DIRECTIVE</text><text x="665" y="476" fill="#fff1c5" font-size="27" font-weight="300" letter-spacing="10">READY</text><text x="665" y="510" fill="#ffb21f" font-size="14" letter-spacing="5">▂ ▆ ▃ ▇ ▄ ▆ ▂</text></g>
+
+  <g fill="url(#panel)" stroke="#6b929e" stroke-opacity=".23"><rect x="1190" y="116" width="377" height="565"/></g><path d="M1190 116h85" stroke="#ffb21f"/>
+  <g font-family="Segoe UI,Arial,sans-serif"><text x="1210" y="140" fill="#526d76" font-size="7" font-weight="700" letter-spacing="2">01 // WORK QUEUE</text><text x="1210" y="162" fill="#d4e3e6" font-size="13" font-weight="700" letter-spacing="2">TODAY’S TASKS</text><text x="1525" y="151" fill="#607a83" font-size="18">−  ×</text>
+    <rect x="1210" y="187" width="336" height="40" fill="#03090d" stroke="#6b929e" stroke-opacity=".2"/><text x="1224" y="212" fill="#405b64" font-size="9">Add something you need to finish…</text><rect x="1490" y="187" width="56" height="40" fill="#ffb21f" fill-opacity=".07" stroke="#ffb21f" stroke-opacity=".2"/><text x="1518" y="212" fill="#ffb21f" font-size="7" font-weight="700" text-anchor="middle">ADD</text>
+    <text x="1212" y="255" fill="#ffb21f" font-size="7" font-weight="700">OPEN</text><text x="1258" y="255" fill="#4b6670" font-size="7" font-weight="700">ALL</text><text x="1544" y="255" fill="#58727a" font-size="7" text-anchor="end">3 OPEN</text>
+    <g font-size="9"><circle cx="1222" cy="292" r="8" fill="none" stroke="#4e6972"/><text x="1243" y="290" fill="#a9bec4" font-weight="700">Finish the Anvil landing page</text><text x="1243" y="305" fill="#49636c" font-size="7">ANVIL · TOMORROW 9:00 AM</text><path d="M1210 323h336" stroke="#668996" stroke-opacity=".12"/>
+      <circle cx="1222" cy="350" r="8" fill="none" stroke="#4e6972"/><text x="1243" y="348" fill="#a9bec4" font-weight="700">Organize Bench research files</text><text x="1243" y="363" fill="#49636c" font-size="7">THE BENCH · NO DUE DATE</text><path d="M1210 382h336" stroke="#668996" stroke-opacity=".12"/>
+      <circle cx="1222" cy="409" r="8" fill="none" stroke="#4e6972"/><text x="1243" y="407" fill="#a9bec4" font-weight="700">Order compressor parts</text><text x="1243" y="422" fill="#49636c" font-size="7">PERSONAL · TODAY 6:00 PM</text></g>
+  </g>
+
+  <g font-family="Segoe UI,Arial,sans-serif"><text x="24" y="94" fill="#4d6871" font-size="7" font-weight="700" letter-spacing="1.4">OPERATING MODE</text><text x="24" y="111" fill="#9db3b9" font-size="8" font-weight="700">LOCAL · PRIVATE · FREE</text><text x="1054" y="94" fill="#4d6871" font-size="7" font-weight="700" text-anchor="end" letter-spacing="1.4">ACTIVE PROJECT</text><text x="1054" y="111" fill="#9db3b9" font-size="8" font-weight="700" text-anchor="end">GENERAL</text></g>
+
+  <g><rect x="352" y="842" width="896" height="125" fill="#030a0e" fill-opacity=".95" stroke="#6b929e" stroke-opacity=".22"/><path d="M352 842h100" stroke="#ffb21f"/><path d="M352 887h896" stroke="#ffb21f" stroke-opacity=".16"/><text x="374" y="869" fill="#ffb21f" font-family="Segoe UI" font-size="8" font-weight="700">JARVIS</text><text x="445" y="870" fill="#bbcdd1" font-family="Segoe UI" font-size="11">Good evening, Adam. Your private local assistant is online.</text><circle cx="382" cy="919" r="18" fill="#ffb21f" fill-opacity=".1" stroke="#ffb21f"/><path d="M382 909v15m-7-5a7 7 0 0 0 14 0m-7 7v6" fill="none" stroke="#ffd36c"/><text x="419" y="924" fill="#ffb21f" font-family="monospace" font-size="15">›_</text><text x="454" y="924" fill="#405b64" font-family="Segoe UI" font-size="10">Type a command or say “Hey Jarvis”…</text><rect x="1118" y="896" width="115" height="45" fill="#ffb21f" fill-opacity=".07" stroke="#ffb21f" stroke-opacity=".2"/><text x="1175" y="923" fill="#ffb21f" font-family="Segoe UI" font-size="7" font-weight="700" text-anchor="middle">EXECUTE ↵</text><circle cx="674" cy="955" r="3" fill="#61efb2"/><text x="686" y="958" fill="#506b74" font-family="Segoe UI" font-size="7" font-weight="700">SAY “HEY JARVIS” · LOCAL VOICE READY</text></g>
+</svg>

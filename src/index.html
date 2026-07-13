@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'none';">
+    <title>JARVIS · Local Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="ambient-grid"></div>
+    <div class="scanlines"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="mini-core"><i></i></div>
+        <div><strong>JARVIS</strong><span>PRIVATE LOCAL ASSISTANT</span></div>
+      </div>
+      <div class="system-state"><i id="status-dot"></i><span id="system-status">LOCAL CORE STARTING</span></div>
+      <div class="top-actions">
+        <button id="modules-button" class="hud-button"><b>＋</b> MODULES</button>
+        <button id="layout-button" class="hud-button"><b>⌘</b> EDIT LAYOUT</button>
+        <button id="settings-button" class="icon-button" title="Settings">⚙</button>
+        <button class="window-button" data-window="minimize">—</button>
+        <button class="window-button" data-window="maximize">□</button>
+        <button class="window-button close" data-window="close">×</button>
+      </div>
+    </header>
+
+    <main id="workspace" class="workspace">
+      <section class="jarvis-stage" id="jarvis-stage">
+        <div class="stage-label left"><span>OPERATING MODE</span><b>LOCAL · PRIVATE · FREE</b></div>
+        <div class="stage-label right"><span>ACTIVE PROJECT</span><b id="active-project">GENERAL</b></div>
+        <canvas id="hologram" aria-label="Animated JARVIS holographic sphere"></canvas>
+        <div class="central-copy">
+          <span id="core-kicker">AWAITING DIRECTIVE</span>
+          <strong id="core-state">READY</strong>
+          <div class="audio-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div id="search-flight" class="search-flight" aria-hidden="true">
+          <span class="flight-line line-one"></span><span class="flight-line line-two"></span>
+          <span class="flight-line line-three"></span><span class="flight-line line-four"></span>
+        </div>
+      </section>
+
+      <section id="module-layer" class="module-layer">
+        <article class="module" data-module="tasks">
+          <header class="module-header drag-handle"><div><span>01 // WORK QUEUE</span><h2>TODAY’S TASKS</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content">
+            <form id="quick-task-form" class="inline-entry"><input id="quick-task-input" placeholder="Add something you need to finish…"><button>ADD</button></form>
+            <div class="task-filters"><button class="active" data-task-filter="open">OPEN</button><button data-task-filter="all">ALL</button><span id="task-count">0 OPEN</span></div>
+            <div id="task-list" class="task-list"></div>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="file-explorer">
+          <header class="module-header drag-handle"><div><span>02 // LIVE SEARCH</span><h2>JARVIS FILE EXPLORER</h2></div><div class="module-actions"><button id="file-collapse">−</button><button data-hide>×</button></div></header>
+          <div class="module-content explorer-content">
+            <div class="explorer-toolbar">
+              <button id="file-up" title="Up one folder">↑</button>
+              <div id="file-breadcrumb" class="breadcrumb"><span>APPROVED LOCATIONS</span></div>
+              <button id="file-close-search">REFORM CORE</button>
+            </div>
+            <div id="search-visual" class="search-visual">
+              <div class="path-tree"><i></i><i></i><i></i><i></i><i></i></div>
+              <div><span id="scan-label">WAITING FOR A FILE REQUEST</span><strong id="scan-path">Say “Hey Jarvis, find…”</strong></div>
+              <b id="scan-counter">0 LOCATIONS</b>
+            </div>
+            <div class="file-table-head"><span>NAME</span><span>MODIFIED</span><span>SIZE</span></div>
+            <div id="file-browser-list" class="file-browser-list"></div>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="performance">
+          <header class="module-header drag-handle"><div><span>03 // TELEMETRY</span><h2>PC PERFORMANCE</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content performance-grid">
+            <div class="meter" id="cpu-meter"><b id="cpu-value">0</b><span>% CPU</span></div>
+            <div class="meter" id="ram-meter"><b id="ram-value">0</b><span>% MEMORY</span></div>
+            <dl><dt>GPU</dt><dd id="gpu-value">RTX 5060 · 8 GB</dd><dt>RAM</dt><dd id="ram-detail">32 GB</dd><dt>UPTIME</dt><dd id="uptime-value">—</dd></dl>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="memory">
+          <header class="module-header drag-handle"><div><span>04 // KNOWLEDGE</span><h2>MEMORY</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content"><form id="memory-form" class="inline-entry"><input id="memory-input" placeholder="Remember something…"><button>STORE</button></form><div id="memory-list" class="memory-list"></div></div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="projects">
+          <header class="module-header drag-handle"><div><span>05 // CONTEXT</span><h2>PROJECTS</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content project-list">
+            <button data-project="general" class="active"><i></i><span>GENERAL</span><b>PERSONAL</b></button>
+            <button data-project="anvil"><i></i><span>ANVIL</span><b>BUSINESS</b></button>
+            <button data-project="the bench"><i></i><span>THE BENCH</span><b>MARKETS</b></button>
+            <button data-project="adamscraft"><i></i><span>ADAMSCRAFT</span><b>BUILD</b></button>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="activity">
+          <header class="module-header drag-handle"><div><span>06 // AUDIT</span><h2>RECENT ACTIVITY</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content"><div id="activity-list" class="activity-list"></div></div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="quick-commands">
+          <header class="module-header drag-handle"><div><span>07 // SHORTCUTS</span><h2>QUICK COMMANDS</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content quick-grid">
+            <button data-command="Open Chrome"><span>OPEN</span>CHROME</button>
+            <button data-command="Open my Anvil workspace"><span>LOAD</span>ANVIL</button>
+            <button data-command="Show my tasks"><span>SHOW</span>TASKS</button>
+            <button data-command="Activate focus mode"><span>ENTER</span>FOCUS MODE</button>
+            <button data-command="Summarize my latest report"><span>READ</span>LATEST REPORT</button>
+            <button data-command="Organize my Downloads"><span>ORGANIZE</span>DOWNLOADS</button>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="document-viewer">
+          <header class="module-header drag-handle"><div><span>08 // DOCUMENT INTELLIGENCE</span><h2 id="document-title">DOCUMENT SUMMARY</h2></div><div class="module-actions"><button id="copy-document-output" title="Copy summary">COPY</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content document-content"><pre id="document-output">Ask JARVIS to read or summarize a document.</pre></div>
+          <i class="resize-handle"></i>
+        </article>
+      </section>
+
+      <section class="response-dock">
+        <div class="response-line"><span>JARVIS</span><p id="jarvis-response">Core systems are coming online.</p></div>
+        <form id="command-form" class="command-form">
+          <button id="mic-button" type="button" class="mic-button" title="Push to talk">
+            <svg viewBox="0 0 24 24"><path d="M12 15.5a4 4 0 0 0 4-4V6a4 4 0 1 0-8 0v5.5a4 4 0 0 0 4 4Zm-1-9.5a1 1 0 0 1 2 0v5.5a1 1 0 1 1-2 0V6Zm7.5 5a1 1 0 0 1 1 1 7.5 7.5 0 0 1-6.5 7.43V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.57A7.5 7.5 0 0 1 4.5 12a1 1 0 1 1 2 0 5.5 5.5 0 1 0 11 0 1 1 0 0 1 1-1Z"/></svg>
+          </button>
+          <span class="prompt">›_</span>
+          <input id="command-input" autocomplete="off" placeholder="Type a command or say “Hey Jarvis”…">
+          <button type="submit" class="execute-button">EXECUTE ↵</button>
+        </form>
+        <div class="voice-line"><i id="voice-dot"></i><span id="voice-status">CHECKING LOCAL VOICE</span></div>
+      </section>
+    </main>
+
+    <aside id="module-drawer" class="module-drawer">
+      <header><div><span>INTERFACE</span><h2>MODULE LIBRARY</h2></div><button id="close-modules">×</button></header>
+      <p>Add only what you need. Drag and resize modules while Edit Layout is active.</p>
+      <div id="module-options" class="module-options">
+        <button data-toggle-module="tasks"><i>✓</i><span><b>Today’s Tasks</b><small>Work queue and reminders</small></span></button>
+        <button data-toggle-module="file-explorer"><i></i><span><b>File Explorer</b><small>Browse and watch live searches</small></span></button>
+        <button data-toggle-module="performance"><i></i><span><b>PC Performance</b><small>CPU, memory, and GPU</small></span></button>
+        <button data-toggle-module="memory"><i></i><span><b>Memory</b><small>Saved notes and instructions</small></span></button>
+        <button data-toggle-module="projects"><i></i><span><b>Projects</b><small>Switch working context</small></span></button>
+        <button data-toggle-module="activity"><i></i><span><b>Activity</b><small>Recent completed commands</small></span></button>
+        <button data-toggle-module="quick-commands"><i></i><span><b>Quick Commands</b><small>One-click actions</small></span></button>
+        <button data-toggle-module="document-viewer"><i></i><span><b>Document Viewer</b><small>Full summaries and document analysis</small></span></button>
+      </div>
+      <button id="reset-layout" class="drawer-reset">RESET DEFAULT LAYOUT</button>
+    </aside>
+
+    <dialog id="settings-modal" class="settings-modal">
+      <form id="settings-form">
+        <header><div><span>LOCAL CONFIGURATION</span><h2>JARVIS SETTINGS</h2></div><button type="button" data-close-settings>×</button></header>
+        <div class="settings-grid">
+          <section class="voice-setup-card">
+            <h3>FREE LOCAL VOICE</h3>
+            <div class="setup-status"><i id="local-voice-light"></i><div><b id="local-voice-title">CHECKING INSTALLATION</b><span id="local-voice-detail">No API key or credits required.</span></div></div>
+            <button type="button" id="install-local-voice" class="primary-action">INSTALL / REPAIR LOCAL VOICE</button>
+            <button type="button" id="open-voice-diagnostics" class="outline-action">VOICE DIAGNOSTICS</button>
+            <small>This installs “Hey Jarvis” and offline speech recognition directly on your laptop.</small>
+          </section>
+          <section>
+            <h3>LOCAL BRAIN</h3>
+            <div class="setup-status"><i id="ollama-light"></i><div><b id="ollama-title">CHECKING OLLAMA</b><span id="ollama-detail">No API key or credits required.</span></div></div>
+            <label>OLLAMA MODEL<input id="setting-ollama-model" value="qwen3:8b"></label>
+            <button type="button" id="connect-ollama" class="primary-action">CONNECT / REPAIR OLLAMA</button>
+            <button type="button" id="get-ollama" class="outline-action">INSTALL OLLAMA FOR WINDOWS</button>
+            <small>File search, tasks, and commands work even without Ollama. Ollama adds basic conversation.</small>
+          </section>
+          <section>
+            <h3>CLOUD BRAIN · OPTIONAL</h3>
+            <div class="setup-status"><i id="cloud-light"></i><div><b id="cloud-title">NOT CONNECTED</b><span id="cloud-detail">Recommended for slower GPUs. Uses separate prepaid API credits.</span></div></div>
+            <label>BRAIN MODE<select id="setting-ai-mode"><option value="local">LOCAL · OLLAMA ONLY</option><option value="cloud">CLOUD · OPENAI ONLY</option><option value="auto">AUTO · CLOUD WITH OLLAMA BACKUP</option></select></label>
+            <label>OPENAI MODEL<select id="setting-openai-model"><option value="gpt-5-mini">GPT-5 MINI · LOW COST</option><option value="gpt-5.6-luna">GPT-5.6 LUNA · EFFICIENT</option><option value="gpt-5.6-terra">GPT-5.6 TERRA · SMARTER</option></select></label>
+            <label>OPENAI API KEY<input id="setting-openai-key" type="password" placeholder="Paste API key here" autocomplete="off"></label>
+            <button type="button" id="connect-openai" class="primary-action">SAVE KEY & TEST</button>
+            <button type="button" id="remove-openai" class="outline-action">REMOVE KEY</button>
+            <button type="button" id="openai-billing" class="outline-action">ADD PREPAID CREDIT</button>
+            <button type="button" id="openai-keys" class="outline-action">CREATE API KEY</button>
+            <small>Your ChatGPT subscription does not include API usage. The key is encrypted on this computer. Turn off Auto Recharge on the OpenAI billing page if you want a hard prepaid budget.</small>
+          </section>
+          <section>
+            <h3>BEHAVIOR</h3>
+            <label>YOUR NAME<input id="setting-profile-name" value="User" maxlength="40"></label>
+            <label class="toggle-row"><span><b>SPOKEN REPLIES</b><small>Use Windows system voices</small></span><input id="setting-voice" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>HEY JARVIS</b><small>Always-listening local wake word</small></span><input id="setting-wake" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>MINIMIZE TO ORB</b><small>Keep the sphere working in the background</small></span><input id="setting-orb" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>ALWAYS ON TOP</b><small>Keep the small orb visible</small></span><input id="setting-top" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>START WITH WINDOWS</b><small>Launch automatically at sign-in</small></span><input id="setting-startup" type="checkbox"><i></i></label>
+            <label>ANIMATION MODE<select id="setting-motion"><option value="cinematic">FULL CINEMATIC</option><option value="fast">FAST</option><option value="reduced">REDUCED MOTION</option></select></label>
+          </section>
+          <section>
+            <h3>PROJECT WORKSPACES</h3>
+            <div class="folder-setting"><span><b>ANVIL</b><small id="folder-anvil">Not assigned</small></span><button type="button" data-folder="anvil">CHOOSE</button></div>
+            <div class="folder-setting"><span><b>THE BENCH</b><small id="folder-the-bench">Not assigned</small></span><button type="button" data-folder="the bench">CHOOSE</button></div>
+            <div class="folder-setting"><span><b>ADAMSCRAFT</b><small id="folder-adamscraft">Not assigned</small></span><button type="button" data-folder="adamscraft">CHOOSE</button></div>
+          </section>
+          <section class="wide-setting">
+            <h3>FOLDERS JARVIS MAY SEARCH</h3>
+            <div id="search-root-list" class="search-root-list"></div>
+            <button type="button" id="add-search-root" class="outline-action">＋ ADD SEARCH FOLDER</button>
+          </section>
+        </div>
+        <footer><span>Local data stays on this computer. Cloud mode sends conversation text to OpenAI. · <b id="app-version">VERSION</b></span><div><button type="button" data-close-settings>CANCEL</button><button type="submit" class="save-button">SAVE SETTINGS</button></div></footer>
+      </form>
+    </dialog>
+
+    <dialog id="voice-diagnostics-modal" class="settings-modal diagnostics-modal">
+      <header><div><span>LOCAL VOICE</span><h2>VOICE DIAGNOSTICS</h2></div><button type="button" id="close-diagnostics">×</button></header>
+      <p class="diagnostics-intro">Green means working. Red tells you exactly what to fix.</p>
+      <div id="diagnostic-rows" class="diagnostic-rows">
+        <div class="diagnostic-row" data-check="micPermission"><i></i><div><b>MICROPHONE PERMISSION</b><span>Checking…</span></div></div>
+        <div class="diagnostic-row" data-check="microphone"><i></i><div><b>MICROPHONE DEVICE</b><span>Checking…</span></div></div>
+        <div class="diagnostic-row" data-check="installed"><i></i><div><b>PYTHON VOICE ENVIRONMENT</b><span>Checking…</span></div></div>
+        <div class="diagnostic-row" data-check="speechModel"><i></i><div><b>SPEECH MODEL</b><span>Checking…</span></div></div>
+        <div class="diagnostic-row" data-check="wakeModel"><i></i><div><b>WAKE-WORD MODEL</b><span>Checking…</span></div></div>
+        <div class="diagnostic-row" data-check="running"><i></i><div><b>VOICE SERVICE RUNNING</b><span>Checking…</span></div></div>
+        <div class="diagnostic-row" data-check="wakeReady"><i></i><div><b>WAKE WORD LISTENING</b><span>Checking…</span></div></div>
+      </div>
+      <div class="diagnostic-live">
+        <div class="mic-meter"><span>INPUT LEVEL</span><div class="meter-track"><i id="diagnostic-level"></i></div></div>
+        <p id="diagnostic-result">Use the buttons below to test your microphone and wake word.</p>
+      </div>
+      <div class="diagnostic-actions">
+        <button type="button" id="diag-test-mic" class="primary-action">TEST MICROPHONE</button>
+        <button type="button" id="diag-test-wake" class="primary-action">TEST “HEY JARVIS”</button>
+        <button type="button" id="diag-repair" class="outline-action">REPAIR VOICE</button>
+        <button type="button" id="diag-copy" class="outline-action">COPY DIAGNOSTIC REPORT</button>
+        <button type="button" id="diag-refresh" class="outline-action">RUN CHECKS AGAIN</button>
+      </div>
+    </dialog>
+
+    <dialog id="approval-modal" class="approval-modal">
+      <div class="warning">!</div><span>CONFIRMATION REQUIRED</span><h2 id="approval-title">CONFIRM ACTION</h2><p id="approval-detail"></p><div><button id="approval-deny">CANCEL</button><button id="approval-accept">CONFIRM</button></div>
+    </dialog>
+
+    <div id="toast" class="toast"></div>
+    <script src="hologram.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>

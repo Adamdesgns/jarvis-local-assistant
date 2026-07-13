@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="43%"><stop stop-color="#13201d"/><stop offset=".28" stop-color="#071015"/><stop offset="1" stop-color="#010407"/></radialGradient>
+    <radialGradient id="core"><stop stop-color="#fffbe7"/><stop offset=".13" stop-color="#ffd15b"/><stop offset=".34" stop-color="#ff9d00" stop-opacity=".76"/><stop offset="1" stop-color="#ff7900" stop-opacity="0"/></radialGradient>
+    <linearGradient id="panel" x2="1" y2="1"><stop stop-color="#0b151a" stop-opacity=".92"/><stop offset="1" stop-color="#03090d" stop-opacity=".74"/></linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#55cbe4" stroke-opacity=".055"/></pattern>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="bigglow"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <rect width="1600" height="1000" fill="url(#grid)"/>
+  <path d="M0 69H1600" stroke="#ffb21f" stroke-opacity=".32"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <circle cx="35" cy="34" r="18" fill="none" stroke="#ffb21f" stroke-opacity=".75"/>
+    <circle cx="35" cy="34" r="9" fill="#ffb21f" filter="url(#glow)"/>
+    <text x="67" y="31" fill="#fff3cf" font-size="18" font-weight="700" letter-spacing="5">J.A.R.V.I.S.</text>
+    <text x="67" y="48" fill="#59737b" font-size="7" font-weight="700" letter-spacing="2.2">JUST A RATHER VERY INTELLIGENT SYSTEM</text>
+    <text x="800" y="27" fill="#587078" font-size="7" text-anchor="middle" letter-spacing="2">ACTIVE CONTEXT</text>
+    <text x="800" y="47" fill="#ffb21f" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="2">GENERAL OPERATIONS</text>
+    <circle cx="1390" cy="34" r="4" fill="#62efb3" filter="url(#glow)"/>
+    <text x="1402" y="38" fill="#8ca4ab" font-size="9" font-weight="700" letter-spacing="1.5">LOCAL READY</text>
+    <text x="1533" y="39" fill="#728890" font-size="19">—</text><text x="1564" y="39" fill="#728890" font-size="18">□</text><text x="1588" y="39" fill="#728890" font-size="20">×</text>
+  </g>
+
+  <g fill="url(#panel)" stroke="#6e9ba8" stroke-opacity=".18">
+    <rect x="14" y="83" width="260" height="326"/><rect x="14" y="422" width="260" height="245"/><rect x="14" y="680" width="260" height="304"/>
+    <rect x="1326" y="83" width="260" height="300"/><rect x="1326" y="396" width="260" height="283"/><rect x="1326" y="692" width="260" height="225"/>
+    <rect x="292" y="770" width="1016" height="214"/>
+  </g>
+  <g stroke="#ffb21f" stroke-opacity=".75"><path d="M14 83h60M14 422h60M14 680h60M1326 83h60M1326 396h60M1326 692h60M292 770h80"/></g>
+
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <g fill="#ffb21f" font-size="8" font-weight="700"><text x="30" y="108">01</text><text x="30" y="447">02</text><text x="30" y="705">03</text><text x="1342" y="108">04</text><text x="1342" y="421">05</text><text x="1342" y="717">06</text></g>
+    <g fill="#d5e4e8" font-size="12" font-weight="700" letter-spacing="2"><text x="63" y="111">SYSTEM CORE</text><text x="63" y="450">SAFEGUARDS</text><text x="63" y="708">QUICK COMMANDS</text><text x="1375" y="111">MISSION CONTEXT</text><text x="1375" y="424">ACTIVE STACK</text><text x="1375" y="720">ACTIVITY</text></g>
+    <g fill="#506871" font-size="7" font-weight="700" letter-spacing="1.3"><text x="63" y="94">LIVE TELEMETRY</text><text x="63" y="433">PERMISSION MATRIX</text><text x="63" y="691">LOCAL CONTROL</text><text x="1375" y="94">OPERATING PROFILE</text><text x="1375" y="407">CAPABILITY BUS</text><text x="1375" y="703">RECENT OPERATIONS</text></g>
+
+    <g fill="none" stroke="#ffb21f" filter="url(#glow)"><circle cx="85" cy="196" r="45" stroke-opacity=".8" stroke-width="4" stroke-dasharray="85 200" transform="rotate(-90 85 196)"/><circle cx="202" cy="196" r="45" stroke-opacity=".8" stroke-width="4" stroke-dasharray="137 200" transform="rotate(-90 202 196)"/></g>
+    <text x="85" y="202" fill="#ffe5a8" font-size="25" text-anchor="middle">18</text><text x="202" y="202" fill="#ffe5a8" font-size="25" text-anchor="middle">42</text>
+    <g fill="#5b7680" font-size="7" font-weight="700" letter-spacing="1"><text x="85" y="260" text-anchor="middle">CPU LOAD</text><text x="202" y="260" text-anchor="middle">MEMORY</text></g>
+    <g fill="#5f7881" font-size="8"><text x="31" y="302">GPU ARRAY</text><text x="31" y="337">MEMORY BANK</text><text x="31" y="372">PLATFORM</text></g>
+    <g fill="#a1b8be" font-size="8" font-weight="700" text-anchor="end"><text x="255" y="302">RTX 5060 · 8 GB</text><text x="255" y="337">32 GB ONLINE</text><text x="255" y="372">WINDOWS</text></g>
+    <g stroke="#5e8490" stroke-opacity=".13"><path d="M31 315h224M31 350h224"/></g>
+
+    <g font-size="8" font-weight="700"><circle cx="34" cy="492" r="3" fill="#62efb3"/><text x="48" y="495" fill="#728b93">OPEN APPS / SEARCH</text><text x="250" y="495" fill="#a7bbc1" text-anchor="end">AUTO</text><circle cx="34" cy="536" r="3" fill="#ffb21f"/><text x="48" y="539" fill="#728b93">EDIT / DRAFT</text><text x="250" y="539" fill="#a7bbc1" text-anchor="end">REVIEW</text><circle cx="34" cy="580" r="3" fill="#ff5f56"/><text x="48" y="583" fill="#728b93">SEND / DELETE / PAY</text><text x="250" y="583" fill="#a7bbc1" text-anchor="end">LOCKED</text></g>
+    <rect x="30" y="613" width="228" height="34" fill="#ffb21f" fill-opacity=".035" stroke="#ffb21f" stroke-opacity=".2"/><text x="42" y="634" fill="#6c858c" font-size="7" font-weight="700">LOCAL SAFETY CORE</text><text x="246" y="634" fill="#ffb21f" font-size="7" font-weight="700" text-anchor="end">ARMED</text>
+
+    <g font-size="8" font-weight="700"><text x="34" y="755" fill="#ffb21f">OPEN</text><text x="75" y="755" fill="#89a1a8">CHROME</text><text x="34" y="807" fill="#ffb21f">LOAD</text><text x="75" y="807" fill="#89a1a8">ANVIL</text><text x="34" y="859" fill="#ffb21f">ENTER</text><text x="75" y="859" fill="#89a1a8">FOCUS MODE</text><text x="34" y="911" fill="#ffb21f">RUN</text><text x="75" y="911" fill="#89a1a8">DIAGNOSTICS</text></g>
+    <g stroke="#628590" stroke-opacity=".12"><path d="M30 774h228M30 826h228M30 878h228M30 930h228"/></g>
+  </g>
+
+  <g transform="translate(800 410)">
+    <circle r="315" fill="#ff9b00" fill-opacity=".025"/>
+    <circle r="276" fill="none" stroke="#ffb21f" stroke-opacity=".13" stroke-dasharray="4 17"/>
+    <ellipse rx="285" ry="103" fill="none" stroke="#ffb21f" stroke-opacity=".34" stroke-width="2" stroke-dasharray="32 13 5 12" transform="rotate(-11)" filter="url(#glow)"/>
+    <ellipse rx="260" ry="127" fill="none" stroke="#ffb21f" stroke-opacity=".24" stroke-dasharray="9 14" transform="rotate(41)"/>
+    <ellipse rx="253" ry="92" fill="none" stroke="#ffb21f" stroke-opacity=".31" stroke-dasharray="3 10" transform="rotate(-55)"/>
+    <ellipse rx="228" ry="166" fill="none" stroke="#ffb21f" stroke-opacity=".18" stroke-dasharray="22 14" transform="rotate(18)"/>
+    <circle r="210" fill="none" stroke="#ffb21f" stroke-opacity=".15" stroke-dasharray="3 10"/>
+    <circle r="170" fill="none" stroke="#ffb21f" stroke-opacity=".2" stroke-dasharray="11 8"/>
+    <g stroke="#ffb21f" stroke-opacity=".16"><path d="M-205-90L190 113M-190 120L211-72M0-216V218M-220 0H220M-151-151L151 151M151-151L-151 151"/></g>
+    <circle r="120" fill="#ff9700" fill-opacity=".12" filter="url(#bigglow)"/>
+    <circle r="72" fill="url(#core)" filter="url(#glow)"/>
+    <circle r="52" fill="none" stroke="#ffd76f" stroke-width="2" stroke-dasharray="11 7"/>
+    <circle r="23" fill="#fff7d9" filter="url(#glow)"/>
+    <g fill="#ffc64c" filter="url(#glow)"><circle cx="-198" cy="-77" r="3"/><circle cx="174" cy="-103" r="2"/><circle cx="212" cy="66" r="3"/><circle cx="-127" cy="176" r="2"/><circle cx="65" cy="203" r="2"/><circle cx="-238" cy="29" r="2"/></g>
+  </g>
+  <g font-family="Segoe UI,Arial,sans-serif" text-anchor="middle"><text x="800" y="385" fill="#ffd783" font-size="8" font-weight="700" letter-spacing="3">AWAITING DIRECTIVE</text><text x="800" y="417" fill="#fff1c5" font-size="23" font-weight="300" letter-spacing="8">READY</text><text x="800" y="448" fill="#ffb21f" font-size="13" letter-spacing="4">▂ ▅ ▃ ▇ ▄ ▆ ▂</text></g>
+  <text x="302" y="94" fill="#46616a" font-family="Segoe UI,Arial" font-size="7" letter-spacing="1.5">SYS // NEURAL INTERFACE</text><text x="1298" y="94" fill="#46616a" font-family="Segoe UI,Arial" font-size="7" letter-spacing="1.5" text-anchor="end">ENC // AES · SAFETY L3</text>
+  <g transform="translate(709 706)" font-family="Segoe UI,Arial,sans-serif"><circle cx="0" cy="0" r="30" fill="#ffb21f" fill-opacity=".09" stroke="#ffb21f" stroke-opacity=".7"/><circle cx="0" cy="0" r="38" fill="none" stroke="#ffb21f" stroke-opacity=".24" stroke-dasharray="3 7"/><path d="M0-11a7 7 0 0 0-7 7v9a7 7 0 0 0 14 0v-9a7 7 0 0 0-7-7M-13 4a13 13 0 0 0 26 0M0 17v7" fill="none" stroke="#ffd36b" stroke-width="2"/><text x="58" y="-2" fill="#d4e5e9" font-size="10" font-weight="700" letter-spacing="2">PRESS TO SPEAK</text><text x="58" y="15" fill="#54717a" font-size="7" letter-spacing="1">WAKE WORD OFF · PUSH-TO-TALK READY</text></g>
+
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="311" y="801" fill="#ffb21f" font-size="8" font-weight="700" letter-spacing="1.3">JARVIS</text><text x="380" y="802" fill="#d0e0e4" font-size="11">Good evening, Adam. Core systems are online. Text commands are ready.</text>
+    <text x="311" y="850" fill="#ffb21f" font-size="16" font-weight="700">›_</text><text x="350" y="848" fill="#526c75" font-size="11">Enter a directive or press the reactor to speak…</text><rect x="1173" y="824" width="120" height="41" fill="#ffb21f" fill-opacity=".06" stroke="#ffb21f" stroke-opacity=".18"/><text x="1233" y="849" fill="#ffb21f" font-size="8" font-weight="700" text-anchor="middle" letter-spacing="1.2">EXECUTE ↵</text><path d="M292 822h1016" stroke="#ffb21f" stroke-opacity=".17"/>
+  </g>
+
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <g font-size="8" font-weight="700"><rect x="1343" y="142" width="108" height="39" fill="#ffb21f" fill-opacity=".07" stroke="#ffb21f" stroke-opacity=".32"/><text x="1371" y="166" fill="#ffe09a">GENERAL</text><rect x="1460" y="142" width="108" height="39" fill="#071015" stroke="#668792" stroke-opacity=".16"/><text x="1492" y="166" fill="#607a83">ANVIL</text><rect x="1343" y="190" width="108" height="39" fill="#071015" stroke="#668792" stroke-opacity=".16"/><text x="1370" y="214" fill="#607a83">THE BENCH</text><rect x="1460" y="190" width="108" height="39" fill="#071015" stroke="#668792" stroke-opacity=".16"/><text x="1498" y="214" fill="#607a83">BUILD</text></g>
+    <text x="1345" y="266" fill="#516b73" font-size="7" font-weight="700" letter-spacing="1">CURRENT OBJECTIVE</text><text x="1345" y="287" fill="#b7cbd0" font-size="10" font-weight="700">Desktop command and control</text><text x="1345" y="310" fill="#597078" font-size="8">Project-specific modes route the visual</text><text x="1345" y="324" fill="#597078" font-size="8">workspace and memory context.</text>
+    <g font-size="8" font-weight="700"><circle cx="1357" cy="466" r="4" fill="#ffb21f"/><text x="1375" y="463" fill="#526b74">VOICE I/O</text><text x="1375" y="478" fill="#93aab1">PUSH-TO-TALK</text><circle cx="1357" cy="520" r="4" fill="#ffb21f"/><text x="1375" y="517" fill="#526b74">REASONING</text><text x="1375" y="532" fill="#93aab1">OLLAMA FALLBACK</text><circle cx="1357" cy="574" r="4" fill="#ffb21f"/><text x="1375" y="571" fill="#526b74">WINDOWS TOOLS</text><text x="1375" y="586" fill="#93aab1">APPROVED SET</text><circle cx="1357" cy="628" r="4" fill="#ffb21f"/><text x="1375" y="625" fill="#526b74">MEMORY</text><text x="1375" y="640" fill="#93aab1">0 RECORDS</text></g>
+    <text x="1456" y="798" fill="#3e5962" font-size="8" font-weight="700" text-anchor="middle" letter-spacing="1.2">NO COMMANDS LOGGED</text>
+    <rect x="1326" y="930" width="260" height="54" fill="#ffb21f" fill-opacity=".06" stroke="#ffb21f" stroke-opacity=".2"/><text x="1351" y="951" fill="#4d6971" font-size="7" font-weight="700" letter-spacing="1">CONFIGURATION</text><text x="1351" y="968" fill="#a9bec3" font-size="8" font-weight="700" letter-spacing="1">OPEN SETTINGS</text><text x="1564" y="963" fill="#ffb21f" font-size="18">›</text>
+  </g>
+</svg>

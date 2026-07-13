@@ -1,0 +1,257 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
+const AdmZip = require('adm-zip');
+const { XMLParser } = require('fast-xml-parser');
+
+const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.json', '.csv', '.log', '.js', '.ts', '.html', '.css', '.xml', '.yaml', '.yml']);
+const DOCUMENT_EXTENSIONS = new Set([...TEXT_EXTENSIONS, '.pdf', '.docx', '.xlsx']);
+const SKIP_DIRECTORIES = new Set(['.git', '.svn', 'node_modules', 'AppData', '$Recycle.Bin', 'System Volume Information', 'Windows', 'ProgramData', '.venv']);
+
+function cleanName(value, fallback = 'Untitled') {
+  return String(value || fallback).replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim().slice(0, 120) || fallback;
+}
+
+function arrayOf(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function xmlText(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'object') return String(value);
+  if (value['#text'] !== undefined) return String(value['#text']);
+  if (value.t !== undefined) return xmlText(value.t);
+  if (value.r !== undefined) return arrayOf(value.r).map((item) => xmlText(item.t)).join('');
+  return '';
+}
+
+function readXlsx(filePath) {
+  const zip = new AdmZip(filePath);
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', textNodeName: '#text' });
+  const sharedEntry = zip.getEntry('xl/sharedStrings.xml');
+  const shared = sharedEntry
+    ? arrayOf(parser.parse(sharedEntry.getData().toString('utf8'))?.sst?.si).map(xmlText)
+    : [];
+  const sheets = zip.getEntries().filter((entry) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(entry.entryName));
+  return sheets.map((entry, index) => {
+    const parsed = parser.parse(entry.getData().toString('utf8'))?.worksheet;
+    const rows = arrayOf(parsed?.sheetData?.row).map((row) => arrayOf(row.c).map((cell) => {
+      if (cell?.['@_t'] === 's') return shared[Number(cell.v)] || '';
+      if (cell?.['@_t'] === 'inlineStr') return xmlText(cell.is);
+      return xmlText(cell?.v);
+    }).join(','));
+    return `SHEET ${index + 1}\n${rows.join('\n')}`;
+  }).join('\n\n');
+}
+
+class DocumentService {
+  constructor({ config, shell, emit }) {
+    this.config = config;
+    this.shell = shell;
+    this.emit = emit || (() => {});
+  }
+
+  approvedRoots() {
+    const settings = this.config.getSettings();
+    return [...new Set([...(settings.searchRoots || []), ...Object.values(settings.projects || {}).filter(Boolean)])]
+      .filter((root) => root && fs.existsSync(root));
+  }
+
+  isAllowed(target) {
+    let resolved;
+    try { resolved = path.resolve(target); } catch { return false; }
+    return this.approvedRoots().some((root) => {
+      const base = path.resolve(root);
+      return resolved === base || resolved.startsWith(`${base}${path.sep}`);
+    });
+  }
+
+  resolveLocation(label = '') {
+    const query = String(label).trim().toLowerCase().replace(/^(?:my|the)\s+/, '');
+    const settings = this.config.getSettings();
+    const project = Object.entries(settings.projects || {}).find(([name, value]) => value && query.includes(name));
+    if (project) return project[1];
+    const roots = this.approvedRoots();
+    const named = roots.find((root) => path.basename(root).toLowerCase() === query || query.includes(path.basename(root).toLowerCase()));
+    if (named) return named;
+    const homeCandidate = ['documents', 'desktop', 'downloads'].includes(query) ? path.join(os.homedir(), query[0].toUpperCase() + query.slice(1)) : '';
+    if (homeCandidate && this.isAllowed(homeCandidate)) return homeCandidate;
+    return query ? '' : (roots[0] || '');
+  }
+
+  supports(filePath) {
+    return DOCUMENT_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+  }
+
+  async readDocument(filePath, maxCharacters = 50000) {
+    if (!this.isAllowed(filePath)) throw new Error('That document is outside your approved folders.');
+    const stats = await fs.promises.stat(filePath);
+    if (!stats.isFile()) throw new Error('That path is not a document.');
+    if (stats.size > 25 * 1024 * 1024) throw new Error('That document is larger than the current 25 MB reading limit.');
+    const extension = path.extname(filePath).toLowerCase();
+    let text = '';
+    if (TEXT_EXTENSIONS.has(extension)) {
+      text = await fs.promises.readFile(filePath, 'utf8');
+    } else if (extension === '.pdf') {
+      const result = await pdfParse(await fs.promises.readFile(filePath));
+      text = result.text || '';
+    } else if (extension === '.docx') {
+      const result = await mammoth.extractRawText({ path: filePath });
+      text = result.value || '';
+    } else if (extension === '.xlsx') {
+      text = readXlsx(filePath);
+    } else {
+      throw new Error('JARVIS can currently read PDF, Word DOCX, Excel XLSX, CSV, text, Markdown, JSON and common code files.');
+    }
+    const normalized = String(text).replace(/\u0000/g, '').replace(/[ \t]+\n/g, '\n').trim();
+    return {
+      name: path.basename(filePath), path: filePath, extension: extension.slice(1),
+      size: stats.size, modifiedAt: stats.mtime.toISOString(),
+      text: normalized.slice(0, maxCharacters), truncated: normalized.length > maxCharacters
+    };
+  }
+
+  async searchContents(query, maxResults = 25) {
+    const terms = String(query).toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 1);
+    if (!terms.length) return [];
+    const results = [];
+    const deadline = Date.now() + 30000;
+    let checked = 0;
+
+    const walk = async (directory, depth = 0) => {
+      if (Date.now() > deadline || depth > 8 || checked >= 160) return;
+      let entries;
+      try { entries = await fs.promises.readdir(directory, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
+        if (Date.now() > deadline || checked >= 160) return;
+        if (entry.isDirectory()) {
+          if (!SKIP_DIRECTORIES.has(entry.name)) await walk(path.join(directory, entry.name), depth + 1);
+          continue;
+        }
+        const filePath = path.join(directory, entry.name);
+        if (!this.supports(filePath)) continue;
+        checked += 1;
+        if (checked % 5 === 0) this.emit('files:progress', { directory, scannedFolders: 0, scannedItems: checked, matches: results.length });
+        try {
+          const document = await this.readDocument(filePath, 120000);
+          const lower = document.text.toLowerCase();
+          const matches = terms.reduce((total, term) => total + (lower.split(term).length - 1), 0);
+          if (!matches) continue;
+          const firstIndex = Math.min(...terms.map((term) => lower.indexOf(term)).filter((index) => index >= 0));
+          const start = Math.max(0, firstIndex - 100);
+          results.push({
+            name: document.name, path: filePath, extension: document.extension,
+            modifiedAt: document.modifiedAt, score: matches,
+            snippet: document.text.slice(start, start + 320).replace(/\s+/g, ' ')
+          });
+          results.sort((a, b) => b.score - a.score || new Date(b.modifiedAt) - new Date(a.modifiedAt));
+          if (results.length > maxResults * 2) results.length = maxResults;
+        } catch {}
+      }
+    };
+
+    this.emit('files:start', { query: `inside documents: ${query}`, roots: this.approvedRoots() });
+    for (const root of this.approvedRoots()) await walk(root);
+    const finalResults = results.slice(0, maxResults);
+    this.emit('files:complete', { query, files: finalResults, scannedFolders: 0, scannedItems: checked });
+    return finalResults;
+  }
+
+  async createFolder(location, name) {
+    const parent = this.resolveLocation(location);
+    if (!parent || !this.isAllowed(parent)) throw new Error('Choose or approve that destination folder in Settings first.');
+    const target = path.join(parent, cleanName(name, 'New Folder'));
+    await fs.promises.mkdir(target, { recursive: false });
+    return { ok: true, path: target, message: `Created folder ${path.basename(target)}.` };
+  }
+
+  async createTextFile(location, name, content, extension = '.txt') {
+    const directory = this.resolveLocation(location);
+    if (!directory || !this.isAllowed(directory)) throw new Error('Choose or approve that destination folder in Settings first.');
+    const safeExtension = extension.startsWith('.') ? extension : `.${extension}`;
+    const base = cleanName(name, 'JARVIS Note').replace(/\.[^.]+$/, '');
+    let target = path.join(directory, `${base}${safeExtension}`);
+    let count = 2;
+    while (fs.existsSync(target)) target = path.join(directory, `${base} ${count++}${safeExtension}`);
+    await fs.promises.writeFile(target, String(content || ''), { encoding: 'utf8', flag: 'wx' });
+    return { ok: true, path: target, message: `Created ${path.basename(target)}.` };
+  }
+
+  async copyItem(source, destinationDirectory) {
+    if (!this.isAllowed(source) || !this.isAllowed(destinationDirectory)) throw new Error('Both locations must be approved in Settings.');
+    const target = path.join(destinationDirectory, path.basename(source));
+    if (fs.existsSync(target)) throw new Error(`${path.basename(target)} already exists at the destination.`);
+    await fs.promises.cp(source, target, { recursive: true, errorOnExist: true });
+    return { ok: true, path: target, message: `Copied ${path.basename(source)}.` };
+  }
+
+  async moveItem(source, destinationDirectory) {
+    if (!this.isAllowed(source) || !this.isAllowed(destinationDirectory)) throw new Error('Both locations must be approved in Settings.');
+    const target = path.join(destinationDirectory, path.basename(source));
+    if (fs.existsSync(target)) throw new Error(`${path.basename(target)} already exists at the destination.`);
+    try {
+      await fs.promises.rename(source, target);
+    } catch (error) {
+      if (error.code !== 'EXDEV') throw error;
+      await fs.promises.cp(source, target, { recursive: true, errorOnExist: true });
+      await fs.promises.rm(source, { recursive: true });
+    }
+    return { ok: true, path: target, message: `Moved ${path.basename(source)}.` };
+  }
+
+  async renameItem(source, newName) {
+    if (!this.isAllowed(source)) throw new Error('That item is outside your approved folders.');
+    const extension = path.extname(source);
+    const requested = cleanName(newName, path.basename(source));
+    const finalName = path.extname(requested) || !extension ? requested : `${requested}${extension}`;
+    const target = path.join(path.dirname(source), finalName);
+    if (fs.existsSync(target)) throw new Error(`${finalName} already exists.`);
+    await fs.promises.rename(source, target);
+    return { ok: true, path: target, message: `Renamed it to ${finalName}.` };
+  }
+
+  async trashItem(target) {
+    if (!this.isAllowed(target)) throw new Error('That item is outside your approved folders.');
+    await this.shell.trashItem(target);
+    return { ok: true, message: `Moved ${path.basename(target)} to the Recycle Bin.` };
+  }
+
+  async planOrganization(location) {
+    const directory = this.resolveLocation(location);
+    if (!directory || !this.isAllowed(directory)) throw new Error('Add that folder to approved search locations first.');
+    const categories = {
+      Images: new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']),
+      Documents: new Set(['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.csv', '.txt', '.md']),
+      Archives: new Set(['.zip', '.7z', '.rar', '.tar', '.gz']),
+      Installers: new Set(['.exe', '.msi']),
+      Media: new Set(['.mp4', '.mov', '.avi', '.mp3', '.wav', '.m4a'])
+    };
+    const entries = await fs.promises.readdir(directory, { withFileTypes: true });
+    const moves = [];
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const extension = path.extname(entry.name).toLowerCase();
+      const category = Object.entries(categories).find(([, extensions]) => extensions.has(extension))?.[0] || 'Other Files';
+      const source = path.join(directory, entry.name);
+      const destination = path.join(directory, category);
+      if (!fs.existsSync(path.join(destination, entry.name))) moves.push({ source, destination, category });
+    }
+    return { directory, moves };
+  }
+
+  async applyOrganization(plan) {
+    let moved = 0;
+    for (const item of plan.moves || []) {
+      if (!this.isAllowed(item.source) || !this.isAllowed(item.destination)) continue;
+      await fs.promises.mkdir(item.destination, { recursive: true });
+      await fs.promises.rename(item.source, path.join(item.destination, path.basename(item.source)));
+      moved += 1;
+    }
+    return { ok: true, message: `Organized ${moved} file${moved === 1 ? '' : 's'} into labeled folders.` };
+  }
+}
+
+module.exports = { DocumentService, cleanName, DOCUMENT_EXTENSIONS };

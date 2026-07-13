@@ -1,0 +1,4 @@
+JARVIS Local Assistant is an unofficial, fan-made productivity application.
+It is not affiliated with or endorsed by Marvel, Disney, OpenAI, or Ollama.
+
+Ollama is optional third-party software and is distributed under its own terms.

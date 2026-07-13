@@ -1,0 +1,57 @@
+{
+  "name": "jarvis-local-assistant",
+  "version": "0.5.0",
+  "description": "A free, private, local Windows assistant for tasks, memory, and file finding.",
+  "main": "main.js",
+  "author": "Adam",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "fast-xml-parser": "^5.7.0",
+    "mammoth": "^1.11.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test",
+    "capture": "node scripts/capture-preview.js",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.adam.jarvis",
+    "productName": "JARVIS",
+    "asar": true,
+    "asarUnpack": [
+      "scripts/**/*"
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "core/**/*",
+      "src/**/*",
+      "scripts/**/*",
+      "assets/**/*",
+      "INSTALL-OLLAMA.url",
+      "DISCLAIMER.txt",
+      "LICENSE",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png",
+      "artifactName": "JARVIS-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
