@@ -1,5 +1,13 @@
 # JARVIS Changelog
 
+## 0.11.0 — July 13, 2026
+
+- In-app update check (Settings > About & Updates): compares against the
+  latest GitHub release and offers a download link. Nothing installs
+  automatically. A quiet check runs at launch and notifies only when newer.
+- Public repository: https://github.com/Adamdesgns/jarvis-local-assistant
+- README rewritten for the public download page.
+
 ## 0.10.0 — July 13, 2026
 
 Roadmap sweep: finished Phase 3, and delivered the buildable parts of

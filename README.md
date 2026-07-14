@@ -1,44 +1,70 @@
-# JARVIS — Private Local Assistant
+# JARVIS — Free Private Desktop Assistant for Windows
 
-A free Windows desktop assistant with a cinematic amber interface. It runs on
-your own PC: local conversation through Ollama, free local speech recognition,
-a "Hey Jarvis" wake word, tasks, memories, file search, and document reading —
-no subscription and no API credits required. An optional OpenAI "Cloud Brain"
-can be connected for stronger reasoning; it is separate and prepaid.
+A JARVIS-style assistant that runs on **your own PC**. No subscription, no
+account, no telemetry. Say **"Hey Jarvis"** — the wake word and speech
+recognition run 100% locally. An animated amber holographic interface with a
+floating orb when minimized.
+
+**[⬇ Download the latest JARVIS-FREE-SETUP.exe](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest)**
+
+> Windows SmartScreen will warn about an unknown publisher — this is a free,
+> unsigned app. Click **More info → Run anyway**. Verify your download against
+> the SHA-256 checksum posted with each release.
+
+## What it does
+
+**Voice**
+- "Hey Jarvis" wake word + push-to-talk — both fully on-device
+- Free local speech recognition (faster-whisper); spoken replies in Windows voices
+- Voice Diagnostics panel: green/red checks, live mic test, one-click repair
+
+**Daily assistant**
+- Tasks with priorities, due dates, and repeats — "remind me to drain the compressor every morning"
+- Morning briefing: tasks, overdue items, latest note, PC status
+- Searchable memory with edit/forget; saved routines like "Start work"
+- Desktop notifications for reminders and watched folders
+
+**Files & documents**
+- Voice file search across folders **you approve** — nowhere else
+- Reads and summarizes PDF, Word, Excel, CSV, and text files
+- **Ask your documents questions** — answers only from your files, cited down to the PDF page
+- Built-in explorer: pinned folders, recent files, folder watching, safe organizing
+
+**Brains — your choice**
+- **Free local mode (default):** conversation via [Ollama](https://ollama.com), entirely on your PC
+- **Optional cloud:** Claude (Anthropic) or OpenAI with your own prepaid API key,
+  encrypted with Windows secure storage, removable anytime
+- **"Look at my screen"** — describes your screen via the cloud brain, always
+  behind a red on-screen indicator
+
+**Safety by design**
+- Deletes go to the Recycle Bin and always ask first; so do moves, renames, and shutdown
+- Cannot send messages, spend money, or run shell commands — by architecture, not policy
+- All data in one folder (`%APPDATA%\jarvis-local-assistant`) you can back up,
+  export, or delete. See [PRIVACY.md](PRIVACY.md) and [SUPPORT.md](SUPPORT.md)
 
 ## Install
 
-1. Double-click **JARVIS-FREE-SETUP.exe** and pick an install folder.
-2. JARVIS opens by itself when the installer finishes.
-3. In Settings, select **INSTALL / REPAIR LOCAL VOICE** and watch the progress
-   line until it says local voice is installed. No other window will open.
-4. Optional: install [Ollama for Windows](https://ollama.com/download/windows)
-   and select **CONNECT / REPAIR OLLAMA** for local conversation.
+1. Download **JARVIS-FREE-SETUP.exe** from [Releases](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest) and run it.
+2. In Settings, click **INSTALL / REPAIR LOCAL VOICE** and watch the progress line (needs [Python 3.12](https://www.python.org/downloads/) — the installer fetches it via winget if missing).
+3. Optional: install [Ollama for Windows](https://ollama.com/download/windows) and click **CONNECT / REPAIR OLLAMA** for local conversation.
+4. Optional: add a Claude or OpenAI API key for the cloud brain and screen vision.
 
-## If voice does not work
+JARVIS checks this repo's releases on launch and tells you when a newer
+version exists. Nothing ever installs automatically.
 
-Open **Settings → VOICE DIAGNOSTICS**. Green rows are working; red rows say
-exactly what to fix. Use **TEST MICROPHONE** to hear back what JARVIS heard,
-**TEST "HEY JARVIS"** to check the wake word, **REPAIR VOICE** to reinstall,
-and **COPY DIAGNOSTIC REPORT** to share the results (it contains no secrets).
-
-## Moving things around
-
-Every module drags by its title bar at any time — no edit mode needed — and
-resizes from every edge and corner. Click a module to bring it forward. Use
-**MODULES** in the top bar to add or remove panels and **EDIT LAYOUT** only if
-you want the handles highlighted. Layouts save automatically.
-
-## For developers
+## Build from source
 
 ```bash
 npm install
-npm test        # 13 tests
+npm test        # 32 tests
 npm start       # run from source
 ```
 
-Build the giveaway installer with `scripts\build-installer.bat` (produces
-`dist\JARVIS-FREE-SETUP.exe`). Data lives in `%APPDATA%\jarvis-local-assistant`;
-API keys are encrypted with Windows secure storage. Security boundaries:
-allow-listed app launching, approved-folder file access, Recycle Bin deletion
-behind approval cards, and no model-generated shell commands, ever.
+Package the installer: `npx electron-builder --win dir`, then compile
+`scripts\jarvis-installer.nsi` with NSIS `makensis`. Output:
+`dist\JARVIS-FREE-SETUP.exe`.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Provided as-is; see [DISCLAIMER.txt](DISCLAIMER.txt).
