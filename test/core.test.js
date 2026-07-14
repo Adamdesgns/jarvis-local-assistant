@@ -149,6 +149,24 @@ test('document Q&A gathers relevant passages and answers with citations', async 
   }
 });
 
+test('project dashboard summarizes that project only', async () => {
+  const router = new CommandRouter({
+    config: { getSettings: () => ({ projects: { anvil: 'C:\\Anvil', 'the bench': '' } }) },
+    tools: { listDirectory: async () => [{ name: 'plan.pdf', path: 'C:\\Anvil\\plan.pdf', type: 'file' }] },
+    ai: { reply: async () => ({ ok: true, text: 'x' }) },
+    memory: { list: () => [{ text: 'Anvil invoices Fridays', project: 'anvil' }, { text: 'unrelated', project: 'general' }], search: () => [] },
+    tasks: { list: ({ project }) => project === 'anvil' ? [{ title: 'ship order', project: 'anvil', status: 'open' }] : [] },
+    log: { write: () => {} }
+  });
+  const result = await router.handle('show my anvil dashboard');
+  assert.match(result.response, /ANVIL dashboard/);
+  assert.match(result.response, /ship order/);
+  assert.match(result.response, /invoices Fridays/);
+  assert.equal(result.files[0].name, 'plan.pdf');
+  // Only the anvil project's tasks come back, not general.
+  assert.ok(result.tasks.every((t) => t.project === 'anvil'));
+});
+
 test('screen vision refuses without a cloud key', async () => {
   const ai = new AIService({ getSettings: () => ({ aiMode: 'local' }), getSecret: () => '' });
   await assert.rejects(() => ai.describeImage('AAAA', 'what is this?'), /No Cloud Brain key/);
