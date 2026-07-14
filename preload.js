@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('jarvis', {
     list: (directory) => ipcRenderer.invoke('files:list', directory),
     open: (target) => ipcRenderer.invoke('path:open', target)
   },
+  exportBackup: () => ipcRenderer.invoke('backup:export'),
+  importBackup: () => ipcRenderer.invoke('backup:import'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   chooseFolder: (title) => ipcRenderer.invoke('dialog:folder', title),
   openPath: (target) => ipcRenderer.invoke('path:open', target),

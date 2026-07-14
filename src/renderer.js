@@ -934,6 +934,20 @@ function bindEvents() {
     showToast(result.message);
   });
   $('anthropic-keys').addEventListener('click', () => window.jarvis.openAnthropicKeys());
+  $('export-backup').addEventListener('click', async () => {
+    const result = await window.jarvis.exportBackup();
+    showToast(result.message, 6000);
+  });
+  $('import-backup').addEventListener('click', async () => {
+    const result = await window.jarvis.importBackup();
+    showToast(result.message, 6000);
+    if (result.ok) {
+      if (result.tasks) renderTasks(result.tasks);
+      if (result.memories) renderMemories(result.memories);
+      state.settings = await window.jarvis.bootstrap().then((b) => b.settings).catch(() => state.settings);
+      updateFolderLabels(); renderSearchRoots();
+    }
+  });
   $('setting-cloud-provider').addEventListener('change', () => {
     state.settings.cloudProvider = $('setting-cloud-provider').value;
   });

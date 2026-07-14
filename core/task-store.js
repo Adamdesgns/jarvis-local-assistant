@@ -115,6 +115,31 @@ class TaskStore {
     );
   }
 
+  // Merge imported tasks, skipping ones that already exist by title + due date.
+  importTasks(items = []) {
+    let added = 0;
+    for (const item of items) {
+      if (!item || !String(item.title || '').trim()) continue;
+      const exists = this.items.some((task) => task.title === item.title && task.dueAt === (item.dueAt || null) && task.status === (item.status || 'open'));
+      if (exists) continue;
+      this.items.push({
+        id: crypto.randomUUID(),
+        title: String(item.title).trim(),
+        project: String(item.project || 'general').toLowerCase(),
+        priority: item.priority || 'normal',
+        repeat: REPEAT_STEPS[item.repeat] ? item.repeat : null,
+        dueAt: item.dueAt || null,
+        status: item.status === 'done' ? 'done' : 'open',
+        notified: Boolean(item.notified),
+        createdAt: item.createdAt || new Date().toISOString(),
+        completedAt: item.completedAt || null
+      });
+      added += 1;
+    }
+    if (added) this.#persist();
+    return added;
+  }
+
   summary() {
     const open = this.items.filter((task) => task.status === 'open');
     const overdue = open.filter((task) => task.dueAt && new Date(task.dueAt) < new Date());

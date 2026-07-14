@@ -402,6 +402,53 @@ function setupIpc() {
     }
     return updated;
   });
+  ipcMain.handle('backup:export', async () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export JARVIS data',
+      defaultPath: `JARVIS-backup-${stamp}.json`,
+      filters: [{ name: 'JARVIS backup', extensions: ['json'] }]
+    });
+    if (result.canceled || !result.filePath) return { ok: false, message: 'Export cancelled.' };
+    // API keys are never exported — they stay in Windows secure storage.
+    const publicSettings = config.publicSettings();
+    delete publicSettings.hasOpenAIKey;
+    delete publicSettings.hasAnthropicKey;
+    const payload = {
+      app: 'JARVIS', kind: 'backup', version: app.getVersion(), exportedAt: new Date().toISOString(),
+      settings: publicSettings, tasks: tasks.list(), memories: memory.list(1000)
+    };
+    try {
+      fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2), 'utf8');
+      return { ok: true, message: `Saved your tasks, notes, and settings to ${path.basename(result.filePath)}. API keys were not included.`, path: result.filePath };
+    } catch (error) {
+      return { ok: false, message: `Could not write the backup: ${error.message}` };
+    }
+  });
+  ipcMain.handle('backup:import', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import a JARVIS backup', properties: ['openFile'],
+      filters: [{ name: 'JARVIS backup', extensions: ['json'] }]
+    });
+    if (result.canceled || !result.filePaths[0]) return { ok: false, message: 'Import cancelled.' };
+    let payload;
+    try { payload = JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8')); }
+    catch { return { ok: false, message: 'That file is not a readable JARVIS backup.' }; }
+    if (payload?.app !== 'JARVIS' || payload.kind !== 'backup') return { ok: false, message: 'That JSON is not a JARVIS backup file.' };
+    const addedTasks = tasks.importTasks(payload.tasks || []);
+    const addedMemories = memory.importMemories(payload.memories || []);
+    // Restore only non-secret preferences (projects, roots, routines, etc.).
+    if (payload.settings) {
+      const s = payload.settings;
+      config.updateSettings({
+        projects: s.projects, searchRoots: s.searchRoots, pinnedFolders: s.pinnedFolders,
+        watchedFolders: s.watchedFolders, routines: s.routines, focusApps: s.focusApps,
+        profileName: s.profileName
+      });
+    }
+    folderWatch.start();
+    return { ok: true, message: `Imported ${addedTasks} task${addedTasks === 1 ? '' : 's'} and ${addedMemories} note${addedMemories === 1 ? '' : 's'}, and restored your folders and routines.`, tasks: tasks.list(), memories: memory.list(100) };
+  });
   ipcMain.handle('dialog:folder', async (_event, title) => {
     const result = await dialog.showOpenDialog(mainWindow, { title: String(title || 'Select folder'), properties: ['openDirectory', 'createDirectory'] });
     return result.canceled ? '' : result.filePaths[0];

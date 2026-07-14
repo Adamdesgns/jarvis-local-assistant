@@ -149,6 +149,33 @@ test('document Q&A gathers relevant passages and answers with citations', async 
   }
 });
 
+test('backup import merges tasks and notes without duplicating', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-backup-'));
+  try {
+    const { MemoryStore } = require('../core/memory-store');
+    const tasks = new TaskStore(dir);
+    const memory = new MemoryStore(dir);
+    tasks.add({ title: 'existing task' });
+    memory.add('existing note');
+
+    const addedTasks = tasks.importTasks([
+      { title: 'existing task', status: 'open' },       // duplicate → skipped
+      { title: 'imported task', dueAt: null, priority: 'high' }
+    ]);
+    const addedMemories = memory.importMemories([
+      { text: 'existing note' },                          // duplicate → skipped
+      { text: 'imported note' }
+    ]);
+    assert.equal(addedTasks, 1);
+    assert.equal(addedMemories, 1);
+    assert.equal(tasks.list().length, 2);
+    assert.equal(memory.list(10).length, 2);
+    assert.equal(tasks.list().find((t) => t.title === 'imported task').priority, 'high');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('cloud provider selection honors preference then falls back to available key', () => {
   const make = (provider, keys) => new AIService({
     getSettings: () => ({ cloudProvider: provider }),

@@ -66,6 +66,26 @@ class MemoryStore {
     return this.items.length !== before;
   }
 
+  // Merge imported memories, skipping exact-text duplicates.
+  importMemories(items = []) {
+    let added = 0;
+    const existing = new Set(this.items.map((item) => item.text));
+    for (const item of items) {
+      const text = String(item?.text || '').trim();
+      if (!text || existing.has(text)) continue;
+      this.items.push({
+        id: crypto.randomUUID(),
+        text,
+        project: item.project || 'general',
+        createdAt: item.createdAt || new Date().toISOString()
+      });
+      existing.add(text);
+      added += 1;
+    }
+    if (added) { this.items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); this.#persist(); }
+    return added;
+  }
+
   forget(query) {
     const match = this.search(query, 1)[0];
     if (!match) return null;
