@@ -1,21 +1,29 @@
 # JARVIS Roadmap and Claude Handoff
 
 Updated: July 13, 2026  
-Current release: 0.8.1  
+Current release: 0.10.0  
 Primary user: Adam — a programming novice. Explain every manual step in plain English, one action at a time.
 
-## Queued for the next session (agreed July 13, 2026)
+## Roadmap status (as of 0.10.0)
 
-1. Work through Adam's morning test feedback on 0.8.1 first — bugs before features.
-2. Add **Anthropic Claude as a third Cloud Brain option** beside OpenAI and
-   Ollama: encrypted key storage via safeStorage, model picker, SAVE KEY &
-   TEST button, and honest prepaid-credit guidance, mirroring the OpenAI
-   card in Settings. (Adam approved this on July 13.)
-3. Then the Phase 4 decisions: local vision model download (~4–6 GB) for
-   "look at my screen", and whether bundling Playwright's size cost is
-   acceptable for the giveaway installer.
+Everything buildable-and-testable locally is DONE. Phases 1, 2, 3 complete.
+Phase 4: screen vision + privacy indicator + action timeline done; browser
+automation deferred. Phase 5: backup and project dashboards done; calendar,
+email, smart-home need external OAuth/integrations. Phase 6: privacy/support
+docs done; the rest needs a purchase, hosting, or a clean VM.
 
-Note: Phases 1–3 below are complete as of 0.8.1 (see CHANGELOG.md).
+## What genuinely remains (each needs something outside the code)
+
+- **Playwright browser tools (4.3/4.4)** — pulls a ~300 MB browser; decide if
+  that's acceptable for the free giveaway before building.
+- **Calendar (5.1) and Email (5.2)** — require Google/Microsoft OAuth sign-in
+  that only Adam can complete; build the tool, Adam authorizes.
+- **Smart-home (5.4)** — needs specific device APIs/allowlists.
+- **In-app updater (6.2)** — needs a hosting URL to publish an update feed.
+- **Code-signing certificate (6.3)** — a purchase; removes SmartScreen warnings.
+- **Public repo + checksums (6.5)**, **clean-VM test (6.1)** — manual.
+
+Note: Phases 1–3 and the buildable parts of 4–6 are complete (see CHANGELOG.md).
 
 ## The goal
 
