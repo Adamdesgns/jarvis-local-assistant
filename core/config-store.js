@@ -64,6 +64,7 @@ class ConfigStore {
   updateSettings(patch) {
     const allowed = [
       'profileName', 'assistantName', 'aiMode', 'ollamaModel', 'ollamaUrl', 'openaiModel',
+      'cloudProvider', 'anthropicModel',
       'voiceEnabled', 'localVoiceEnabled', 'localVoiceModel', 'wakeWordEnabled',
       'wakeSensitivity', 'startWithWindows', 'minimizeToOrb', 'orbAlwaysOnTop',
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',

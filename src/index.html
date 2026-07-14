@@ -187,7 +187,7 @@
           <section>
             <h3>CLOUD BRAIN · OPTIONAL</h3>
             <div class="setup-status"><i id="cloud-light"></i><div><b id="cloud-title">NOT CONNECTED</b><span id="cloud-detail">Recommended for slower GPUs. Uses separate prepaid API credits.</span></div></div>
-            <label>BRAIN MODE<select id="setting-ai-mode"><option value="local">LOCAL · OLLAMA ONLY</option><option value="cloud">CLOUD · OPENAI ONLY</option><option value="auto">AUTO · CLOUD WITH OLLAMA BACKUP</option></select></label>
+            <label>BRAIN MODE<select id="setting-ai-mode"><option value="local">LOCAL · OLLAMA ONLY</option><option value="cloud">CLOUD ONLY</option><option value="auto">AUTO · CLOUD WITH OLLAMA BACKUP</option></select></label>
             <label>OPENAI MODEL<select id="setting-openai-model"><option value="gpt-5-mini">GPT-5 MINI · LOW COST</option><option value="gpt-5.6-luna">GPT-5.6 LUNA · EFFICIENT</option><option value="gpt-5.6-terra">GPT-5.6 TERRA · SMARTER</option></select></label>
             <label>OPENAI API KEY<input id="setting-openai-key" type="password" placeholder="Paste API key here" autocomplete="off"></label>
             <button type="button" id="connect-openai" class="primary-action">SAVE KEY & TEST</button>
@@ -195,6 +195,21 @@
             <button type="button" id="openai-billing" class="outline-action">ADD PREPAID CREDIT</button>
             <button type="button" id="openai-keys" class="outline-action">CREATE API KEY</button>
             <small>Your ChatGPT subscription does not include API usage. The key is encrypted on this computer. Turn off Auto Recharge on the OpenAI billing page if you want a hard prepaid budget.</small>
+          </section>
+          <section>
+            <h3>CLAUDE BRAIN · OPTIONAL</h3>
+            <div class="setup-status"><i id="claude-light"></i><div><b id="claude-title">NOT CONNECTED</b><span id="claude-detail">Anthropic's Claude models. Uses separate prepaid API credits.</span></div></div>
+            <label>CLAUDE MODEL<select id="setting-anthropic-model">
+              <option value="claude-haiku-4-5-20251001">CLAUDE HAIKU 4.5 · FAST & LOW COST</option>
+              <option value="claude-sonnet-5">CLAUDE SONNET 5 · SMART · RECOMMENDED</option>
+              <option value="claude-opus-4-8">CLAUDE OPUS 4.8 · STRONGEST</option>
+            </select></label>
+            <label>ANTHROPIC API KEY<input id="setting-anthropic-key" type="password" placeholder="Paste API key here" autocomplete="off"></label>
+            <button type="button" id="connect-anthropic" class="primary-action">SAVE KEY &amp; TEST</button>
+            <button type="button" id="remove-anthropic" class="outline-action">REMOVE KEY</button>
+            <button type="button" id="anthropic-keys" class="outline-action">CREATE API KEY</button>
+            <small>When both Claude and OpenAI keys are saved, the Cloud Provider choice below decides which one answers.</small>
+            <label>CLOUD PROVIDER<select id="setting-cloud-provider"><option value="anthropic">CLAUDE</option><option value="openai">OPENAI</option></select></label>
           </section>
           <section>
             <h3>BEHAVIOR</h3>

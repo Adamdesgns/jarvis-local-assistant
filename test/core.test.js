@@ -119,6 +119,22 @@ test('folder watch notifies once for a burst of matching changes', async () => {
   }
 });
 
+test('cloud provider selection honors preference then falls back to available key', () => {
+  const make = (provider, keys) => new AIService({
+    getSettings: () => ({ cloudProvider: provider }),
+    getSecret: (name) => (keys[name] ? 'x' : '')
+  });
+  // Preference wins when its key exists.
+  assert.equal(make('anthropic', { anthropicKey: true, openaiKey: true }).cloudProvider(), 'anthropic');
+  assert.equal(make('openai', { anthropicKey: true, openaiKey: true }).cloudProvider(), 'openai');
+  // Falls back to whichever key is present when the preferred one is missing.
+  assert.equal(make('anthropic', { openaiKey: true }).cloudProvider(), 'openai');
+  assert.equal(make('openai', { anthropicKey: true }).cloudProvider(), 'anthropic');
+  // No keys → no cloud.
+  assert.equal(make('anthropic', {}).cloudProvider(), null);
+  assert.equal(make('anthropic', {}).hasCloudKey(), false);
+});
+
 test('brain that adds a task via a tool returns the fresh list to redraw', async () => {
   const open = [{ id: '1', title: 'buy pipe dope', project: 'general', status: 'open' }];
   const router = new CommandRouter({

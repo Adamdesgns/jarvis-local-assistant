@@ -20,6 +20,7 @@ const state = {
   voiceStatus: {},
   ollamaStatus: {},
   cloudConfigured: false,
+  anthropicConfigured: false,
   currentDirectory: '',
   searchResults: [],
   searchTemporary: false,
@@ -103,6 +104,43 @@ function renderCloudStatus(configured, message = '') {
     ? 'OpenAI API key is encrypted and ready.'
     : 'Recommended for slower GPUs. Uses separate prepaid API credits.');
   $('remove-openai').disabled = !configured;
+}
+
+function renderClaudeStatus(configured, message = '') {
+  state.anthropicConfigured = Boolean(configured);
+  const color = configured ? '#61efb2' : '#ffb21f';
+  $('claude-light').style.background = color;
+  $('claude-light').style.boxShadow = `0 0 8px ${color}`;
+  $('claude-title').textContent = configured ? 'CLAUDE BRAIN CONNECTED' : 'NOT CONNECTED';
+  $('claude-detail').textContent = message || (configured
+    ? 'Anthropic API key is encrypted and ready.'
+    : "Anthropic's Claude models. Uses separate prepaid API credits.");
+  $('remove-anthropic').disabled = !configured;
+}
+
+async function connectAnthropic() {
+  const key = $('setting-anthropic-key').value.trim();
+  if (!key) return showToast('Paste your Anthropic API key first.');
+  $('connect-anthropic').disabled = true;
+  $('connect-anthropic').textContent = 'TESTING…';
+  renderClaudeStatus(false, 'Testing Claude Cloud Brain…');
+  try {
+    state.settings = await window.jarvis.saveSettings({
+      aiMode: $('setting-ai-mode').value,
+      anthropicModel: $('setting-anthropic-model').value,
+      cloudProvider: 'anthropic'
+    });
+    $('setting-cloud-provider').value = 'anthropic';
+    const result = await window.jarvis.saveAnthropicKey(key);
+    $('setting-anthropic-key').value = '';
+    renderClaudeStatus(result.ok, result.message);
+    showToast(result.ok ? 'Claude Brain connected.' : result.message, 5500);
+  } catch (error) {
+    renderClaudeStatus(false, friendlyError(error));
+  } finally {
+    $('connect-anthropic').disabled = false;
+    $('connect-anthropic').textContent = 'SAVE KEY & TEST';
+  }
 }
 
 async function connectOpenAI() {
@@ -617,6 +655,9 @@ function openSettings() {
   $('setting-ai-mode').value = state.settings.aiMode || 'local';
   $('setting-openai-model').value = state.settings.openaiModel || 'gpt-5-mini';
   $('setting-openai-key').value = '';
+  $('setting-anthropic-model').value = state.settings.anthropicModel || 'claude-sonnet-5';
+  $('setting-anthropic-key').value = '';
+  $('setting-cloud-provider').value = state.settings.cloudProvider || 'anthropic';
   $('setting-profile-name').value = state.settings.profileName || 'User';
   $('setting-voice').checked = Boolean(state.settings.voiceEnabled);
   $('setting-wake').checked = Boolean(state.settings.wakeWordEnabled);
@@ -624,7 +665,7 @@ function openSettings() {
   $('setting-top').checked = Boolean(state.settings.orbAlwaysOnTop);
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
   $('setting-motion').value = state.settings.motionMode || 'cinematic';
-  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured);
+  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured);
   $('settings-modal').showModal();
 }
 
@@ -634,6 +675,8 @@ async function saveSettings(event) {
     profileName: $('setting-profile-name').value.trim() || 'User',
     aiMode: $('setting-ai-mode').value,
     openaiModel: $('setting-openai-model').value,
+    anthropicModel: $('setting-anthropic-model').value,
+    cloudProvider: $('setting-cloud-provider').value,
     ollamaModel: $('setting-ollama-model').value.trim() || 'qwen3:8b',
     voiceEnabled: $('setting-voice').checked,
     wakeWordEnabled: $('setting-wake').checked,
@@ -884,6 +927,16 @@ function bindEvents() {
   });
   $('openai-billing').addEventListener('click', () => window.jarvis.openOpenAIBilling());
   $('openai-keys').addEventListener('click', () => window.jarvis.openOpenAIKeys());
+  $('connect-anthropic').addEventListener('click', connectAnthropic);
+  $('remove-anthropic').addEventListener('click', async () => {
+    const result = await window.jarvis.removeAnthropicKey();
+    renderClaudeStatus(false, result.message);
+    showToast(result.message);
+  });
+  $('anthropic-keys').addEventListener('click', () => window.jarvis.openAnthropicKeys());
+  $('setting-cloud-provider').addEventListener('change', () => {
+    state.settings.cloudProvider = $('setting-cloud-provider').value;
+  });
   $('get-ollama').addEventListener('click', () => window.jarvis.openOllamaDownload());
   document.querySelectorAll('[data-folder]').forEach((button) => button.addEventListener('click', async () => {
     const selected = await window.jarvis.chooseFolder(`Assign ${button.dataset.folder} workspace`);
@@ -957,6 +1010,7 @@ async function initialize() {
     Object.assign(state.layout, JSON.parse(JSON.stringify(state.settings.moduleLayout || {})));
     state.voiceStatus = bootstrap.voiceStatus;
     state.cloudConfigured = Boolean(bootstrap.cloudConfigured);
+    state.anthropicConfigured = Boolean(bootstrap.anthropicConfigured);
     $('app-version').textContent = `VERSION ${bootstrap.version}`;
     renderModuleVisibility(); renderTasks(); renderMemories(); renderActivity(); renderTelemetry(bootstrap.telemetry); renderVoiceStatus(state.voiceStatus);
     setResponse(`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${state.settings.profileName || 'User'}. Your private local assistant is online.`);

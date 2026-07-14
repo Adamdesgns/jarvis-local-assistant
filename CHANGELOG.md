@@ -1,5 +1,19 @@
 # JARVIS Changelog
 
+## 0.9.0 — July 13, 2026
+
+### Added
+- **Claude Cloud Brain**: Anthropic's Claude models (Haiku 4.5, Sonnet 5,
+  Opus 4.8) now sit beside OpenAI and Ollama as a cloud option. Encrypted
+  key storage, SAVE KEY & TEST, and a Cloud Provider choice that decides
+  which cloud answers when both keys are saved.
+
+### Fixed
+- The task list did not refresh when a task was added through the command
+  bar or voice (e.g. "add buying pipe dope to my list and tell me
+  everything"). The task was saved correctly but the module kept showing
+  "NOTHING PENDING" until an unrelated redraw. It now updates immediately.
+
 ## 0.8.1 — July 13, 2026
 
 - The assistant brain now follows a Fable-style working prompt: lead with

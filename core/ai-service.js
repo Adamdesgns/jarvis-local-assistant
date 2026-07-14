@@ -60,7 +60,31 @@ class AIService {
     ].filter(Boolean).join('\n');
   }
 
+  // Which cloud provider should answer: the user's preference when its key is
+  // saved, otherwise whichever key exists. Null means no cloud is configured.
+  cloudProvider() {
+    const preferred = this.config.getSettings().cloudProvider || 'anthropic';
+    const hasAnthropic = Boolean(this.config.getSecret('anthropicKey'));
+    const hasOpenAI = Boolean(this.config.getSecret('openaiKey'));
+    if (preferred === 'anthropic' && hasAnthropic) return 'anthropic';
+    if (preferred === 'openai' && hasOpenAI) return 'openai';
+    if (hasAnthropic) return 'anthropic';
+    if (hasOpenAI) return 'openai';
+    return null;
+  }
+
+  hasCloudKey() {
+    return this.cloudProvider() !== null;
+  }
+
   async cloudReply(text, context = {}) {
+    const provider = this.cloudProvider();
+    if (provider === 'anthropic') return this.anthropicReply(text, context);
+    if (provider === 'openai') return this.openaiReply(text, context);
+    throw new Error('No Cloud Brain key is saved. Add a Claude or OpenAI key in Settings.');
+  }
+
+  async openaiReply(text, context = {}) {
     const settings = this.config.getSettings();
     const apiKey = this.config.getSecret('openaiKey');
     if (!apiKey) throw new Error('OpenAI Cloud Brain needs an API key in Settings.');
@@ -87,6 +111,43 @@ class AIService {
       if (!String(output || '').trim()) throw new Error('OpenAI returned no text.');
       this.#remember(context.project, text, String(output).trim());
       return { ok: true, source: 'openai', text: String(output).trim() };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async anthropicReply(text, context = {}) {
+    const settings = this.config.getSettings();
+    const apiKey = this.config.getSecret('anthropicKey');
+    if (!apiKey) throw new Error('Claude Cloud Brain needs an API key in Settings.');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: settings.anthropicModel || 'claude-sonnet-5',
+          max_tokens: 800,
+          system: this.prompt(settings, context),
+          messages: [...this.#history(context.project), { role: 'user', content: text }]
+        }),
+        signal: controller.signal
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || `Claude returned ${response.status}.`);
+      const output = (payload.content || [])
+        .filter((item) => item.type === 'text')
+        .map((item) => item.text)
+        .join('')
+        .trim();
+      if (!output) throw new Error('Claude returned no text.');
+      this.#remember(context.project, text, output);
+      return { ok: true, source: 'anthropic', text: output };
     } finally {
       clearTimeout(timeout);
     }
@@ -185,12 +246,17 @@ class AIService {
     }
   }
 
-  async testCloud() {
+  async testCloud(provider) {
+    const settings = this.config.getSettings();
+    const which = provider || this.cloudProvider();
     try {
-      const result = await this.cloudReply('Reply with exactly: Cloud Brain connected.');
-      return { ok: true, message: result.text, model: this.config.getSettings().openaiModel };
+      const result = which === 'openai'
+        ? await this.openaiReply('Reply with exactly: Cloud Brain connected.')
+        : await this.anthropicReply('Reply with exactly: Cloud Brain connected.');
+      const model = which === 'openai' ? settings.openaiModel : settings.anthropicModel;
+      return { ok: true, message: result.text, model, provider: which };
     } catch (error) {
-      return { ok: false, message: error.name === 'AbortError' ? 'OpenAI connection timed out.' : error.message };
+      return { ok: false, message: error.name === 'AbortError' ? 'The Cloud Brain connection timed out.' : error.message, provider: which };
     }
   }
 
@@ -203,7 +269,7 @@ class AIService {
         return { ok: false, source: 'cloud-core', text: `Cloud Brain could not respond. ${error.message}`, detail: error.message };
       }
     }
-    if (mode === 'auto' && this.config.getSecret('openaiKey')) {
+    if (mode === 'auto' && this.hasCloudKey()) {
       try { return await this.cloudReply(text, context); }
       catch (cloudError) {
         try {

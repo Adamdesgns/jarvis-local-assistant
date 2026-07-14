@@ -306,6 +306,7 @@ function setupIpc() {
     taskSummary: tasks.summary(),
     voiceStatus: localVoice.getStatus(),
     cloudConfigured: Boolean(config.getSecret('openaiKey')),
+    anthropicConfigured: Boolean(config.getSecret('anthropicKey')),
     version: app.getVersion()
   }));
   ipcMain.handle('telemetry', collectTelemetry);
@@ -336,15 +337,29 @@ function setupIpc() {
     const value = String(key || '').trim();
     if (!value) return { ok: false, message: 'Paste an OpenAI API key first.' };
     config.setSecret('openaiKey', value);
-    const result = await ai.testCloud();
+    const result = await ai.testCloud('openai');
     if (!result.ok) config.setSecret('openaiKey', '');
     return result;
   });
   ipcMain.handle('openai:remove-key', () => {
     config.setSecret('openaiKey', '');
-    return { ok: true, message: 'Cloud Brain key removed from this computer.' };
+    return { ok: true, message: 'OpenAI key removed from this computer.' };
   });
-  ipcMain.handle('openai:test', () => ai.testCloud());
+  ipcMain.handle('openai:test', () => ai.testCloud('openai'));
+
+  ipcMain.handle('anthropic:save-key', async (_event, key) => {
+    const value = String(key || '').trim();
+    if (!value) return { ok: false, message: 'Paste an Anthropic API key first.' };
+    config.setSecret('anthropicKey', value);
+    const result = await ai.testCloud('anthropic');
+    if (!result.ok) config.setSecret('anthropicKey', '');
+    return result;
+  });
+  ipcMain.handle('anthropic:remove-key', () => {
+    config.setSecret('anthropicKey', '');
+    return { ok: true, message: 'Claude key removed from this computer.' };
+  });
+  ipcMain.handle('anthropic:test', () => ai.testCloud('anthropic'));
 
   ipcMain.handle('tasks:list', () => tasks.list());
   ipcMain.handle('tasks:add', (_event, input) => tasks.add(input));
@@ -396,6 +411,7 @@ function setupIpc() {
   ipcMain.handle('external:ollama', () => shell.openExternal('https://ollama.com/download/windows'));
   ipcMain.handle('external:openai-billing', () => shell.openExternal('https://platform.openai.com/settings/organization/billing/overview'));
   ipcMain.handle('external:openai-keys', () => shell.openExternal('https://platform.openai.com/api-keys'));
+  ipcMain.handle('external:anthropic-keys', () => shell.openExternal('https://console.anthropic.com/settings/keys'));
 
   ipcMain.on('widget:show', showOrb);
   ipcMain.on('widget:restore', restoreMainWindow);

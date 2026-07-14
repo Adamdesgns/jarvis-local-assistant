@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('jarvis', {
   saveOpenAIKey: (key) => ipcRenderer.invoke('openai:save-key', key),
   removeOpenAIKey: () => ipcRenderer.invoke('openai:remove-key'),
   testOpenAI: () => ipcRenderer.invoke('openai:test'),
+  saveAnthropicKey: (key) => ipcRenderer.invoke('anthropic:save-key', key),
+  removeAnthropicKey: () => ipcRenderer.invoke('anthropic:remove-key'),
+  testAnthropic: () => ipcRenderer.invoke('anthropic:test'),
   tasks: {
     list: () => ipcRenderer.invoke('tasks:list'),
     add: (input) => ipcRenderer.invoke('tasks:add', input),
@@ -48,6 +51,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   openOllamaDownload: () => ipcRenderer.invoke('external:ollama'),
   openOpenAIBilling: () => ipcRenderer.invoke('external:openai-billing'),
   openOpenAIKeys: () => ipcRenderer.invoke('external:openai-keys'),
+  openAnthropicKeys: () => ipcRenderer.invoke('external:anthropic-keys'),
   showWidget: () => ipcRenderer.send('widget:show'),
   restoreMain: () => ipcRenderer.send('widget:restore'),
   windowControl: (action) => ipcRenderer.send('window:control', action),
