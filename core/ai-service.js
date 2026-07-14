@@ -295,6 +295,61 @@ class AIService {
     return { ...result, sources: passages.map((p, i) => ({ n: i + 1, name: p.name, path: p.path, page: p.page, section: p.section })) };
   }
 
+  // Describe a screenshot with a vision-capable cloud model. base64 is raw PNG.
+  async describeImage(base64, question, context = {}) {
+    const provider = this.cloudProvider();
+    const settings = this.config.getSettings();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    const instruction = `${this.prompt(settings, context)}\n\nYou are looking at a screenshot of the user's screen. ${question}`;
+    try {
+      if (provider === 'anthropic') {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': this.config.getSecret('anthropicKey'), 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: settings.anthropicModel || 'claude-sonnet-5',
+            max_tokens: 700,
+            messages: [{ role: 'user', content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } },
+              { type: 'text', text: instruction }
+            ] }]
+          }),
+          signal: controller.signal
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error?.message || `Claude returned ${response.status}.`);
+        const text = (payload.content || []).filter((i) => i.type === 'text').map((i) => i.text).join('').trim();
+        if (!text) throw new Error('Claude returned no description.');
+        return { ok: true, source: 'anthropic', text };
+      }
+      if (provider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.getSecret('openaiKey')}` },
+          body: JSON.stringify({
+            model: settings.openaiModel || 'gpt-5-mini',
+            input: [{ role: 'user', content: [
+              { type: 'input_text', text: instruction },
+              { type: 'input_image', image_url: `data:image/png;base64,${base64}` }
+            ] }],
+            max_output_tokens: 700,
+            store: false
+          }),
+          signal: controller.signal
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
+        const text = payload.output_text || (payload.output || []).flatMap((i) => i.content || []).find((i) => i.type === 'output_text')?.text;
+        if (!String(text || '').trim()) throw new Error('OpenAI returned no description.');
+        return { ok: true, source: 'openai', text: String(text).trim() };
+      }
+      throw new Error('No Cloud Brain key is saved for vision.');
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   async reply(text, context = {}) {
     const settings = this.config.getSettings();
     const mode = settings.aiMode || 'local';

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const {
   app, BrowserWindow, ipcMain, dialog, shell, safeStorage, session,
-  Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences
+  Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
 const { ActivityLog } = require('./core/activity-log');
@@ -401,6 +401,32 @@ function setupIpc() {
       folderWatch.start();
     }
     return updated;
+  });
+  ipcMain.handle('screen:describe', async (_event, question) => {
+    if (!ai.hasCloudKey()) {
+      return { ok: false, message: 'Looking at your screen needs a Cloud Brain. Add a Claude or OpenAI key in Settings — the local vision model is a future option.' };
+    }
+    // Privacy: tell every window we are viewing the screen, before and after.
+    sendEverywhere('screen:viewing', { active: true });
+    log.write({ type: 'screen-view', command: question || 'look at my screen', response: 'Captured the screen for a one-time look.', source: 'vision' });
+    try {
+      const display = screen.getPrimaryDisplay();
+      const { width, height } = display.size;
+      const scale = display.scaleFactor || 1;
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) }
+      });
+      const primary = sources[0];
+      if (!primary || primary.thumbnail.isEmpty()) return { ok: false, message: 'Windows did not return a screen image to look at.' };
+      const base64 = primary.thumbnail.toPNG().toString('base64');
+      const answer = await ai.describeImage(base64, question || 'Describe what is on this screen and anything that looks important.', {});
+      return { ok: answer.ok !== false, message: answer.text, source: answer.source };
+    } catch (error) {
+      return { ok: false, message: `I could not read the screen: ${error.message}` };
+    } finally {
+      sendEverywhere('screen:viewing', { active: false });
+    }
   });
   ipcMain.handle('backup:export', async () => {
     const stamp = new Date().toISOString().slice(0, 10);

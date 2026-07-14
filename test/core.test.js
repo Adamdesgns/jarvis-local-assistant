@@ -149,6 +149,11 @@ test('document Q&A gathers relevant passages and answers with citations', async 
   }
 });
 
+test('screen vision refuses without a cloud key', async () => {
+  const ai = new AIService({ getSettings: () => ({ aiMode: 'local' }), getSecret: () => '' });
+  await assert.rejects(() => ai.describeImage('AAAA', 'what is this?'), /No Cloud Brain key/);
+});
+
 test('backup import merges tasks and notes without duplicating', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-backup-'));
   try {

@@ -112,6 +112,7 @@
           <header class="module-header drag-handle"><div><span>07 // SHORTCUTS</span><h2>QUICK COMMANDS</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content quick-grid">
             <button data-command="Morning briefing"><span>START</span>BRIEFING</button>
+            <button data-command="Look at my screen"><span>VIEW</span>MY SCREEN</button>
             <button data-command="Open Chrome"><span>OPEN</span>CHROME</button>
             <button data-command="Open my Anvil workspace"><span>LOAD</span>ANVIL</button>
             <button data-command="Show my tasks"><span>SHOW</span>TASKS</button>
@@ -272,6 +273,8 @@
       <div class="warning">!</div><span>CONFIRMATION REQUIRED</span><h2 id="approval-title">CONFIRM ACTION</h2><p id="approval-detail"></p><div><button id="approval-deny">CANCEL</button><button id="approval-accept">CONFIRM</button></div>
     </dialog>
 
+    <div id="screen-privacy" class="screen-privacy" aria-live="polite"><i></i> JARVIS IS VIEWING YOUR SCREEN</div>
+    <div id="action-timeline" class="action-timeline" aria-label="Recent JARVIS actions"></div>
     <div id="toast" class="toast"></div>
     <script src="hologram.js"></script>
     <script src="layout-engine.js"></script>

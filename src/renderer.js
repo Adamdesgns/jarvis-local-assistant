@@ -561,6 +561,37 @@ function stopRecording() {
   if (state.recording?.recorder?.state === 'recording') state.recording.recorder.stop();
 }
 
+function pushTimeline(label) {
+  const strip = $('action-timeline');
+  const item = document.createElement('span');
+  item.className = 'timeline-item';
+  item.textContent = label;
+  strip.prepend(item);
+  while (strip.children.length > 4) strip.lastChild.remove();
+  setTimeout(() => item.classList.add('fade'), 20);
+  setTimeout(() => { if (item.parentNode) item.remove(); }, 12000);
+}
+
+function looksLikeScreenView(command) {
+  return /\b(?:look at|what(?:'s| is) on|read|check|see|analyze|describe)\s+(?:my|the)\s+screen\b|\bwhat am i (?:looking at|seeing)\b|\btake a (?:screenshot|screen shot)\b/i.test(command);
+}
+
+async function describeScreen(question) {
+  setCoreState('processing', 'VIEWING SCREEN');
+  pushTimeline('Looking at your screen');
+  try {
+    const result = await window.jarvis.describeScreen(question);
+    setResponse(result.message);
+    pushTimeline(result.ok ? 'Answered from the screen' : 'Could not read the screen');
+    if (result.ok) speak(result.message); else showToast(result.message, 6000);
+    state.activity = await window.jarvis.recentActivity(20); renderActivity(state.activity);
+  } catch (error) {
+    setResponse(friendlyError(error));
+  } finally {
+    setCoreState('ready');
+  }
+}
+
 function looksLikeFileSearch(command) {
   const text = command.trim();
   return /^(?:jarvis[, ]*)?(?:can you\s+)?(?:find|locate|look for|search(?: my (?:computer|files))? for|find\s+and\s+open)\s+/i.test(text)
@@ -572,6 +603,8 @@ async function executeCommand(command) {
   const text = String(command || '').trim();
   if (!text) return;
   $('command-input').value = '';
+  // Screen vision is captured in the main process, never through the router.
+  if (looksLikeScreenView(text)) { setResponse(`› ${text}`); return describeScreen(text); }
   state.streamBuffer = '';
   document.body.classList.add('busy');
   if (looksLikeFileSearch(text)) startSearchExperience(text);
@@ -975,6 +1008,9 @@ function bindEvents() {
   window.jarvis.onWakeDetected(() => {
     if (diagnostics.wakeTimer) return finishWakeTest(true);
     startRecording('wake');
+  });
+  window.jarvis.onScreenViewing(({ active }) => {
+    $('screen-privacy').classList.toggle('visible', Boolean(active));
   });
   $('ai-stop').addEventListener('click', () => window.jarvis.cancelAI());
   document.addEventListener('keydown', (event) => {

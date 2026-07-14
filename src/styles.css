@@ -138,3 +138,11 @@ dialog{color:var(--text)}dialog::backdrop{background:rgba(0,3,5,.8);backdrop-fil
 
 .ai-stop{display:none;margin-left:10px;padding:2px 10px;border:1px solid rgba(255,102,92,.55);background:none;color:#ff8d85;font:600 8px var(--tech);letter-spacing:.12em;cursor:pointer;flex:none}
 body.busy .ai-stop{display:inline-block}
+
+.screen-privacy{position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:200;display:none;align-items:center;gap:8px;padding:7px 16px;background:rgba(255,102,92,.16);border:1px solid #ff665c;color:#ff9a92;font:600 10px var(--tech);letter-spacing:.14em;border-radius:3px;box-shadow:0 0 24px rgba(255,102,92,.35)}
+.screen-privacy.visible{display:flex}
+.screen-privacy i{width:9px;height:9px;border-radius:50%;background:#ff665c;box-shadow:0 0 8px #ff665c;animation:pulse-dot 1s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+.action-timeline{position:fixed;bottom:120px;left:16px;z-index:150;display:flex;flex-direction:column;gap:4px;pointer-events:none}
+.timeline-item{padding:4px 10px;background:rgba(255,178,31,.1);border-left:2px solid var(--amber);color:#ffd98f;font:500 10px var(--tech);letter-spacing:.06em;opacity:1;transition:opacity .5s;max-width:240px}
+.timeline-item.fade{opacity:.5}
