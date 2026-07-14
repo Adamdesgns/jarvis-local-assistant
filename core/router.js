@@ -313,7 +313,13 @@ class CommandRouter {
     } else {
       const memories = this.memory.search(text, 4);
       const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, tasks: this.tasks.list({ status: 'open' }).slice(0, 10) });
-      result = this.#result(aiResult.text, aiResult.source, { detail: aiResult.detail, success: aiResult.ok });
+      const extra = { detail: aiResult.detail, success: aiResult.ok };
+      // When the brain used a tool that changed local state, hand the fresh
+      // list back so the modules redraw instead of showing stale data.
+      const usedTools = aiResult.usedTools || [];
+      if (usedTools.includes('add_task')) extra.tasks = this.tasks.list({ status: 'open' });
+      if (usedTools.includes('remember_note')) extra.memories = this.memory.list(30);
+      result = this.#result(aiResult.text, aiResult.source, extra);
     }
     this.#log(text, result);
     return result;

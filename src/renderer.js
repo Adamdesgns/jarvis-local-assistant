@@ -564,6 +564,9 @@ async function executeCommand(command) {
       }
     }
     state.activity = await window.jarvis.recentActivity(20); renderActivity(state.activity);
+    // Safety net: any command can change tasks through the brain's tools, so
+    // reconcile the list from the store even if the result did not carry it.
+    if (!result.tasks) renderTasks(await window.jarvis.tasks.list());
     if (!result.approval && !state.searchActive) speak(result.response);
     else if (!result.approval && result.openedFile) speak(result.response);
   } catch (error) {

@@ -119,6 +119,23 @@ test('folder watch notifies once for a burst of matching changes', async () => {
   }
 });
 
+test('brain that adds a task via a tool returns the fresh list to redraw', async () => {
+  const open = [{ id: '1', title: 'buy pipe dope', project: 'general', status: 'open' }];
+  const router = new CommandRouter({
+    config: { getSettings: () => ({ projects: {} }) },
+    tools: {},
+    // Simulate the model deciding to call add_task for a compound sentence.
+    ai: { reply: async () => ({ ok: true, source: 'ollama', text: 'Added buy pipe dope.', usedTools: ['add_task'] }) },
+    memory: { search: () => [], list: () => [] },
+    tasks: { list: () => open },
+    log: { write: () => {} }
+  });
+  const result = await router.handle('add buying pipe dope to my list and then tell me everything on my list');
+  // The result must carry the tasks so the module redraws instead of showing stale "0 OPEN".
+  assert.ok(Array.isArray(result.tasks));
+  assert.equal(result.tasks[0].title, 'buy pipe dope');
+});
+
 test('saved routines open their apps and folders', async () => {
   const opened = [];
   const router = new CommandRouter({
