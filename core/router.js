@@ -145,22 +145,24 @@ class CommandRouter {
       result = memories.length
         ? this.#result(memories.map((item) => item.text).join(' • '), 'memory', { memories })
         : this.#result(`I don’t have a saved memory matching “${query}” yet.`, 'memory');
-    } else if (this.documents && /^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)/i.test(text)) {
-      const question = text.match(/^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)/i)[1];
-      const hits = await this.documents.searchContents(question, 5);
-      if (!hits.length) {
+    } else if (this.documents && /^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)|^according to my (?:documents?|files?|docs)[,:]?\s+(.+)/i.test(text)) {
+      const match = text.match(/^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)|^according to my (?:documents?|files?|docs)[,:]?\s+(.+)/i);
+      const question = match[1] || match[2];
+      const passages = await this.documents.gatherPassages(question);
+      if (!passages.length) {
         result = this.#result(`I couldn’t find anything about “${question}” in your approved documents.`, 'documents', { files: [] });
       } else {
-        const sources = hits.map((hit, index) => `[${index + 1}] ${hit.name}: "${hit.snippet}"`).join('\n');
-        const grounded = [
-          `Answer the question using ONLY these document excerpts. After each fact, cite the source filename in brackets, like [${hits[0].name}].`,
-          'If the excerpts do not contain the answer, say that plainly.',
-          `Question: ${question}`,
-          `Excerpts:\n${sources}`
-        ].join('\n');
-        const aiResult = await this.ai.reply(grounded, { memories: [], project, onChunk: stream.onChunk, onReset: stream.onReset, tasks: [] });
-        result = this.#result(aiResult.text, aiResult.ok ? 'documents' : aiResult.source, {
-          files: hits, query: question, detail: aiResult.detail, success: aiResult.ok
+        const aiResult = await this.ai.answerFromDocuments(question, passages, { project, onChunk: stream.onChunk, onReset: stream.onReset });
+        // Turn the cited passages into clickable file rows the user can open.
+        const seen = new Set();
+        const files = (aiResult.sources || []).filter((s) => { if (seen.has(s.path)) return false; seen.add(s.path); return true; })
+          .map((s) => ({ name: s.name, path: s.path, type: 'file' }));
+        const legend = (aiResult.sources || [])
+          .map((s) => `[${s.n}] ${s.name}${s.page ? ` (p.${s.page})` : s.section ? ` (section ${s.section})` : ''}`)
+          .join('  ·  ');
+        const answerText = aiResult.ok === false ? aiResult.text : `${aiResult.text}\n\nSources: ${legend}`;
+        result = this.#result(answerText, aiResult.ok !== false ? 'documents' : aiResult.source, {
+          files, query: question, sources: aiResult.sources, detail: aiResult.detail, success: aiResult.ok !== false
         });
       }
     } else if (this.documents && /^(?:search|find|look)\s+(?:inside|through)\s+(?:my\s+)?documents?\s+(?:for\s+)?(.+)/i.test(text)) {

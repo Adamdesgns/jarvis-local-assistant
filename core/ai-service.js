@@ -96,7 +96,7 @@ class AIService {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: settings.openaiModel || 'gpt-5-mini',
-          instructions: this.prompt(settings, context),
+          instructions: context.systemOverride || this.prompt(settings, context),
           input: text,
           max_output_tokens: 600,
           store: false
@@ -133,8 +133,10 @@ class AIService {
         body: JSON.stringify({
           model: settings.anthropicModel || 'claude-sonnet-5',
           max_tokens: 800,
-          system: this.prompt(settings, context),
-          messages: [...this.#history(context.project), { role: 'user', content: text }]
+          system: context.systemOverride || this.prompt(settings, context),
+          messages: context.systemOverride
+            ? [{ role: 'user', content: text }]
+            : [...this.#history(context.project), { role: 'user', content: text }]
         }),
         signal: controller.signal
       });
@@ -171,9 +173,10 @@ class AIService {
         || installed[0];
       if (!selected) throw new Error('Ollama is running, but it has no model installed.');
       const model = String(selected.name || selected.model);
+      const grounded = Boolean(context.systemOverride);
       const messages = [
-        { role: 'system', content: this.prompt(settings, context) },
-        ...this.#history(context.project),
+        { role: 'system', content: context.systemOverride || this.prompt(settings, context) },
+        ...(grounded ? [] : this.#history(context.project)),
         { role: 'user', content: text }
       ];
       const onChunk = typeof context.onChunk === 'function' ? context.onChunk : null;
@@ -223,10 +226,10 @@ class AIService {
         return { content: state.content, tool_calls: state.toolCalls };
       };
 
-      let message = await chat(true);
+      // Grounded document answers run once with no tools and no history write.
+      let message = await chat(!grounded);
       let usedTools = [];
-      // At most two tool rounds: enough to act and confirm, never a loop.
-      for (let round = 0; round < 2 && Array.isArray(message.tool_calls) && message.tool_calls.length; round += 1) {
+      for (let round = 0; !grounded && round < 2 && Array.isArray(message.tool_calls) && message.tool_calls.length; round += 1) {
         messages.push({ role: 'assistant', content: message.content || '', tool_calls: message.tool_calls });
         for (const call of message.tool_calls.slice(0, 3)) {
           const outcome = await executeToolCall(this.registry, call);
@@ -239,7 +242,7 @@ class AIService {
       }
       const output = String(message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
       if (!output) throw new Error('The local model returned no text.');
-      this.#remember(context.project, text, output);
+      if (!grounded) this.#remember(context.project, text, output);
       return { ok: true, source: 'ollama', text: output, usedTools };
     } finally {
       clearTimeout(timeout);
@@ -258,6 +261,38 @@ class AIService {
     } catch (error) {
       return { ok: false, message: error.name === 'AbortError' ? 'The Cloud Brain connection timed out.' : error.message, provider: which };
     }
+  }
+
+  // Answer a question using only the supplied document passages, and require
+  // the model to cite them by [number]. Sources are labeled with filename and
+  // page/section so citations point back to a real spot in a real file.
+  async answerFromDocuments(question, passages, context = {}) {
+    const settings = this.config.getSettings();
+    const cite = (p, i) => `[${i + 1}] ${p.name}${p.page ? `, page ${p.page}` : p.section ? `, section ${p.section}` : ''}`;
+    const sourcesBlock = passages.map((p, i) => `${cite(p, i)}\n${p.text}`).join('\n\n');
+    const systemOverride = [
+      `You are ${settings.assistantName || 'JARVIS'}, answering a question strictly from the document passages below.`,
+      'Rules:',
+      '- Use only the passages. If they do not contain the answer, say so plainly — do not use outside knowledge.',
+      '- Cite every claim with its source number in square brackets, like [1] or [2].',
+      '- Keep the answer short and spoken-plain. Lead with the answer.',
+      '',
+      `PASSAGES:\n${sourcesBlock}`
+    ].join('\n');
+    const groundedContext = { ...context, systemOverride, onChunk: context.onChunk, onReset: context.onReset };
+    const mode = settings.aiMode || 'local';
+    let result;
+    if (mode !== 'local' && this.hasCloudKey()) {
+      try { result = await this.cloudReply(question, groundedContext); }
+      catch (cloudError) {
+        try { result = await this.localReply(question, groundedContext); }
+        catch (localError) { return { ok: false, source: 'local-core', text: `Could not answer from your documents. ${cloudError.message} / ${localError.message}` }; }
+      }
+    } else {
+      try { result = await this.localReply(question, groundedContext); }
+      catch (error) { return { ok: false, source: 'local-core', text: `Could not answer from your documents. ${error.message}` }; }
+    }
+    return { ...result, sources: passages.map((p, i) => ({ n: i + 1, name: p.name, path: p.path, page: p.page, section: p.section })) };
   }
 
   async reply(text, context = {}) {

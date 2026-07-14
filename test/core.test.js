@@ -119,6 +119,36 @@ test('folder watch notifies once for a burst of matching changes', async () => {
   }
 });
 
+test('document Q&A gathers relevant passages and answers with citations', async () => {
+  const { DocumentService } = require('../core/document-service');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-docqa-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'compressor.txt'),
+      'The Ingersoll Rand compressor requires SAE 30 oil. '.repeat(3) +
+      '\n\nDrain the tank weekly to prevent rust. Torque the head bolts to 25 foot pounds.');
+    fs.writeFileSync(path.join(dir, 'unrelated.txt'), 'Grocery list: milk, eggs, bread.');
+    const docs = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+
+    const passages = await docs.gatherPassages('what oil does the compressor take');
+    assert.ok(passages.length >= 1);
+    assert.match(passages[0].text, /SAE 30/);
+    assert.equal(passages[0].name, 'compressor.txt');
+    assert.equal(passages[0].section, 1); // text file cites by section
+
+    // answerFromDocuments must pass sources through and label them for citation.
+    const ai = new AIService({ getSettings: () => ({ aiMode: 'local' }), getSecret: () => '' });
+    let capturedSystem = '';
+    ai.localReply = async (question, ctx) => { capturedSystem = ctx.systemOverride; return { ok: true, source: 'ollama', text: 'It takes SAE 30 oil [1].' }; };
+    const answer = await ai.answerFromDocuments('what oil?', passages);
+    assert.match(capturedSystem, /\[1\] compressor\.txt/);
+    assert.match(capturedSystem, /only the passages/i);
+    assert.equal(answer.sources[0].name, 'compressor.txt');
+    assert.match(answer.text, /\[1\]/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('cloud provider selection honors preference then falls back to available key', () => {
   const make = (provider, keys) => new AIService({
     getSettings: () => ({ cloudProvider: provider }),
@@ -234,27 +264,31 @@ test('stream accumulator collects text and tool calls; cancel is safe when idle'
   assert.equal(ai.cancelledByUser, true);
 });
 
-test('ask my documents retrieves excerpts and demands cited answers', async () => {
-  let prompted = '';
+test('ask my documents retrieves passages and demands cited answers', async () => {
+  const passages = [{ name: 'weld-specs.pdf', path: 'C:\\Docs\\weld-specs.pdf', page: 3, score: 4, text: 'Preheat to 250F before welding P91 pipe.' }];
+  let receivedPassages = null;
   const router = new CommandRouter({
     config: { getSettings: () => ({ projects: {} }) },
     tools: {},
-    documents: {
-      searchContents: async () => [
-        { name: 'weld-specs.pdf', path: 'C:\\Docs\\weld-specs.pdf', snippet: 'Preheat to 250F before welding P91 pipe.', score: 4, extension: 'pdf', modifiedAt: new Date().toISOString() }
-      ]
+    documents: { gatherPassages: async () => passages },
+    ai: {
+      answerFromDocuments: async (question, given) => {
+        receivedPassages = given;
+        return { ok: true, source: 'documents', text: 'Preheat to 250F [1].', sources: given.map((p, i) => ({ n: i + 1, name: p.name, path: p.path, page: p.page })) };
+      }
     },
-    ai: { reply: async (text) => { prompted = text; return { ok: true, source: 'ollama', text: 'Preheat to 250F [weld-specs.pdf].' }; } },
     memory: { search: () => [] },
     tasks: {},
     log: { write: () => {} }
   });
   const result = await router.handle('Ask my documents: what preheat does P91 need?');
-  assert.match(prompted, /ONLY these document excerpts/);
-  assert.match(prompted, /weld-specs\.pdf/);
-  assert.match(prompted, /Preheat to 250F/);
+  assert.equal(receivedPassages[0].name, 'weld-specs.pdf');
   assert.equal(result.files[0].name, 'weld-specs.pdf');
-  assert.match(result.response, /\[weld-specs\.pdf\]/);
+  assert.equal(result.sources[0].page, 3);
+  assert.match(result.response, /\[1\]/);
+  // The "according to my documents" phrasing routes the same way.
+  const alt = await router.handle('according to my documents, what preheat does P91 need?');
+  assert.match(alt.response, /\[1\]/);
 });
 
 test('nextDueDate rolls weekly and monthly forward past today', () => {

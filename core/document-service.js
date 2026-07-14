@@ -114,6 +114,57 @@ class DocumentService {
     };
   }
 
+  // Break a document into cited passages: real page numbers for PDFs, and
+  // numbered sections for everything else, so answers can point back to a spot.
+  async readPassages(filePath, maxChars = 120000) {
+    if (!this.isAllowed(filePath)) throw new Error('That document is outside your approved folders.');
+    const extension = path.extname(filePath).toLowerCase();
+    const name = path.basename(filePath);
+    if (extension === '.pdf') {
+      const pages = [];
+      await pdfParse(await fs.promises.readFile(filePath), {
+        pagerender: (pageData) => pageData.getTextContent().then((content) => {
+          const text = content.items.map((item) => item.str).join(' ').replace(/\s+/g, ' ').trim();
+          pages.push(text);
+          return text;
+        })
+      });
+      return { name, path: filePath, passages: pages.map((text, index) => ({ page: index + 1, text })).filter((p) => p.text) };
+    }
+    const document = await this.readDocument(filePath, maxChars);
+    const chunkSize = 1500;
+    const passages = [];
+    for (let i = 0, section = 1; i < document.text.length; i += chunkSize, section += 1) {
+      const text = document.text.slice(i, i + chunkSize).trim();
+      if (text) passages.push({ page: null, section, text });
+    }
+    return { name, path: filePath, passages };
+  }
+
+  // Retrieve the passages most relevant to a question across approved documents.
+  async gatherPassages(query, { maxFiles = 4, maxPassages = 6 } = {}) {
+    const terms = String(query).toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 1);
+    if (!terms.length) return [];
+    const files = await this.searchContents(query, maxFiles);
+    const passages = [];
+    for (const file of files) {
+      let doc;
+      try { doc = await this.readPassages(file.path); } catch { continue; }
+      for (const passage of doc.passages) {
+        const lower = passage.text.toLowerCase();
+        const score = terms.reduce((total, term) => total + (lower.split(term).length - 1), 0);
+        if (score > 0) {
+          passages.push({
+            name: doc.name, path: doc.path, page: passage.page, section: passage.section,
+            score, text: passage.text.slice(0, 700)
+          });
+        }
+      }
+    }
+    passages.sort((a, b) => b.score - a.score);
+    return passages.slice(0, maxPassages);
+  }
+
   async searchContents(query, maxResults = 25) {
     const terms = String(query).toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 1);
     if (!terms.length) return [];
