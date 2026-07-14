@@ -6,6 +6,7 @@
   "author": "Adam",
   "license": "MIT",
   "private": true,
+  "updateRepo": "OWNER/REPO",
   "dependencies": {
     "adm-zip": "^0.5.16",
     "fast-xml-parser": "^5.7.0",

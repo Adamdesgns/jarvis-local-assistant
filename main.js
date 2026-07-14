@@ -16,6 +16,8 @@ const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService } = require('./core/local-voice-service');
 const { FolderWatchService } = require('./core/folder-watch');
+const { checkForUpdate } = require('./core/update-check');
+const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
 
@@ -402,6 +404,8 @@ function setupIpc() {
     }
     return updated;
   });
+  ipcMain.handle('update:check', () => checkForUpdate(app.getVersion(), updateRepo));
+  ipcMain.handle('update:open', (_event, url) => shell.openExternal(String(url || `https://github.com/${updateRepo}/releases/latest`)));
   ipcMain.handle('screen:describe', async (_event, question) => {
     if (!ai.hasCloudKey()) {
       return { ok: false, message: 'Looking at your screen needs a Cloud Brain. Add a Claude or OpenAI key in Settings — the local vision model is a future option.' };
@@ -549,6 +553,16 @@ app.whenReady().then(async () => {
   localVoice.start();
   folderWatch.start();
   setInterval(checkTaskReminders, 30000);
+  // Quiet update check a few seconds after launch; only speaks up if newer.
+  setTimeout(async () => {
+    const info = await checkForUpdate(app.getVersion(), updateRepo);
+    if (info.updateAvailable) {
+      sendEverywhere('update:available', info);
+      if (Notification.isSupported()) {
+        new Notification({ title: 'JARVIS update available', body: `Version ${info.latest} is ready to download.`, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
+      }
+    }
+  }, 6000);
 });
 
 app.on('before-quit', () => {

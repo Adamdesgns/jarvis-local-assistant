@@ -43,6 +43,9 @@ contextBridge.exposeInMainWorld('jarvis', {
     list: (directory) => ipcRenderer.invoke('files:list', directory),
     open: (target) => ipcRenderer.invoke('path:open', target)
   },
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  openUpdate: (url) => ipcRenderer.invoke('update:open', url),
+  onUpdateAvailable: (callback) => on('update:available', callback),
   describeScreen: (question) => ipcRenderer.invoke('screen:describe', question),
   onScreenViewing: (callback) => on('screen:viewing', callback),
   exportBackup: () => ipcRenderer.invoke('backup:export'),

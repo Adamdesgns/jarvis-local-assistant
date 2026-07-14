@@ -167,6 +167,31 @@ test('project dashboard summarizes that project only', async () => {
   assert.ok(result.tasks.every((t) => t.project === 'anvil'));
 });
 
+test('update check compares versions and reads the latest release', async () => {
+  const { compareVersions, checkForUpdate } = require('../core/update-check');
+  assert.equal(compareVersions('0.11.0', '0.10.0'), 1);
+  assert.equal(compareVersions('v0.10.0', '0.10.0'), 0);   // v-prefix tolerated
+  assert.equal(compareVersions('0.9', '0.9.1'), -1);        // uneven segment counts
+  assert.equal(compareVersions('1.0.0', '0.99.99'), 1);
+
+  const stub = async () => ({ ok: true, json: async () => ({ tag_name: 'v0.12.0', html_url: 'https://github.com/a/b/releases/tag/v0.12.0' }) });
+  const newer = await checkForUpdate('0.11.0', 'a/b', stub);
+  assert.equal(newer.updateAvailable, true);
+  assert.equal(newer.latest, '0.12.0');
+  assert.match(newer.url, /releases/);
+
+  const same = await checkForUpdate('0.12.0', 'a/b', stub);
+  assert.equal(same.updateAvailable, false);
+
+  // A network failure must fail soft, never throw.
+  const boom = await checkForUpdate('0.11.0', 'a/b', async () => { throw new Error('offline'); });
+  assert.equal(boom.updateAvailable, false);
+
+  // An unconfigured repo returns no update without even calling fetch.
+  const unset = await checkForUpdate('0.11.0', 'OWNER/REPO', async () => { throw new Error('should not be called'); });
+  assert.equal(unset.updateAvailable, false);
+});
+
 test('screen vision refuses without a cloud key', async () => {
   const ai = new AIService({ getSettings: () => ({ aiMode: 'local' }), getSecret: () => '' });
   await assert.rejects(() => ai.describeImage('AAAA', 'what is this?'), /No Cloud Brain key/);

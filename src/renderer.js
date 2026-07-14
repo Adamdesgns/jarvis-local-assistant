@@ -21,6 +21,7 @@ const state = {
   ollamaStatus: {},
   cloudConfigured: false,
   anthropicConfigured: false,
+  updateUrl: '',
   currentDirectory: '',
   searchResults: [],
   searchTemporary: false,
@@ -561,6 +562,26 @@ function stopRecording() {
   if (state.recording?.recorder?.state === 'recording') state.recording.recorder.stop();
 }
 
+function applyUpdateInfo(info = {}) {
+  state.updateUrl = info.url || '';
+  const light = $('update-light');
+  const title = $('update-title');
+  const detail = $('update-detail');
+  const download = $('download-update');
+  if (info.updateAvailable) {
+    if (light) { light.style.background = '#ffb21f'; light.style.boxShadow = '0 0 8px #ffb21f'; }
+    if (title) title.textContent = `UPDATE AVAILABLE · ${info.latest}`;
+    if (detail) detail.textContent = `You have ${info.current}. Version ${info.latest} is ready.`;
+    if (download) download.style.display = '';
+    showToast(`JARVIS ${info.latest} is available. Open Settings to download.`, 6000);
+  } else {
+    if (light) { light.style.background = '#61efb2'; light.style.boxShadow = '0 0 8px #61efb2'; }
+    if (title) title.textContent = `JARVIS ${info.current || ''}`.trim();
+    if (detail) detail.textContent = info.latest ? 'You are on the latest version.' : 'Free local assistant.';
+    if (download) download.style.display = 'none';
+  }
+}
+
 function pushTimeline(label) {
   const strip = $('action-timeline');
   const item = document.createElement('span');
@@ -699,6 +720,7 @@ function openSettings() {
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
   $('setting-motion').value = state.settings.motionMode || 'cinematic';
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured);
+  if (!state.updateUrl) applyUpdateInfo({ current: state.version });
   $('settings-modal').showModal();
 }
 
@@ -967,6 +989,19 @@ function bindEvents() {
     showToast(result.message);
   });
   $('anthropic-keys').addEventListener('click', () => window.jarvis.openAnthropicKeys());
+  $('check-update').addEventListener('click', async () => {
+    $('check-update').disabled = true;
+    $('check-update').textContent = 'CHECKING…';
+    $('update-detail').textContent = 'Checking the release page…';
+    const info = await window.jarvis.checkForUpdate();
+    applyUpdateInfo(info);
+    $('check-update').disabled = false;
+    $('check-update').textContent = 'CHECK FOR UPDATES';
+    if (!info.latest) showToast('Could not reach the update page. Check your connection or try later.', 5000);
+    else if (!info.updateAvailable) showToast('You are on the latest version.');
+  });
+  $('download-update').addEventListener('click', () => window.jarvis.openUpdate(state.updateUrl));
+  window.jarvis.onUpdateAvailable(applyUpdateInfo);
   $('export-backup').addEventListener('click', async () => {
     const result = await window.jarvis.exportBackup();
     showToast(result.message, 6000);
@@ -1062,6 +1097,7 @@ async function initialize() {
     state.cloudConfigured = Boolean(bootstrap.cloudConfigured);
     state.anthropicConfigured = Boolean(bootstrap.anthropicConfigured);
     $('app-version').textContent = `VERSION ${bootstrap.version}`;
+    state.version = bootstrap.version;
     renderModuleVisibility(); renderTasks(); renderMemories(); renderActivity(); renderTelemetry(bootstrap.telemetry); renderVoiceStatus(state.voiceStatus);
     setResponse(`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${state.settings.profileName || 'User'}. Your private local assistant is online.`);
     $('system-status').textContent = 'LOCAL CORE ONLINE'; $('status-dot').style.background = '#61efb2'; setCoreState('ready');
