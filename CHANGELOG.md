@@ -1,5 +1,30 @@
 # JARVIS Changelog
 
+## 0.10.0 — July 13, 2026
+
+Roadmap sweep: finished Phase 3, and delivered the buildable parts of
+Phases 4, 5, and 6.
+
+### Added
+- **Document Q&A with citations** (Phase 3.4): "Ask my documents: <question>"
+  retrieves the most relevant passages across your approved files and answers
+  using only them, citing each claim [1][2] by filename and PDF page or text
+  section. Cited files are clickable.
+- **Look at my screen** (Phase 4.1/4.2/4.5): captures your screen and describes
+  it with the cloud vision model, behind a red "viewing your screen" indicator,
+  logged to Activity, with a live action timeline. Refuses clearly with no key.
+- **Backup & Restore** (Phase 5.5): export your tasks, notes, folders, and
+  routines to a file; import merges without deleting. API keys never exported.
+- **Project dashboards** (Phase 5.3): "Show my Anvil dashboard" summarizes one
+  project's tasks, notes, and recent files.
+- **Privacy & Support docs** (Phase 6.4): PRIVACY.md and SUPPORT.md, bundled in
+  the installer.
+
+### Deferred (need heavy downloads or external accounts)
+- Playwright browser automation (Phase 4.3/4.4) — ~300 MB browser download.
+- Calendar and email integrations (Phase 5.1/5.2) — require OAuth sign-in.
+- Code-signing certificate and public repo (Phase 6.3/6.5).
+
 ## 0.9.0 — July 13, 2026
 
 ### Added
