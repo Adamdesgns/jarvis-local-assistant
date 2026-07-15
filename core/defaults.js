@@ -60,7 +60,7 @@ const DEFAULT_SETTINGS = {
   routines: {
     'start work': { apps: ['chrome'], folders: ['anvil'] }
   },
-  personality: 'Calm, direct, and quietly capable, with dry wit used sparingly. Reads like a sharp coworker, never like a movie script.'
+  personality: 'Witty, composed, loyal, and lightly sarcastic. Reads like a sharp human assistant with dry humor, never like a chatbot or movie script. Casual greetings get casual answers before any offer to help.'
 };
 
 module.exports = { DEFAULT_SETTINGS };

@@ -1,5 +1,19 @@
 # JARVIS Changelog
 
+## 0.11.1 — July 14, 2026
+
+### Fixed
+- Opening a folder no longer freezes JARVIS: folder opens launch Explorer
+  as a detached process instead of a blocking shell call. This freeze was
+  also why diagnostics showed the wake word as not ready.
+- AI tool calls are wrapped in a timeout and cannot hang a reply forever.
+- Approval dialogs clean up their state even if resolving fails.
+- Casual greetings ("how are you doing") get a quick local answer instead
+  of a full AI round-trip; spoken replies retry when Windows voices load late.
+
+(Credit: explorer fix and hardening from a Codex debugging session; a voice
+change from that session that dead-locked wake-word startup was rejected.)
+
 ## 0.11.0 — July 13, 2026
 
 - In-app update check (Settings > About & Updates): compares against the

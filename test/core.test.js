@@ -93,6 +93,52 @@ test('opening a file records it in recent files, folders are not recorded', asyn
   }
 });
 
+test('opening a folder dispatches Explorer without waiting for shell completion', async () => {
+  const { EventEmitter } = require('node:events');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-explorer-open-'));
+  const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  let platformOverridden = false;
+  try {
+    if (process.platform !== 'win32') {
+      try {
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        platformOverridden = true;
+      } catch {
+        return;
+      }
+    }
+    let saved = {};
+    let shellCalled = false;
+    let launched = null;
+    const svc = new ToolService({
+      config: {
+        getSettings: () => ({ recentFiles: saved.recentFiles || [] }),
+        updateSettings: (patch) => { saved = { ...saved, ...patch }; }
+      },
+      shell: { openPath: async () => { shellCalled = true; return new Promise(() => {}); } },
+      app: null,
+      launchProcess: (command, args, options) => {
+        launched = { command, args, options };
+        const child = new EventEmitter();
+        child.unref = () => { child.unrefCalled = true; };
+        return child;
+      }
+    });
+    const start = Date.now();
+    const result = await svc.openPath(dir);
+    assert.equal(result.ok, true);
+    assert.ok(Date.now() - start < 200);
+    assert.equal(shellCalled, false);
+    assert.equal(launched.command, 'explorer.exe');
+    assert.deepEqual(launched.args, [dir]);
+    assert.equal(launched.options.detached, true);
+    assert.equal(saved.recentFiles, undefined);
+  } finally {
+    if (platformOverridden) Object.defineProperty(process, 'platform', platformDescriptor);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('folder watch notifies once for a burst of matching changes', async () => {
   const { FolderWatchService, matchesPattern } = require('../core/folder-watch');
   assert.ok(matchesPattern('report.pdf', '*.pdf'));
@@ -257,6 +303,22 @@ test('brain that adds a task via a tool returns the fresh list to redraw', async
   assert.equal(result.tasks[0].title, 'buy pipe dope');
 });
 
+test('router answers simple small talk locally without invoking AI', async () => {
+  let aiCalled = false;
+  const router = new CommandRouter({
+    config: { getSettings: () => ({ projects: {} }) },
+    tools: {},
+    ai: { reply: async () => { aiCalled = true; return { ok: true, source: 'test', text: 'wrong path' }; } },
+    memory: { search: () => [], list: () => [] },
+    tasks: { list: () => [] },
+    log: { write: () => {} }
+  });
+  const result = await router.handle('How are you doing?');
+  assert.equal(result.source, 'local-core');
+  assert.equal(aiCalled, false);
+  assert.doesNotMatch(result.response, /what do you want|what needs doing|today/i);
+});
+
 test('saved routines open their apps and folders', async () => {
   const opened = [];
   const router = new CommandRouter({
@@ -307,6 +369,17 @@ test('tool registry exposes only safe tools and executes them', async () => {
   assert.equal(unknown.ok, false);
 });
 
+test('tool registry returns an error when a tool call times out', async () => {
+  const { executeToolCall } = require('../core/tool-registry');
+  const result = await executeToolCall([{
+    name: 'slow_tool',
+    timeoutMs: 20,
+    execute: async () => new Promise(() => {})
+  }], { function: { name: 'slow_tool', arguments: '{}' } });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /timed out/);
+});
+
 test('AI service keeps per-project sessions and resets them', () => {
   const { AIService } = require('../core/ai-service');
   const ai = new AIService({ getSettings: () => ({}), getSecret: () => '' });
@@ -322,6 +395,7 @@ test('AI service keeps per-project sessions and resets them', () => {
   assert.match(prompt, /Lead with the answer/);
   assert.match(prompt, /Never claim a computer action happened/);
   assert.match(prompt, /Never invent file names/);
+  assert.match(prompt, /Casual greetings and "how are you" are small talk/);
   assert.match(prompt, /approval card/);
 });
 

@@ -42,6 +42,16 @@ function pathLabel(target) {
   return String(target || '').split(/[\\/]/).filter(Boolean).pop() || 'FOLDER';
 }
 
+function smallTalkReply(text) {
+  if (/^(?:how are you|how are you doing|how's it going|how are things|you good|are you ok|are you okay)$/i.test(text)) {
+    return 'Systems steady, mood excellent, and I have not yet formed an opinion about your browser tabs.';
+  }
+  if (/^(?:hello|hi|hey|yo|good evening|good afternoon)$/i.test(text)) {
+    return 'Right here.';
+  }
+  return null;
+}
+
 class CommandRouter {
   constructor({ config, tools, documents, ai, memory, tasks, log }) {
     this.config = config;
@@ -75,8 +85,11 @@ class CommandRouter {
     const lower = text.toLowerCase();
     const settings = this.config.getSettings();
     let result;
+    const smallTalk = smallTalkReply(text);
 
-    if (/^(help|what can you do|show commands)$/i.test(text)) {
+    if (smallTalk) {
+      result = this.#result(smallTalk, 'local-core');
+    } else if (/^(help|what can you do|show commands)$/i.test(text)) {
       result = this.#result('I can track work, remember notes, read and summarize documents, search inside files, create folders and reports, open apps, and safely organize approved folders.', 'local-core');
     } else if (/\b(?:what(?:'s| is) the )?time\b/i.test(text)) {
       result = this.#result(`It’s ${new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }).format(new Date())}.`, 'local-core');

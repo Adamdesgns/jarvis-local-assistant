@@ -7,9 +7,18 @@ const SKIP_DIRECTORIES = new Set([
   'System Volume Information', 'Windows', 'ProgramData', '.venv'
 ]);
 const SEARCH_FILLER = new Set(['the', 'a', 'an', 'my', 'file', 'folder', 'document', 'please', 'for', 'me', 'called', 'named']);
+const EXTERNAL_OPEN_TIMEOUT_MS = 8000;
 
 function normalize(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms.`)), timeoutMs);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
 }
 
 function fileInfo(fullPath, entry, stats) {
@@ -24,11 +33,12 @@ function fileInfo(fullPath, entry, stats) {
 }
 
 class ToolService {
-  constructor({ config, shell, app, emit }) {
+  constructor({ config, shell, app, emit, launchProcess }) {
     this.config = config;
     this.shell = shell;
     this.app = app;
     this.emit = emit || (() => {});
+    this.launchProcess = launchProcess || spawn;
   }
 
   setEmitter(emit) {
@@ -69,13 +79,47 @@ class ToolService {
     if (!targetPath) return { ok: false, message: 'That folder has not been assigned yet.' };
     try {
       if (!fs.existsSync(targetPath)) return { ok: false, message: `I can't find ${targetPath}. Update it in Settings.` };
-      const error = await this.shell.openPath(targetPath);
-      if (error) return { ok: false, message: error };
+      const stats = fs.statSync(targetPath);
+      this.#launchPath(targetPath, stats);
       this.#recordRecentFile(targetPath);
       return { ok: true, message: `Opening ${path.basename(targetPath) || targetPath}.`, path: targetPath };
     } catch (error) {
       return { ok: false, message: `I couldn't open that location: ${error.message}` };
     }
+  }
+
+  #launchPath(targetPath, stats) {
+    const isDirectory = stats.isDirectory();
+    if (process.platform === 'win32' && isDirectory) {
+      console.info(`[JARVIS] Opening Explorer for path: ${targetPath}`);
+      try {
+        const child = this.launchProcess('explorer.exe', [targetPath], {
+          detached: true,
+          stdio: 'ignore',
+          shell: false,
+          windowsHide: false
+        });
+        child.once('error', (error) => {
+          console.error(`[JARVIS] Explorer launch failed for ${targetPath}: ${error.message}`);
+        });
+        child.unref();
+        console.info(`[JARVIS] Explorer launch dispatched for path: ${targetPath}`);
+      } catch (error) {
+        console.error(`[JARVIS] Explorer launch threw for ${targetPath}: ${error.message}`);
+        throw error;
+      }
+      return;
+    }
+
+    console.info(`[JARVIS] Opening path via Electron shell: ${targetPath}`);
+    withTimeout(this.shell.openPath(targetPath), EXTERNAL_OPEN_TIMEOUT_MS, 'shell.openPath')
+      .then((error) => {
+        if (error) console.error(`[JARVIS] shell.openPath returned an error for ${targetPath}: ${error}`);
+        else console.info(`[JARVIS] shell.openPath completed for ${targetPath}`);
+      })
+      .catch((error) => {
+        console.error(`[JARVIS] shell.openPath failed for ${targetPath}: ${error.message}`);
+      });
   }
 
   #recordRecentFile(targetPath) {

@@ -55,6 +55,7 @@ class AIService {
       '- Do what the request implies without asking permission for reversible steps. Ask a question only when genuinely blocked on a choice only he can make.',
       '- Deleting, sending, buying, and power controls are deliberately outside your tools. If asked, say the direct command (like "delete <file>") so JARVIS can show its approval card.',
       '- Match effort to the question: simple question, one-sentence answer.',
+      '- Casual greetings and "how are you" are small talk: answer naturally in one short sentence, and do not ask what needs doing unless he asks for help.',
       `Saved notes that may be relevant:\n${memories}`,
       `Open tasks:\n${tasks}`
     ].filter(Boolean).join('\n');

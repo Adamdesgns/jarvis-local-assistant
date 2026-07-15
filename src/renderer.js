@@ -167,23 +167,39 @@ async function connectOpenAI() {
   }
 }
 
-function speak(message) {
+function selectVoice() {
+  const voices = speechSynthesis.getVoices();
+  const preferred = ['Ryan', 'Guy', 'George', 'Daniel', 'David', 'Mark'];
+  return preferred.map((name) => voices.find((voice) => voice.name.includes(name))).find(Boolean)
+    || voices.find((voice) => voice.lang.startsWith('en'))
+    || null;
+}
+
+function speak(message, retry = false) {
   if (!state.settings.voiceEnabled || !message || !('speechSynthesis' in window)) {
     if (!state.searchActive) setCoreState('ready');
     return;
   }
-  speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(message.replace(/[*#•]/g, ' '));
   const voices = speechSynthesis.getVoices();
-  const preferred = ['Ryan', 'Guy', 'George', 'Daniel', 'David', 'Mark'];
-  utterance.voice = preferred.map((name) => voices.find((voice) => voice.name.includes(name))).find(Boolean)
-    || voices.find((voice) => voice.lang.startsWith('en'));
+  if (!voices.length && !retry) {
+    const retrySpeak = () => speak(message, true);
+    speechSynthesis.addEventListener?.('voiceschanged', retrySpeak, { once: true });
+    setTimeout(retrySpeak, 500);
+    return;
+  }
+  speechSynthesis.cancel();
+  speechSynthesis.resume?.();
+  const utterance = new SpeechSynthesisUtterance(message.replace(/[*#•]/g, ' '));
+  utterance.voice = selectVoice();
   utterance.rate = .98;
   utterance.pitch = .88;
   utterance.volume = .92;
   utterance.onstart = () => setCoreState('speaking', 'LOCAL VOICE RESPONSE');
   utterance.onend = () => { if (!state.searchActive) setCoreState('ready'); };
-  utterance.onerror = () => { if (!state.searchActive) setCoreState('ready'); };
+  utterance.onerror = (event) => {
+    console.warn(`[JARVIS] Spoken reply failed: ${event.error || 'unknown speech error'}`);
+    if (!state.searchActive) setCoreState('ready');
+  };
   speechSynthesis.speak(utterance);
 }
 
@@ -679,10 +695,18 @@ function showApproval(approval) {
 
 async function resolveApproval(approved) {
   $('approval-modal').close();
-  const result = await window.jarvis.resolveApproval(state.pendingApproval, approved);
-  state.pendingApproval = '';
-  setResponse(result.response);
-  speak(result.response);
+  const approvalId = state.pendingApproval;
+  try {
+    const result = await window.jarvis.resolveApproval(approvalId, approved);
+    setResponse(result.response);
+    speak(result.response);
+  } catch (error) {
+    const message = friendlyError(error);
+    setResponse(message);
+    showToast(message);
+  } finally {
+    if (state.pendingApproval === approvalId) state.pendingApproval = '';
+  }
 }
 
 function renderSearchRoots() {

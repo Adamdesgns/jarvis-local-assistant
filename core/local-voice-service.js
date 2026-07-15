@@ -89,6 +89,7 @@ class LocalVoiceService {
       if (message.type === 'error') pending.reject(new Error(message.message));
       else pending.resolve(String(message.text || '').trim());
     } else if (message.type === 'status') {
+      this.status = { ...this.status, message: message.message || this.status.message };
       this.emit('voice:status', { ...this.getStatus(), message: message.message });
     }
   }

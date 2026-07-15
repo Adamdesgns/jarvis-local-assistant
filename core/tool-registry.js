@@ -91,6 +91,14 @@ function toolSpecs(registry) {
   }));
 }
 
+function withTimeout(promise, timeoutMs, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms.`)), timeoutMs);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+}
+
 async function executeToolCall(registry, call) {
   const name = call?.function?.name;
   const tool = registry.find((item) => item.name === name);
@@ -100,10 +108,10 @@ async function executeToolCall(registry, call) {
     try { args = JSON.parse(args); } catch { args = {}; }
   }
   try {
-    return await tool.execute(args || {});
+    return await withTimeout(tool.execute(args || {}), tool.timeoutMs || 20000, `Tool ${name}`);
   } catch (error) {
     return { ok: false, error: error.message };
   }
 }
 
-module.exports = { buildToolRegistry, toolSpecs, executeToolCall };
+module.exports = { buildToolRegistry, toolSpecs, executeToolCall, withTimeout };
