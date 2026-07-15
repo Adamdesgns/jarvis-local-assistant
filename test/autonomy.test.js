@@ -107,3 +107,53 @@ test('autonomy settings: everything defaults OFF and old saves merge safely', ()
   assert.equal(partial.autonomyRules.speakDoorbell, true);
   assert.equal(partial.autonomyRules.speakMotion, false, 'missing rules fall back to defaults');
 });
+
+const { AutonomyService } = require('../core/autonomy-service');
+
+function fakeAutonomyConfig(settings) {
+  return { getSettings: () => JSON.parse(JSON.stringify(settings)) };
+}
+
+test('autonomy service: emits autonomy:event and logs with source autonomy', () => {
+  const emitted = [];
+  const logged = [];
+  const service = new AutonomyService({
+    config: fakeAutonomyConfig(settingsWith({}, { speakDoorbell: true, someoneHereCard: true })),
+    emit: (channel, payload) => emitted.push({ channel, payload }),
+    log: { write: (entry) => logged.push(entry) },
+    now: () => at(12)
+  });
+  const actions = service.handleCameraAlert({ kind: 'doorbell', name: 'Front Door', body: 'Front Door: a courier.', jpegBase64: 'abc' });
+  assert.equal(actions.length, 2);
+  assert.equal(emitted.length, 2);
+  assert.ok(emitted.every((e) => e.channel === 'autonomy:event'));
+  assert.ok(emitted.some((e) => e.payload.speak === 'Front Door: a courier.'));
+  assert.ok(emitted.some((e) => e.payload.card && e.payload.card.jpegBase64 === 'abc'));
+  assert.equal(logged.length, 2);
+  assert.ok(logged.every((entry) => entry.source === 'autonomy' && entry.type === 'autonomy'));
+});
+
+test('autonomy service: silent when the master switch is off', () => {
+  const emitted = [];
+  const service = new AutonomyService({
+    config: fakeAutonomyConfig(settingsWith({ autonomyEnabled: false }, { speakDoorbell: true })),
+    emit: (channel, payload) => emitted.push({ channel, payload }),
+    log: { write: () => {} },
+    now: () => at(12)
+  });
+  assert.deepEqual(service.handleCameraAlert({ kind: 'doorbell', name: 'Front Door', body: 'ding' }), []);
+  assert.equal(emitted.length, 0);
+});
+
+test('autonomy service: notifyGate follows the night rule and fails open', () => {
+  const service = new AutonomyService({
+    config: fakeAutonomyConfig(settingsWith({}, { nightMotionOnly: true })),
+    emit: () => {}, log: { write: () => {} },
+    now: () => at(14)
+  });
+  assert.equal(service.notifyGate({ kind: 'motion' }), false, 'daytime motion notification suppressed');
+  assert.equal(service.notifyGate({ kind: 'doorbell' }), true);
+  // A config that throws must never block notifications.
+  const broken = new AutonomyService({ config: { getSettings: () => { throw new Error('boom'); } }, emit: () => {}, log: { write: () => {} } });
+  assert.equal(broken.notifyGate({ kind: 'motion' }), true);
+});
