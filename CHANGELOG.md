@@ -1,5 +1,15 @@
 # JARVIS Changelog
 
+## 0.11.2 — July 14, 2026
+
+### Fixed
+- Voice can no longer get stuck at "Starting local voice" forever. The
+  service now detects a failed or stalled engine start, restarts it once
+  automatically, and otherwise says plainly to run Repair Voice. (The
+  engine itself was healthy; the app lost track of it after an upgrade.)
+- Long answers are readable: the response box grows with the reply,
+  keeps line breaks, and scrolls instead of clipping to one line.
+
 ## 0.11.1 — July 14, 2026
 
 ### Fixed

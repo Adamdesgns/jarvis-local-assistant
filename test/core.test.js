@@ -482,6 +482,31 @@ test('layout engine keeps modules inside the workspace at any size', () => {
   assert.equal(nextZ({ a: { z: 3 }, b: { z: 7 } }), 8);
 });
 
+test('voice service reports a failed spawn instead of "starting" forever', async () => {
+  const { LocalVoiceService } = require('../core/local-voice-service');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-voice-spawn-'));
+  try {
+    // A python.exe that exists but is not a real executable makes spawn fail.
+    fs.mkdirSync(path.join(dir, '.venv', 'Scripts'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.venv', 'Scripts', 'python.exe'), 'not a program');
+    const statuses = [];
+    const svc = new LocalVoiceService({
+      voiceRoot: dir,
+      scriptPath: 'x.py',
+      config: { getSettings: () => ({}) },
+      emit: (channel, payload) => { if (channel === 'voice:status') statuses.push(payload); }
+    });
+    svc.start();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const status = svc.getStatus();
+    assert.equal(status.running, false);
+    assert.match(status.message, /could not start|stopped/i);
+    assert.ok(statuses.length >= 1); // the UI heard about it
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('voice diagnostic report states every check and omits secrets', () => {
   const report = buildDiagnosticReport({
     installed: true,

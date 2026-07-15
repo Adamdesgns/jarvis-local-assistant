@@ -32,23 +32,59 @@ class LocalVoiceService {
       return this.getStatus();
     }
     const settings = this.config.getSettings();
-    this.process = spawn(this.pythonPath(), ['-u', this.scriptPath, '--service'], {
-      cwd: this.voiceRoot,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-      env: {
-        ...process.env,
-        JARVIS_WHISPER_MODEL: settings.localVoiceModel || 'small.en',
-        JARVIS_WAKE_ENABLED: settings.wakeWordEnabled === false ? '0' : '1'
-      }
-    });
+    let child;
+    try {
+      child = spawn(this.pythonPath(), ['-u', this.scriptPath, '--service'], {
+        cwd: this.voiceRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+        env: {
+          ...process.env,
+          JARVIS_WHISPER_MODEL: settings.localVoiceModel || 'small.en',
+          JARVIS_WAKE_ENABLED: settings.wakeWordEnabled === false ? '0' : '1'
+        }
+      });
+    } catch (error) {
+      // Windows throws synchronously for some spawn failures (bad executable).
+      this.status = { installed: true, running: false, wakeReady: false, message: `The voice engine could not start: ${error.message}` };
+      this.emit('voice:status', this.getStatus());
+      return this.getStatus();
+    }
+    this.process = child;
     this.status = { installed: true, running: true, wakeReady: false, message: 'Starting local voice' };
-    this.process.stdout.setEncoding('utf8');
-    this.process.stdout.on('data', (chunk) => this.#readLines(chunk));
-    this.process.stderr.setEncoding('utf8');
-    this.process.stderr.on('data', (chunk) => this.emit('voice:log', String(chunk).trim()));
-    this.process.on('exit', (code) => {
+
+    // Watchdog: a healthy engine reports ready within seconds. If nothing
+    // arrives, kill it and retry once instead of showing "starting" forever.
+    clearTimeout(this.readyWatchdog);
+    this.readyWatchdog = setTimeout(() => {
+      if (this.process !== child || this.status.wakeReady || this.status.message !== 'Starting local voice') return;
+      try { child.kill(); } catch {}
       this.process = null;
+      if (!this.retriedStart) {
+        this.retriedStart = true;
+        this.status = { installed: true, running: false, wakeReady: false, message: 'Voice engine stalled — restarting it' };
+        this.emit('voice:status', this.getStatus());
+        this.start();
+      } else {
+        this.status = { installed: true, running: false, wakeReady: false, message: 'The voice engine did not start. Open Voice Diagnostics and select Repair Voice.' };
+        this.emit('voice:status', this.getStatus());
+      }
+    }, 20000);
+
+    child.on('error', (error) => {
+      // Spawn failures emit 'error' with no 'exit'; without this handler the
+      // service would report "starting" forever with no process behind it.
+      clearTimeout(this.readyWatchdog);
+      if (this.process === child) this.process = null;
+      this.status = { installed: true, running: false, wakeReady: false, message: `The voice engine could not start: ${error.message}` };
+      this.emit('voice:status', this.getStatus());
+    });
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => this.#readLines(chunk));
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => this.emit('voice:log', String(chunk).trim()));
+    child.on('exit', (code) => {
+      if (this.process === child) this.process = null;
       this.status = { installed: true, running: false, wakeReady: false, message: `Local voice stopped${code ? ` (${code})` : ''}` };
       this.emit('voice:status', this.getStatus());
       for (const pending of this.pending.values()) pending.reject(new Error('Local voice stopped unexpectedly.'));
@@ -59,8 +95,10 @@ class LocalVoiceService {
 
   stop() {
     if (!this.process) return;
-    this.#send({ type: 'shutdown' });
-    setTimeout(() => this.process?.kill(), 1500);
+    clearTimeout(this.readyWatchdog);
+    const child = this.process;
+    try { this.#send({ type: 'shutdown' }); } catch {}
+    setTimeout(() => { try { child.kill(); } catch {} }, 1500);
   }
 
   #readLines(chunk) {
@@ -77,6 +115,8 @@ class LocalVoiceService {
 
   #handle(message) {
     if (message.type === 'ready') {
+      clearTimeout(this.readyWatchdog);
+      this.retriedStart = false;
       this.status = { installed: true, running: true, wakeReady: Boolean(message.wakeReady), message: message.message || 'Local voice ready' };
       this.emit('voice:status', this.getStatus());
     } else if (message.type === 'wake') {
