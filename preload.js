@@ -37,6 +37,17 @@ contextBridge.exposeInMainWorld('jarvis', {
     update: (id, text) => ipcRenderer.invoke('memory:update', { id, text }),
     remove: (id) => ipcRenderer.invoke('memory:remove', id)
   },
+  cameras: {
+    bootstrap: () => ipcRenderer.invoke('cameras:bootstrap'),
+    addRtsp: (payload) => ipcRenderer.invoke('cameras:add-rtsp', payload),
+    removeAccount: (accountId) => ipcRenderer.invoke('cameras:remove-account', accountId),
+    list: () => ipcRenderer.invoke('cameras:list'),
+    snapshot: (key, manual) => ipcRenderer.invoke('cameras:snapshot', { key, manual }),
+    liveStart: (key) => ipcRenderer.invoke('cameras:live-start', key),
+    liveStop: (key) => ipcRenderer.invoke('cameras:live-stop', key)
+  },
+  onCamerasChanged: (callback) => on('cameras:changed', callback),
+  onCamerasStatus: (callback) => on('cameras:status', callback),
   files: {
     roots: () => ipcRenderer.invoke('files:roots'),
     home: () => ipcRenderer.invoke('files:home'),

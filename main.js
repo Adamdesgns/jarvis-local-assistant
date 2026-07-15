@@ -15,6 +15,8 @@ const { DocumentService } = require('./core/document-service');
 const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService } = require('./core/local-voice-service');
+const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
+const { CameraService } = require('./core/camera/camera-service');
 const { FolderWatchService } = require('./core/folder-watch');
 const { checkForUpdate } = require('./core/update-check');
 const updateRepo = require('./package.json').updateRepo || '';
@@ -36,6 +38,8 @@ let ollama;
 let localVoice;
 let folderWatch;
 let router;
+let go2rtc;
+let cameras;
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
 
@@ -490,6 +494,18 @@ function setupIpc() {
   ipcMain.handle('external:openai-keys', () => shell.openExternal('https://platform.openai.com/api-keys'));
   ipcMain.handle('external:anthropic-keys', () => shell.openExternal('https://console.anthropic.com/settings/keys'));
 
+  ipcMain.handle('cameras:bootstrap', async () => ({
+    accounts: cameras.listAccounts(),
+    cameras: await cameras.listCameras(),
+    status: cameras.getStatus()
+  }));
+  ipcMain.handle('cameras:add-rtsp', (_event, payload) => cameras.addRtspAccount(payload || {}));
+  ipcMain.handle('cameras:remove-account', (_event, accountId) => cameras.removeAccount(String(accountId || '')));
+  ipcMain.handle('cameras:list', () => cameras.listCameras());
+  ipcMain.handle('cameras:snapshot', (_event, payload) => cameras.getSnapshot(String(payload?.key || ''), { manual: Boolean(payload?.manual) }));
+  ipcMain.handle('cameras:live-start', (_event, key) => cameras.openLiveView(String(key || '')));
+  ipcMain.handle('cameras:live-stop', (_event, key) => cameras.closeLiveView(String(key || '')));
+
   ipcMain.on('widget:show', showOrb);
   ipcMain.on('widget:restore', restoreMainWindow);
   ipcMain.on('ui:state', (_event, payload) => {
@@ -539,6 +555,15 @@ app.whenReady().then(async () => {
     config,
     emit: sendEverywhere
   });
+  go2rtc = new Go2RtcManager({
+    binaryPath: app.isPackaged
+      ? path.join(process.resourcesPath, 'go2rtc', 'go2rtc.exe')
+      : path.join(__dirname, 'resources', 'go2rtc', 'go2rtc.exe'),
+    dataDir: path.join(app.getPath('userData'), 'cameras'),
+    emit: sendEverywhere
+  });
+  cameras = new CameraService({ config, emit: sendEverywhere, log, go2rtc });
+  cameras.init();
 
   try {
     const gpu = await app.getGPUInfo('basic');
@@ -568,5 +593,6 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   isQuitting = true;
   localVoice?.stop();
+  cameras?.shutdown();
 });
 app.on('window-all-closed', () => { if (isQuitting) app.quit(); });
