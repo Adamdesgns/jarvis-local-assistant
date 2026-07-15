@@ -17,3 +17,58 @@ test('base driver: contract shape and NotSupported defaults', async () => {
   assert.deepEqual(seen, [{ state: 'connected', message: 'ok' }]);
   assert.ok(new NotSupportedError('Arming') instanceof Error);
 });
+
+const fsx = require('node:fs');
+const osx = require('node:os');
+const pathx = require('node:path');
+const { EventEmitter: EE } = require('node:events');
+const { Go2RtcManager } = require('../core/camera/go2rtc-manager');
+
+function fakeChild() {
+  const child = new EE();
+  child.kill = () => child.emit('exit', 0);
+  return child;
+}
+
+test('go2rtc manager: reports not installed without the binary', async () => {
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'jarvis-go2rtc-'));
+  try {
+    const manager = new Go2RtcManager({ binaryPath: pathx.join(dir, 'missing.exe'), dataDir: dir, emit: () => {} });
+    assert.equal(manager.installed(), false);
+    const result = await manager.start();
+    assert.equal(result.ok, false);
+    assert.match(result.message, /streaming helper/i);
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('go2rtc manager: writes localhost-only config, starts, and manages streams', async () => {
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'jarvis-go2rtc-'));
+  try {
+    const binary = pathx.join(dir, 'go2rtc.exe');
+    fsx.writeFileSync(binary, 'stub');
+    const calls = [];
+    const manager = new Go2RtcManager({
+      binaryPath: binary,
+      dataDir: dir,
+      emit: () => {},
+      spawnFn: (cmd, args) => { calls.push({ kind: 'spawn', cmd, args }); return fakeChild(); },
+      fetchFn: async (url, options) => { calls.push({ kind: 'fetch', url, method: options?.method || 'GET' }); return { ok: true, arrayBuffer: async () => new ArrayBuffer(3) }; }
+    });
+    const started = await manager.start();
+    assert.equal(started.ok, true);
+    const yaml = fsx.readFileSync(pathx.join(dir, 'go2rtc.yaml'), 'utf8');
+    assert.match(yaml, /127\.0\.0\.1/);
+    assert.doesNotMatch(yaml, /0\.0\.0\.0/);
+    assert.match(manager.apiBase(), /^http:\/\/127\.0\.0\.1:\d+$/);
+    await manager.setStream('cam_a', 'rtsp://user:pw@192.168.1.20/stream1');
+    const put = calls.find((c) => c.kind === 'fetch' && c.method === 'PUT');
+    assert.ok(put && put.url.includes('cam_a'));
+    // The RTSP URL (contains a password) must be query-encoded, not logged raw anywhere else.
+    assert.ok(put.url.includes(encodeURIComponent('rtsp://user:pw@192.168.1.20/stream1')));
+    const frame = await manager.snapshot('cam_a');
+    assert.ok(Buffer.isBuffer(frame) && frame.length === 3);
+    assert.match(manager.whepUrl('cam_a'), /\/api\/webrtc\?src=cam_a$/);
+    await manager.stop();
+    assert.equal(manager.getStatus().running, false);
+  } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
+});
