@@ -205,7 +205,10 @@ class CameraService {
     const driver = this.drivers.get(accountId);
     if (!driver) return { ok: false, message: 'That system is no longer set up.' };
     try {
-      await driver.setArmed(Number(systemId), Boolean(armed));
+      // Pass the id through as-is. Blink network ids are numeric but Ring
+      // location ids are non-numeric strings — Number() would make them NaN
+      // and Ring arm/disarm would never find the location.
+      await driver.setArmed(systemId, Boolean(armed));
       this.emit('cameras:changed', {});
       this.log.write({ type: 'camera', command: armed ? 'camera arm' : 'camera disarm', response: `${armed ? 'Armed' : 'Disarmed'} system ${systemKey}.`, source: 'cameras' });
       return { ok: true, message: armed ? 'System armed.' : 'System disarmed.' };

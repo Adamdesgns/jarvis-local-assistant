@@ -268,6 +268,31 @@ test('camera service: alerts pipeline notifies, logs, dedupes, and emits', async
   assert.equal(notified.length, 1, 'deduped within 60s window');
 });
 
+test('camera service: setArmed passes non-numeric system ids through unchanged (Ring)', async () => {
+  const config = fakeConfig();
+  const armedWith = [];
+  // Mimics Ring: location ids are non-numeric strings, and setArmed looks the
+  // location up by exact string id. Number()-coercing the id would break this.
+  class RingLikeDriver extends RtspDriver {
+    async connect() { this.setState('connected'); }
+    async listSystems() { return [{ id: 'loc-abc123', name: 'Home', armed: false, canArm: true }]; }
+    async setArmed(systemId, armed) {
+      if (systemId !== 'loc-abc123') throw new Error('That location was not found.');
+      armedWith.push({ systemId, armed });
+    }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { rtsp: RingLikeDriver }
+  });
+  await service.init();
+  await service.addRtspAccount({ name: 'Home', cameras: [{ name: 'Cam', url: 'rtsp://u:p@h/s' }] });
+  const [system] = await service.listSystems();
+  const result = await service.setArmed(system.key, true);
+  assert.equal(result.ok, true, result.message);
+  assert.deepEqual(armedWith, [{ systemId: 'loc-abc123', armed: true }]);
+});
+
 test('camera service: sdp-bridge live view for drivers with sessions', async () => {
   const config = fakeConfig();
   class SdpDriver extends RtspDriver {
