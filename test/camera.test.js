@@ -189,3 +189,21 @@ test('camera service: cooldown blocks automatic snapshots but not manual ones', 
   const manual = await service.getSnapshot(camera.key, { manual: true });
   assert.equal(manual.ok, true);
 });
+
+const { discoverCameras } = require('../core/camera/onvif-discovery');
+
+test('onvif discovery: dedupes and survives probe errors', async () => {
+  const found = await discoverCameras({
+    probeFn: async () => ([
+      { hostname: '192.168.1.20', name: 'Reolink' },
+      { hostname: '192.168.1.20', name: 'Reolink duplicate' },
+      { hostname: '192.168.1.31', name: '' }
+    ])
+  });
+  assert.deepEqual(found, [
+    { address: '192.168.1.20', name: 'Reolink' },
+    { address: '192.168.1.31', name: 'Camera at 192.168.1.31' }
+  ]);
+  const failed = await discoverCameras({ probeFn: async () => { throw new Error('no network'); } });
+  assert.deepEqual(failed, []);
+});

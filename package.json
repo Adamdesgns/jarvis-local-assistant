@@ -11,6 +11,7 @@
     "adm-zip": "^0.5.16",
     "fast-xml-parser": "^5.7.0",
     "mammoth": "^1.11.0",
+    "onvif": "^0.8.1",
     "pdf-parse": "^1.1.1"
   },
   "scripts": {
@@ -32,7 +33,13 @@
       "scripts/**/*"
     ],
     "extraResources": [
-      { "from": "resources/go2rtc", "to": "go2rtc", "filter": ["go2rtc.exe"] }
+      {
+        "from": "resources/go2rtc",
+        "to": "go2rtc",
+        "filter": [
+          "go2rtc.exe"
+        ]
+      }
     ],
     "files": [
       "main.js",

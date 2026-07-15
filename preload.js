@@ -44,7 +44,8 @@ contextBridge.exposeInMainWorld('jarvis', {
     list: () => ipcRenderer.invoke('cameras:list'),
     snapshot: (key, manual) => ipcRenderer.invoke('cameras:snapshot', { key, manual }),
     liveStart: (key) => ipcRenderer.invoke('cameras:live-start', key),
-    liveStop: (key) => ipcRenderer.invoke('cameras:live-stop', key)
+    liveStop: (key) => ipcRenderer.invoke('cameras:live-stop', key),
+    discover: () => ipcRenderer.invoke('cameras:discover')
   },
   onCamerasChanged: (callback) => on('cameras:changed', callback),
   onCamerasStatus: (callback) => on('cameras:status', callback),

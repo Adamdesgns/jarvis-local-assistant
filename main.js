@@ -505,6 +505,10 @@ function setupIpc() {
   ipcMain.handle('cameras:snapshot', (_event, payload) => cameras.getSnapshot(String(payload?.key || ''), { manual: Boolean(payload?.manual) }));
   ipcMain.handle('cameras:live-start', (_event, key) => cameras.openLiveView(String(key || '')));
   ipcMain.handle('cameras:live-stop', (_event, key) => cameras.closeLiveView(String(key || '')));
+  ipcMain.handle('cameras:discover', () => {
+    const { discoverCameras } = require('./core/camera/onvif-discovery');
+    return discoverCameras({});
+  });
 
   ipcMain.on('widget:show', showOrb);
   ipcMain.on('widget:restore', restoreMainWindow);
