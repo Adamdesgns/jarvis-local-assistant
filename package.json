@@ -31,6 +31,9 @@
     "asarUnpack": [
       "scripts/**/*"
     ],
+    "extraResources": [
+      { "from": "resources/go2rtc", "to": "go2rtc", "filter": ["go2rtc.exe"] }
+    ],
     "files": [
       "main.js",
       "preload.js",
