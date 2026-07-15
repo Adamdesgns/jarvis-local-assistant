@@ -133,7 +133,7 @@
           <header class="module-header drag-handle"><div><span>09 // SURVEILLANCE</span><h2>CAMERAS</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Add cameras">＋ ADD</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content cameras-content">
             <form id="camera-add-form" class="camera-add-form" hidden>
-              <div class="camera-brand-tabs"><button type="button" class="active" data-camera-brand="rtsp">LOCAL (RTSP)</button><button type="button" data-camera-brand="blink">BLINK</button></div>
+              <div class="camera-brand-tabs"><button type="button" class="active" data-camera-brand="rtsp">LOCAL (RTSP)</button><button type="button" data-camera-brand="blink">BLINK</button><button type="button" data-camera-brand="ring">RING</button></div>
               <div id="camera-pane-rtsp" class="camera-pane">
                 <p class="camera-hint">Add a local network camera. The address looks like rtsp://username:password@192.168.1.20/stream1 — it is stored encrypted on this computer.</p>
                 <input id="camera-add-name" placeholder="Camera name (Front Door)">
@@ -148,6 +148,16 @@
                 <div id="blink-pin-row" class="camera-add-actions" hidden>
                   <input id="blink-pin" inputmode="numeric" placeholder="PIN from the Blink email">
                   <button type="button" id="blink-verify">VERIFY PIN</button>
+                </div>
+              </div>
+              <div id="camera-pane-ring" class="camera-pane" hidden>
+                <p class="camera-hint">Sign in with your Ring app email and password. Ring will text or email you a code to approve JARVIS. Credentials are stored encrypted on this computer.</p>
+                <input id="ring-email" type="email" placeholder="Ring account email" autocomplete="off">
+                <input id="ring-password" type="password" placeholder="Ring account password" autocomplete="off">
+                <div class="camera-add-actions"><button type="button" id="ring-signin">SIGN IN</button><button type="button" id="ring-cancel">CANCEL</button></div>
+                <div id="ring-code-row" class="camera-add-actions" hidden>
+                  <input id="ring-code" inputmode="numeric" placeholder="Code from Ring">
+                  <button type="button" id="ring-verify">VERIFY CODE</button>
                 </div>
               </div>
               <p id="camera-add-status" class="camera-status" role="status"></p>
