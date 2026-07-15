@@ -18,6 +18,7 @@ const { LocalVoiceService } = require('./core/local-voice-service');
 const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
 const { CameraService } = require('./core/camera/camera-service');
 const { FolderWatchService } = require('./core/folder-watch');
+const { AutonomyService } = require('./core/autonomy-service');
 const { checkForUpdate } = require('./core/update-check');
 const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
@@ -40,6 +41,7 @@ let folderWatch;
 let router;
 let go2rtc;
 let cameras;
+let autonomy;
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
 
@@ -559,6 +561,7 @@ app.whenReady().then(async () => {
 
   config = new ConfigStore(app.getPath('userData'), safeStorage);
   log = new ActivityLog(app.getPath('userData'));
+  autonomy = new AutonomyService({ config, emit: sendEverywhere, log });
   memory = new MemoryStore(app.getPath('userData'));
   tasks = new TaskStore(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });
@@ -573,10 +576,16 @@ app.whenReady().then(async () => {
     emit: sendEverywhere
   });
   cameras = new CameraService({
-    config, emit: sendEverywhere, log, go2rtc,
+    config, log, go2rtc,
+    // Autonomy listens where the alert is born: same payload the UI gets.
+    emit: (channel, payload) => {
+      sendEverywhere(channel, payload);
+      if (channel === 'cameras:alert') autonomy.handleCameraAlert(payload);
+    },
     notify: (title, body) => {
       if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
-    }
+    },
+    notifyGate: (alert) => autonomy.notifyGate(alert)
   });
   // Smart alerts: describe the frame with the local vision model when the
   // user has AI descriptions turned on. Failures fall back to generic text.

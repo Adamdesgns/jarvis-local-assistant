@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   onCamerasAlert: (callback) => on('cameras:alert', callback),
   onCamerasChanged: (callback) => on('cameras:changed', callback),
   onCamerasStatus: (callback) => on('cameras:status', callback),
+  onAutonomyEvent: (callback) => on('autonomy:event', callback),
   files: {
     roots: () => ipcRenderer.invoke('files:roots'),
     home: () => ipcRenderer.invoke('files:home'),
