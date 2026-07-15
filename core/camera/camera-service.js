@@ -33,7 +33,11 @@ class CameraService {
   async #instantiate(account) {
     const DriverClass = this.driverClasses[account.brand];
     if (!DriverClass) return;
-    const driver = new DriverClass({ account, secrets: this.#readSecrets(account.id) });
+    const driver = new DriverClass({
+      account,
+      secrets: this.#readSecrets(account.id),
+      persistSecrets: (secrets) => this.config.setSecret(this.#secretKey(account.id), JSON.stringify(secrets || {}))
+    });
     driver.on('status', () => this.emit('cameras:status', this.getStatus()));
     this.drivers.set(account.id, driver);
     try { await driver.connect(); }

@@ -6,6 +6,9 @@ test('base driver: contract shape and NotSupported defaults', async () => {
   const driver = new CameraDriver({ account: { id: 'a1', name: 'Test' }, secrets: {} });
   assert.equal(driver.brand, 'generic');
   assert.deepEqual(await driver.listCameras(), []);
+  assert.deepEqual(await driver.listSystems(), []);
+  assert.equal(typeof driver.persistSecrets, 'function');
+  driver.persistSecrets({}); // default is a no-op, never a crash
   assert.equal(await driver.getStreamSource('x'), null);
   assert.equal(driver.snapshotCooldownMs, 0);
   await assert.rejects(() => driver.getSnapshot('x'), (e) => e.code === 'NOT_SUPPORTED');
