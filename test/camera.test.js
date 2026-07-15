@@ -207,3 +207,71 @@ test('onvif discovery: dedupes and survives probe errors', async () => {
   const failed = await discoverCameras({ probeFn: async () => { throw new Error('no network'); } });
   assert.deepEqual(failed, []);
 });
+
+const { BlinkClient } = require('../core/camera/blink-client');
+
+function blinkFetch(routes) {
+  const calls = [];
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET', headers: options.headers || {}, body: options.body });
+    for (const route of routes) {
+      if (url.includes(route.match) && (!route.method || route.method === (options.method || 'GET'))) {
+        return {
+          ok: route.status ? route.status < 300 : true,
+          status: route.status || 200,
+          json: async () => route.json ?? {},
+          arrayBuffer: async () => route.buffer ?? new ArrayBuffer(4),
+          text: async () => JSON.stringify(route.json ?? {})
+        };
+      }
+    }
+    return { ok: false, status: 404, json: async () => ({ message: 'not found' }), text: async () => 'not found' };
+  };
+  return { fetchFn, calls };
+}
+
+test('blink client: login returns session and flags 2FA verification', async () => {
+  const { fetchFn, calls } = blinkFetch([{
+    match: '/api/v5/account/login', method: 'POST',
+    json: { account: { account_id: 111, client_id: 222, tier: 'u011', client_verification_required: true }, auth: { token: 'tok123' } }
+  }]);
+  const client = new BlinkClient({ fetchFn });
+  const session = await client.login({ email: 'a@b.c', password: 'pw', uniqueId: 'uid-1' });
+  assert.deepEqual(session, { token: 'tok123', accountId: 111, clientId: 222, tier: 'u011', verificationRequired: true });
+  const call = calls[0];
+  assert.match(call.url, /^https:\/\/rest-prod\.immedia-semi\.com\/api\/v5\/account\/login$/);
+  const body = JSON.parse(call.body);
+  assert.equal(body.email, 'a@b.c');
+  assert.equal(body.unique_id, 'uid-1');
+  assert.equal(body.reauth, 'true');
+});
+
+test('blink client: authenticated calls hit the tier host with TOKEN-AUTH', async () => {
+  const session = { token: 'tok123', accountId: 111, clientId: 222, tier: 'u011' };
+  const { fetchFn, calls } = blinkFetch([
+    { match: '/pin/verify', method: 'POST', json: { valid: true, message: 'ok' } },
+    { match: '/homescreen', json: { networks: [], cameras: [] } },
+    { match: '/state/arm', method: 'POST', json: {} },
+    { match: '/media/production/', buffer: new ArrayBuffer(6) }
+  ]);
+  const client = new BlinkClient({ fetchFn });
+  const pin = await client.verifyPin(session, '1234');
+  assert.equal(pin.ok, true);
+  await client.homescreen(session);
+  await client.setArmed(session, 55, true);
+  const image = await client.getImage(session, '/media/production/account/111/thumb');
+  assert.ok(Buffer.isBuffer(image) && image.length === 6);
+  for (const call of calls) {
+    assert.match(call.url, /^https:\/\/rest-u011\.immedia-semi\.com/);
+    assert.equal(call.headers['TOKEN-AUTH'], 'tok123');
+  }
+  assert.match(calls[0].url, /\/api\/v4\/account\/111\/client\/222\/pin\/verify$/);
+  assert.match(calls[2].url, /\/api\/v1\/accounts\/111\/networks\/55\/state\/arm$/);
+  assert.match(calls[3].url, /\/media\/production\/account\/111\/thumb\.jpg$/);
+});
+
+test('blink client: surfaces server error messages', async () => {
+  const { fetchFn } = blinkFetch([{ match: '/api/v5/account/login', method: 'POST', status: 401, json: { message: 'Invalid credentials' } }]);
+  const client = new BlinkClient({ fetchFn });
+  await assert.rejects(() => client.login({ email: 'a@b.c', password: 'bad', uniqueId: 'u' }), /Invalid credentials/);
+});
