@@ -14,7 +14,7 @@
   document.getElementById('camera-add-cancel').addEventListener('click', () => { addForm.hidden = true; });
 
   // Brand tabs: LOCAL (RTSP) | BLINK
-  const panes = { rtsp: document.getElementById('camera-pane-rtsp'), blink: document.getElementById('camera-pane-blink'), ring: document.getElementById('camera-pane-ring') };
+  const panes = { rtsp: document.getElementById('camera-pane-rtsp'), blink: document.getElementById('camera-pane-blink'), ring: document.getElementById('camera-pane-ring'), nest: document.getElementById('camera-pane-nest') };
   document.querySelectorAll('[data-camera-brand]').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('[data-camera-brand]').forEach((other) => other.classList.toggle('active', other === tab));
     for (const [brand, pane] of Object.entries(panes)) pane.hidden = brand !== tab.dataset.cameraBrand;
@@ -99,6 +99,12 @@
     article.querySelector('.camera-name').textContent = camera.name;
     article.querySelector('.camera-brand').textContent = camera.brand.toUpperCase();
     article.querySelector('img').alt = camera.name;
+    if (camera.liveOnly) {
+      // Nest: no snapshot API — the tile is live-view only.
+      article.querySelector('.camera-refresh').hidden = true;
+      article.querySelector('.camera-describe').hidden = true;
+      article.querySelector('.camera-view-empty').textContent = 'LIVE VIEW ONLY';
+    }
     article.querySelector('.camera-refresh').addEventListener('click', () => refresh(article, camera, true));
     article.querySelector('.camera-describe').addEventListener('click', async () => {
       const stamp = article.querySelector('.camera-stamp');
@@ -145,6 +151,9 @@
     try {
       const peer = new RTCPeerConnection();
       livePeers.set(camera.key, peer);
+      // Nest's WebRTC endpoint requires a data channel in the offer; it is
+      // harmless for the go2rtc and Ring paths.
+      peer.createDataChannel('jarvis');
       peer.addTransceiver('video', { direction: 'recvonly' });
       peer.addTransceiver('audio', { direction: 'recvonly' });
       peer.ontrack = (event) => { video.srcObject = event.streams[0]; };
@@ -227,6 +236,27 @@
   document.getElementById('ring-signin').addEventListener('click', () => ringSignIn(''));
   document.getElementById('ring-verify').addEventListener('click', () => ringSignIn(ringCode.value));
 
+  // Nest advanced setup: three Google console values, then browser sign-in.
+  document.getElementById('nest-console').addEventListener('click', () => window.jarvis.cameras.openNestConsole());
+  document.getElementById('nest-cancel').addEventListener('click', () => {
+    addForm.hidden = true;
+    document.getElementById('nest-client-secret').value = '';
+  });
+  document.getElementById('nest-signin').addEventListener('click', async () => {
+    addStatus.textContent = 'Opening Google sign-in in your browser… approve JARVIS there, then come back.';
+    const result = await window.jarvis.cameras.addNest({
+      projectId: document.getElementById('nest-project').value,
+      clientId: document.getElementById('nest-client-id').value,
+      clientSecret: document.getElementById('nest-client-secret').value
+    });
+    addStatus.textContent = result.message || '';
+    if (result.ok) {
+      document.getElementById('nest-client-secret').value = '';
+      addForm.hidden = true;
+      render();
+    }
+  });
+
   // Systems strip: arm/disarm with an explicit two-step confirmation.
   const systemsStrip = document.getElementById('camera-systems');
   const armTimers = new Map();
@@ -280,7 +310,7 @@
     for (const camera of cameras) {
       const article = tile(camera);
       grid.appendChild(article);
-      refresh(article, camera, false);
+      if (!camera.liveOnly) refresh(article, camera, false);
     }
   }
 
