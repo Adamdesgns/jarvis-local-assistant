@@ -235,6 +235,61 @@ test('camera service: blink account flow with PIN, systems, and arming', async (
   assert.ok(logged.some((entry) => entry.command === 'camera arm'));
 });
 
+test('camera service: alerts pipeline notifies, logs, dedupes, and emits', async () => {
+  const config = fakeConfig();
+  const notified = [];
+  const emitted = [];
+  const logged = [];
+  class NoisyDriver extends RtspDriver {
+    async connect() { this.setState('connected'); }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(),
+    emit: (channel, payload) => emitted.push({ channel, payload }),
+    log: { write: (entry) => logged.push(entry) },
+    notify: (title, body) => notified.push({ title, body }),
+    driverClasses: { rtsp: NoisyDriver }
+  });
+  await service.init();
+  await service.addRtspAccount({ name: 'Home', cameras: [{ name: 'Front Door', url: 'rtsp://u:p@h/s' }] });
+  const [camera] = await service.listCameras();
+  const driver = service.drivers.get(camera.accountId);
+
+  driver.emit('doorbell', { cameraId: camera.id, name: 'Front Door' });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(notified.length, 1);
+  assert.match(notified[0].body, /doorbell/i);
+  assert.ok(logged.some((entry) => entry.type === 'camera-alert'));
+  assert.ok(emitted.some((event) => event.channel === 'cameras:alert' && event.payload.kind === 'doorbell'));
+
+  // Same camera again inside the dedupe window: silently dropped.
+  driver.emit('doorbell', { cameraId: camera.id, name: 'Front Door' });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(notified.length, 1, 'deduped within 60s window');
+});
+
+test('camera service: sdp-bridge live view for drivers with sessions', async () => {
+  const config = fakeConfig();
+  class SdpDriver extends RtspDriver {
+    async connect() { this.setState('connected'); }
+    async createSdpSession(cameraId, offerSdp) { return { answerSdp: `ans:${cameraId}:${offerSdp}`, close: () => {} }; }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { rtsp: SdpDriver }
+  });
+  await service.init();
+  await service.addRtspAccount({ name: 'Home', cameras: [{ name: 'Cam', url: 'rtsp://u:p@h/s' }] });
+  const [camera] = await service.listCameras();
+  const live = await service.openLiveView(camera.key);
+  assert.equal(live.ok, true);
+  assert.equal(live.mode, 'sdp-bridge');
+  const answer = await service.answerLiveView(camera.key, 'offer-1');
+  assert.equal(answer.ok, true);
+  assert.equal(answer.answerSdp, `ans:${camera.id}:offer-1`);
+  await service.closeLiveView(camera.key);
+});
+
 const { RingDriver } = require('../core/camera/drivers/ring-driver');
 
 function fakeSubject() {

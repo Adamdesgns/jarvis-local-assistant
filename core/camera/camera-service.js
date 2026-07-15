@@ -1,21 +1,28 @@
 const crypto = require('node:crypto');
 const { RtspDriver } = require('./drivers/rtsp-driver');
 const { BlinkDriver } = require('./drivers/blink-driver');
+const { RingDriver } = require('./drivers/ring-driver');
+
+const ALERT_DEDUPE_MS = 60000;
 
 function streamName(key) { return `cam_${key.replace(/[^a-zA-Z0-9]+/g, '_')}`; }
 
 // Orchestrates accounts, drivers, snapshots, and live view sessions.
 // Brand code stays in drivers; secrets stay in config secrets storage.
 class CameraService {
-  constructor({ config, emit, log, go2rtc, driverClasses }) {
+  constructor({ config, emit, log, go2rtc, driverClasses, notify }) {
     this.config = config;
     this.emit = emit || (() => {});
     this.log = log || { write: () => {} };
+    this.notify = notify || (() => {});
     this.go2rtc = go2rtc;
-    this.driverClasses = driverClasses || { rtsp: RtspDriver, blink: BlinkDriver };
+    this.driverClasses = driverClasses || { rtsp: RtspDriver, blink: BlinkDriver, ring: RingDriver };
     this.drivers = new Map(); // accountId -> driver
     this.lastAutoSnapshot = new Map(); // camera key -> timestamp
-    this.liveViews = new Set(); // stream names
+    this.liveViews = new Set(); // go2rtc stream names
+    this.sdpViews = new Map(); // camera key -> {driver, cameraId, session}
+    this.lastAlert = new Map(); // camera key -> timestamp
+    this.describeFrame = null; // Phase 4 assigns: async (jpegBase64, context) => text|null
   }
 
   async init() {
@@ -40,9 +47,32 @@ class CameraService {
       persistSecrets: (secrets) => this.config.setSecret(this.#secretKey(account.id), JSON.stringify(secrets || {}))
     });
     driver.on('status', () => this.emit('cameras:status', this.getStatus()));
+    driver.on('motion', (event) => this.#handleAlert(account.id, 'motion', event));
+    driver.on('doorbell', (event) => this.#handleAlert(account.id, 'doorbell', event));
     this.drivers.set(account.id, driver);
     try { await driver.connect(); }
     catch (error) { driver.setState('error', `Could not connect: ${error.message}`); }
+  }
+
+  async #handleAlert(accountId, kind, event) {
+    try {
+      const key = `${accountId}:${event.cameraId}`;
+      const last = this.lastAlert.get(key) || 0;
+      if (Date.now() - last < ALERT_DEDUPE_MS) return;
+      this.lastAlert.set(key, Date.now());
+      const name = event.name || 'Camera';
+      let body = kind === 'doorbell' ? `${name}: someone pressed the doorbell.` : `Motion at ${name}.`;
+      const shot = await this.getSnapshot(key, { manual: false });
+      if (shot.ok && typeof this.describeFrame === 'function') {
+        try {
+          const description = await this.describeFrame(shot.jpegBase64, { name, kind });
+          if (description) body = `${name}: ${description}`;
+        } catch {}
+      }
+      this.notify(`JARVIS · ${kind === 'doorbell' ? 'DOORBELL' : 'MOTION'}`, body);
+      this.log.write({ type: 'camera-alert', command: `${kind} at ${name}`, response: body, source: 'cameras' });
+      this.emit('cameras:alert', { key, kind, name, body, jpegBase64: shot.ok ? shot.jpegBase64 : undefined, at: new Date().toISOString() });
+    } catch {}
   }
 
   listAccounts() {
@@ -96,6 +126,33 @@ class CameraService {
     const result = await driver.submitPin(pin);
     if (result.ok) this.emit('cameras:changed', {});
     return result;
+  }
+
+  // Ring 2FA happens before the account exists: sign-in either yields a
+  // refresh token immediately or asks for the code Ring just sent.
+  async addRingAccount({ email, password, code }, loginFn) {
+    const login = loginFn || require('./ring-session').ringLogin;
+    const cleanEmail = String(email || '').trim();
+    if (!cleanEmail || !String(password || '')) return { ok: false, message: 'Enter your Ring email and password first.' };
+    try {
+      const result = await login({ email: cleanEmail, password: String(password), code });
+      if (result.needs2fa) return { ok: true, needs2fa: true, message: result.prompt || 'Enter the code Ring sent you.' };
+      const account = { id: crypto.randomUUID().slice(0, 8), brand: 'ring', name: cleanEmail };
+      this.config.setSecret(this.#secretKey(account.id), JSON.stringify({ email: cleanEmail, refreshToken: result.refreshToken }));
+      const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
+      this.config.updateSettings({ cameraAccounts: accounts });
+      await this.#instantiate(account);
+      const status = this.drivers.get(account.id)?.status();
+      if (status?.state === 'error') {
+        await this.removeAccount(account.id);
+        return { ok: false, message: status.message };
+      }
+      this.emit('cameras:changed', {});
+      this.log.write({ type: 'camera', command: 'add ring account', response: `Connected Ring account ${cleanEmail}.`, source: 'cameras' });
+      return { ok: true, message: 'Ring is connected.' };
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
   }
 
   async listSystems() {
@@ -187,6 +244,13 @@ class CameraService {
     const { driver, cameraId } = await this.#resolve(key);
     if (!driver) return { ok: false, message: 'That camera is no longer set up.' };
     try {
+      // Drivers with their own WebRTC sessions (Ring) bridge the renderer's
+      // offer directly — no local streaming helper involved.
+      if (typeof driver.createSdpSession === 'function') {
+        this.sdpViews.set(key, { driver, cameraId, session: null });
+        this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
+        return { ok: true, mode: 'sdp-bridge', key };
+      }
       const source = await driver.getStreamSource(cameraId);
       if (!source) return { ok: false, message: 'This camera does not support live view — snapshots only.' };
       const started = await this.go2rtc.start();
@@ -195,13 +259,32 @@ class CameraService {
       await this.go2rtc.setStream(name, source);
       this.liveViews.add(name);
       this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
-      return { ok: true, whepUrl: this.go2rtc.whepUrl(name) };
+      return { ok: true, mode: 'whep', key, whepUrl: this.go2rtc.whepUrl(name) };
     } catch (error) {
       return { ok: false, message: `Could not start live view: ${error.message}` };
     }
   }
 
+  async answerLiveView(key, offerSdp) {
+    const view = this.sdpViews.get(key);
+    if (!view) return { ok: false, message: 'Start live view first.' };
+    try {
+      const session = await view.driver.createSdpSession(view.cameraId, offerSdp);
+      view.session = session;
+      return { ok: true, answerSdp: session.answerSdp };
+    } catch (error) {
+      this.sdpViews.delete(key);
+      return { ok: false, message: `Could not start live view: ${error.message}` };
+    }
+  }
+
   async closeLiveView(key) {
+    const view = this.sdpViews.get(key);
+    if (view) {
+      this.sdpViews.delete(key);
+      try { view.session?.close(); } catch {}
+      return { ok: true };
+    }
     const name = streamName(key);
     if (!this.liveViews.has(name)) return { ok: true };
     this.liveViews.delete(name);
@@ -214,8 +297,11 @@ class CameraService {
   }
 
   async shutdown() {
+    for (const [, view] of this.sdpViews) { try { view.session?.close(); } catch {} }
+    this.sdpViews.clear();
     for (const name of this.liveViews) { try { await this.go2rtc.removeStream(name); } catch {} }
     this.liveViews.clear();
+    for (const [, driver] of this.drivers) { try { await driver.disconnect(); } catch {} }
     await this.go2rtc.stop();
   }
 }
