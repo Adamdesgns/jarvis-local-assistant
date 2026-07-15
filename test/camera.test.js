@@ -273,6 +273,84 @@ test('blink client: authenticated calls hit the tier host with TOKEN-AUTH', asyn
   assert.match(calls[3].url, /\/media\/production\/account\/111\/thumb\.jpg$/);
 });
 
+const { BlinkDriver } = require('../core/camera/drivers/blink-driver');
+
+function fakeBlinkClient(overrides = {}) {
+  return {
+    login: async () => ({ token: 't1', accountId: 1, clientId: 2, tier: 'u1', verificationRequired: false }),
+    verifyPin: async () => ({ ok: true, message: '' }),
+    homescreen: async () => ({
+      networks: [{ id: 55, name: 'Home', armed: false }],
+      cameras: [{ id: 9, name: 'Garage', network_id: 55, thumbnail: '/media/thumb9' }],
+      owls: [{ id: 10, name: 'Mini', network_id: 55, thumbnail: '/media/thumb10' }],
+      doorbells: [{ id: 11, name: 'Front Door', network_id: 55, thumbnail: '/media/thumb11' }]
+    }),
+    requestThumbnail: async () => {},
+    getImage: async () => Buffer.from([1, 2, 3]),
+    setArmed: async () => {},
+    ...overrides
+  };
+}
+
+test('blink driver: connects, merges camera kinds, lists systems, snapshots', async () => {
+  const persisted = [];
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'a@b.c' },
+    secrets: { email: 'a@b.c', password: 'pw', uniqueId: 'u1' },
+    persistSecrets: (secrets) => persisted.push(secrets),
+    clientFactory: () => fakeBlinkClient()
+  });
+  await driver.connect();
+  assert.equal(driver.brand, 'blink');
+  assert.equal(driver.status().state, 'connected');
+  assert.equal(driver.snapshotCooldownMs, 600000);
+  assert.ok(persisted.length >= 1 && persisted[0].token === 't1', 'session persisted after login');
+
+  const cameras = await driver.listCameras();
+  assert.deepEqual(cameras.map((c) => `${c.kind}:${c.name}`), ['camera:Garage', 'owl:Mini', 'doorbell:Front Door']);
+  assert.ok(cameras.every((c) => c.brand === 'blink' && c.canStream === false && c.canArm === false));
+
+  const systems = await driver.listSystems();
+  assert.deepEqual(systems, [{ id: 55, name: 'Home', armed: false, canArm: true }]);
+
+  const jpeg = await driver.getSnapshot('9');
+  assert.ok(Buffer.isBuffer(jpeg) && jpeg.length === 3);
+  await driver.setArmed(55, true);
+});
+
+test('blink driver: 2FA flow pauses in verify state until the PIN arrives', async () => {
+  let pinChecked = '';
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'a@b.c' },
+    secrets: { email: 'a@b.c', password: 'pw', uniqueId: 'u1' },
+    clientFactory: () => fakeBlinkClient({
+      login: async () => ({ token: 't1', accountId: 1, clientId: 2, tier: 'u1', verificationRequired: true }),
+      verifyPin: async (_session, pin) => { pinChecked = pin; return { ok: true, message: '' }; }
+    })
+  });
+  await driver.connect();
+  assert.equal(driver.status().state, 'verify');
+  assert.match(driver.status().message, /PIN/);
+  const result = await driver.submitPin('4321');
+  assert.equal(result.ok, true);
+  assert.equal(pinChecked, '4321');
+  assert.equal(driver.status().state, 'connected');
+});
+
+test('blink driver: falls back to the current thumbnail when a fresh one fails', async () => {
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'a@b.c' },
+    secrets: { email: 'a@b.c', password: 'pw', uniqueId: 'u1', token: 't1', accountId: 1, clientId: 2, tier: 'u1' },
+    clientFactory: () => fakeBlinkClient({
+      requestThumbnail: async () => { throw new Error('busy'); }
+    })
+  });
+  driver.freshWaitMs = 0;
+  await driver.connect();
+  const jpeg = await driver.getSnapshot('10');
+  assert.ok(Buffer.isBuffer(jpeg), 'still returns the last known picture');
+});
+
 test('blink client: surfaces server error messages', async () => {
   const { fetchFn } = blinkFetch([{ match: '/api/v5/account/login', method: 'POST', status: 401, json: { message: 'Invalid credentials' } }]);
   const client = new BlinkClient({ fetchFn });
