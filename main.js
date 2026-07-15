@@ -497,8 +497,13 @@ function setupIpc() {
   ipcMain.handle('cameras:bootstrap', async () => ({
     accounts: cameras.listAccounts(),
     cameras: await cameras.listCameras(),
+    systems: await cameras.listSystems(),
     status: cameras.getStatus()
   }));
+  ipcMain.handle('cameras:add-blink', (_event, payload) => cameras.addBlinkAccount(payload || {}));
+  ipcMain.handle('cameras:blink-pin', (_event, payload) => cameras.submitBlinkPin(String(payload?.accountId || ''), String(payload?.pin || '')));
+  ipcMain.handle('cameras:systems', () => cameras.listSystems());
+  ipcMain.handle('cameras:set-armed', (_event, payload) => cameras.setArmed(String(payload?.key || ''), Boolean(payload?.armed)));
   ipcMain.handle('cameras:add-rtsp', (_event, payload) => cameras.addRtspAccount(payload || {}));
   ipcMain.handle('cameras:remove-account', (_event, accountId) => cameras.removeAccount(String(accountId || '')));
   ipcMain.handle('cameras:list', () => cameras.listCameras());

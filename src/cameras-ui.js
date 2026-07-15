@@ -13,6 +13,54 @@
   addToggle.addEventListener('click', () => { addForm.hidden = !addForm.hidden; });
   document.getElementById('camera-add-cancel').addEventListener('click', () => { addForm.hidden = true; });
 
+  // Brand tabs: LOCAL (RTSP) | BLINK
+  const panes = { rtsp: document.getElementById('camera-pane-rtsp'), blink: document.getElementById('camera-pane-blink') };
+  document.querySelectorAll('[data-camera-brand]').forEach((tab) => tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-camera-brand]').forEach((other) => other.classList.toggle('active', other === tab));
+    for (const [brand, pane] of Object.entries(panes)) pane.hidden = brand !== tab.dataset.cameraBrand;
+    addStatus.textContent = '';
+  }));
+
+  // Blink sign-in with the emailed-PIN step.
+  const blinkEmail = document.getElementById('blink-email');
+  const blinkPassword = document.getElementById('blink-password');
+  const blinkPinRow = document.getElementById('blink-pin-row');
+  const blinkPin = document.getElementById('blink-pin');
+  let pendingBlinkAccount = '';
+
+  document.getElementById('blink-cancel').addEventListener('click', () => {
+    addForm.hidden = true; blinkPassword.value = ''; blinkPinRow.hidden = true; pendingBlinkAccount = '';
+  });
+
+  document.getElementById('blink-signin').addEventListener('click', async () => {
+    addStatus.textContent = 'Signing in to Blink…';
+    const result = await window.jarvis.cameras.addBlink({ email: blinkEmail.value, password: blinkPassword.value });
+    blinkPassword.value = '';
+    if (!result.ok) { addStatus.textContent = result.message || 'Blink sign-in failed.'; return; }
+    if (result.needsPin) {
+      pendingBlinkAccount = result.accountId;
+      blinkPinRow.hidden = false;
+      addStatus.textContent = 'Blink emailed you a PIN. Type it here to finish.';
+      blinkPin.focus();
+      return;
+    }
+    addStatus.textContent = result.message || 'Blink is connected.';
+    addForm.hidden = true;
+    render();
+  });
+
+  document.getElementById('blink-verify').addEventListener('click', async () => {
+    if (!pendingBlinkAccount) { addStatus.textContent = 'Sign in first, then enter the PIN.'; return; }
+    addStatus.textContent = 'Checking the PIN…';
+    const result = await window.jarvis.cameras.blinkPin(pendingBlinkAccount, blinkPin.value);
+    addStatus.textContent = result.message || '';
+    if (result.ok) {
+      blinkPin.value = ''; blinkPinRow.hidden = true; pendingBlinkAccount = '';
+      addForm.hidden = true;
+      render();
+    }
+  });
+
   document.getElementById('camera-scan').addEventListener('click', async () => {
     if (!window.jarvis.cameras.discover) { addStatus.textContent = 'Network scan is not available yet.'; return; }
     addStatus.textContent = 'Scanning your network for cameras (about 5 seconds)…';
@@ -121,8 +169,50 @@
     }
   }
 
+  // Systems strip: arm/disarm with an explicit two-step confirmation.
+  const systemsStrip = document.getElementById('camera-systems');
+  const armTimers = new Map();
+
+  async function renderSystems() {
+    const systems = await window.jarvis.cameras.systems();
+    systemsStrip.innerHTML = '';
+    for (const system of systems.filter((item) => item.canArm)) {
+      const row = document.createElement('div');
+      row.className = 'camera-system';
+      row.innerHTML = '<span class="camera-system-name"></span><b class="camera-system-state"></b><button class="camera-arm"></button>';
+      row.querySelector('.camera-system-name').textContent = system.name;
+      const stateLabel = row.querySelector('.camera-system-state');
+      stateLabel.textContent = system.armed ? 'ARMED' : 'DISARMED';
+      stateLabel.classList.toggle('armed', system.armed);
+      const button = row.querySelector('.camera-arm');
+      button.textContent = system.armed ? 'DISARM' : 'ARM';
+      button.addEventListener('click', async () => {
+        // First click asks for confirmation; the action runs only on the
+        // second click within 5 seconds. Sensitive actions never fire once.
+        if (!armTimers.has(system.key)) {
+          button.textContent = system.armed ? 'CONFIRM DISARM?' : 'CONFIRM ARM?';
+          button.classList.add('confirming');
+          armTimers.set(system.key, setTimeout(() => {
+            armTimers.delete(system.key);
+            button.textContent = system.armed ? 'DISARM' : 'ARM';
+            button.classList.remove('confirming');
+          }, 5000));
+          return;
+        }
+        clearTimeout(armTimers.get(system.key));
+        armTimers.delete(system.key);
+        button.disabled = true;
+        const result = await window.jarvis.cameras.setArmed(system.key, !system.armed);
+        if (!result.ok) addStatus.textContent = result.message || '';
+        renderSystems();
+      });
+      systemsStrip.appendChild(row);
+    }
+  }
+
   async function render() {
     for (const key of [...livePeers.keys()]) stopLive(key);
+    renderSystems();
     const cameras = await window.jarvis.cameras.list();
     grid.innerHTML = '';
     if (!cameras.length) {

@@ -172,3 +172,16 @@ body.busy .ai-stop{display:inline-block}
 .camera-brand{font:600 8px/1 var(--ui);color:var(--amber);opacity:.8}
 .camera-tile-bar button{background:none;border:1px solid rgba(255,178,31,.3);color:var(--amber);font:600 8px/1 var(--ui);padding:4px 6px;cursor:pointer}
 .camera-stamp{font:400 9px/1.4 var(--ui);color:#7b949b;padding:0 8px 6px;min-height:14px}
+
+/* Cameras: brand tabs, Blink sign-in, systems strip */
+.camera-brand-tabs{display:flex;gap:4px;margin-bottom:4px}
+.camera-brand-tabs button{background:none;border:1px solid rgba(255,178,31,.25);color:#7b949b;font:600 9px/1 var(--ui);letter-spacing:.1em;padding:6px 10px;cursor:pointer}
+.camera-brand-tabs button.active{color:var(--amber);border-color:rgba(255,178,31,.6)}
+.camera-pane{display:flex;flex-direction:column;gap:6px}
+.camera-systems{display:flex;flex-direction:column;gap:4px}
+.camera-system{display:flex;align-items:center;gap:8px;border:1px solid rgba(255,178,31,.2);padding:6px 10px}
+.camera-system-name{font:600 10px/1 var(--ui);color:#d8e6ea;flex:1}
+.camera-system-state{font:600 9px/1 var(--ui);color:#7b949b;letter-spacing:.1em}
+.camera-system-state.armed{color:var(--amber)}
+.camera-arm{background:none;border:1px solid rgba(255,178,31,.3);color:var(--amber);font:600 8px/1 var(--ui);padding:5px 8px;cursor:pointer}
+.camera-arm.confirming{background:rgba(255,178,31,.18);border-color:var(--amber)}
