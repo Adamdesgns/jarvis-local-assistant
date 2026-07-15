@@ -72,3 +72,21 @@ test('go2rtc manager: writes localhost-only config, starts, and manages streams'
     assert.equal(manager.getStatus().running, false);
   } finally { fsx.rmSync(dir, { recursive: true, force: true }); }
 });
+
+const { RtspDriver } = require('../core/camera/drivers/rtsp-driver');
+
+test('rtsp driver: lists cameras from secrets and exposes stream sources', async () => {
+  const driver = new RtspDriver({
+    account: { id: 'a1', name: 'Home cams' },
+    secrets: { cameras: [{ id: 'front', name: 'Front Door', url: 'rtsp://u:p@192.168.1.20/stream1' }] }
+  });
+  await driver.connect();
+  assert.equal(driver.brand, 'rtsp');
+  assert.equal(driver.status().state, 'connected');
+  const cameras = await driver.listCameras();
+  assert.deepEqual(cameras, [{ id: 'front', name: 'Front Door', brand: 'rtsp', canStream: true, canArm: false }]);
+  assert.equal(await driver.getStreamSource('front'), 'rtsp://u:p@192.168.1.20/stream1');
+  assert.equal(await driver.getStreamSource('nope'), null);
+  await assert.rejects(() => driver.getSnapshot('front'), (e) => e.code === 'NOT_SUPPORTED');
+  await assert.rejects(() => driver.setArmed('front', true), (e) => e.code === 'NOT_SUPPORTED');
+});
