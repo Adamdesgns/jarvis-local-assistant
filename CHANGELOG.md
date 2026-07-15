@@ -1,5 +1,21 @@
 # JARVIS Changelog
 
+## Unreleased (autonomy-engine branch)
+
+### Added — Autonomy engine + camera reactions (slice 1)
+- New AUTONOMY settings section: master switch plus four rules, all off by
+  default.
+- JARVIS can speak the doorbell aloud, speak motion alerts, show a
+  "someone's here" card with the camera picture, and quiet daytime motion
+  pop-ups (night window configurable, default 9 PM–7 AM).
+- Autonomy only announces: nothing is sent, spent, deleted, or executed
+  without the usual approval card. Everything it does shows in the
+  Activity log.
+
+### Fixed
+- Ring arm/disarm works: system ids are passed through unchanged instead of
+  being coerced to numbers (Ring location ids are non-numeric).
+
 ## 0.11.2 — July 14, 2026
 
 ### Fixed
