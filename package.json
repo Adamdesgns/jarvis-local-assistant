@@ -12,7 +12,8 @@
     "fast-xml-parser": "^5.7.0",
     "mammoth": "^1.11.0",
     "onvif": "^0.8.1",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "ring-client-api": "^14.3.0"
   },
   "scripts": {
     "start": "electron .",
