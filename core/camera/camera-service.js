@@ -11,11 +11,12 @@ function streamName(key) { return `cam_${key.replace(/[^a-zA-Z0-9]+/g, '_')}`; }
 // Orchestrates accounts, drivers, snapshots, and live view sessions.
 // Brand code stays in drivers; secrets stay in config secrets storage.
 class CameraService {
-  constructor({ config, emit, log, go2rtc, driverClasses, notify }) {
+  constructor({ config, emit, log, go2rtc, driverClasses, notify, notifyGate }) {
     this.config = config;
     this.emit = emit || (() => {});
     this.log = log || { write: () => {} };
     this.notify = notify || (() => {});
+    this.notifyGate = notifyGate || (() => true); // autonomy may veto the Windows notification only
     this.go2rtc = go2rtc;
     this.driverClasses = driverClasses || { rtsp: RtspDriver, blink: BlinkDriver, ring: RingDriver, nest: NestDriver };
     this.drivers = new Map(); // accountId -> driver
@@ -70,7 +71,9 @@ class CameraService {
           if (description) body = `${name}: ${description}`;
         } catch {}
       }
-      this.notify(`JARVIS · ${kind === 'doorbell' ? 'DOORBELL' : 'MOTION'}`, body);
+      let showNotification = true;
+      try { showNotification = this.notifyGate({ kind, name, body }) !== false; } catch {}
+      if (showNotification) this.notify(`JARVIS · ${kind === 'doorbell' ? 'DOORBELL' : 'MOTION'}`, body);
       this.log.write({ type: 'camera-alert', command: `${kind} at ${name}`, response: body, source: 'cameras' });
       this.emit('cameras:alert', { key, kind, name, body, jpegBase64: shot.ok ? shot.jpegBase64 : undefined, at: new Date().toISOString() });
     } catch {}

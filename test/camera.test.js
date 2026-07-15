@@ -268,6 +268,36 @@ test('camera service: alerts pipeline notifies, logs, dedupes, and emits', async
   assert.equal(notified.length, 1, 'deduped within 60s window');
 });
 
+test('camera service: notifyGate can silence the notification without touching the alert pipeline', async () => {
+  const config = fakeConfig();
+  const notified = [];
+  const emitted = [];
+  const gateCalls = [];
+  class NoisyDriver2 extends RtspDriver {
+    async connect() { this.setState('connected'); }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(),
+    emit: (channel, payload) => emitted.push({ channel, payload }),
+    log: { write: () => {} },
+    notify: (title, body) => notified.push({ title, body }),
+    notifyGate: (alert) => { gateCalls.push(alert); return alert.kind !== 'motion'; },
+    driverClasses: { rtsp: NoisyDriver2 }
+  });
+  await service.init();
+  await service.addRtspAccount({ name: 'Home', cameras: [{ name: 'Yard', url: 'rtsp://u:p@h/s' }] });
+  const [camera] = await service.listCameras();
+  const driver = service.drivers.get(camera.accountId);
+
+  driver.emit('motion', { cameraId: camera.id, name: 'Yard' });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(notified.length, 0, 'gated motion shows no Windows notification');
+  assert.ok(emitted.some((event) => event.channel === 'cameras:alert' && event.payload.kind === 'motion'), 'the alert still reaches the UI');
+  assert.equal(gateCalls.length, 1);
+  assert.equal(gateCalls[0].kind, 'motion');
+  assert.equal(gateCalls[0].name, 'Yard');
+});
+
 test('camera service: setArmed passes non-numeric system ids through unchanged (Ring)', async () => {
   const config = fakeConfig();
   const armedWith = [];
