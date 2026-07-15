@@ -235,6 +235,88 @@ test('camera service: blink account flow with PIN, systems, and arming', async (
   assert.ok(logged.some((entry) => entry.command === 'camera arm'));
 });
 
+const { RingDriver } = require('../core/camera/drivers/ring-driver');
+
+function fakeSubject() {
+  const subs = [];
+  return { subscribe: (fn) => { subs.push(fn); return { unsubscribe: () => {} }; }, fire: (v) => subs.forEach((fn) => fn(v)) };
+}
+
+function fakeRingApi() {
+  const motion = fakeSubject();
+  const doorbell = fakeSubject();
+  const camera = {
+    id: 77, name: 'Front Door', isDoorbot: true,
+    onMotionDetected: motion, onDoorbellPressed: doorbell,
+    getSnapshot: async () => Buffer.from([9, 9]),
+    createSimpleWebRtcSession: () => ({
+      start: async (offerSdp) => `answer-for:${offerSdp}`,
+      end: () => {}
+    })
+  };
+  const location = {
+    id: 'loc1', name: 'Home',
+    getLocationMode: async () => ({ mode: 'disarmed' }),
+    setLocationMode: async () => {},
+    supportsLocationModeSwitching: true
+  };
+  return {
+    getCameras: async () => [camera],
+    getLocations: async () => [location],
+    disconnect: () => {},
+    _fire: { motion, doorbell }
+  };
+}
+
+test('ring driver: cameras, systems, snapshot, sdp session, motion events', async () => {
+  const persisted = [];
+  const api = fakeRingApi();
+  const driver = new RingDriver({
+    account: { id: 'r1', name: 'ring@a.c' },
+    secrets: { email: 'ring@a.c', refreshToken: 'rt-1' },
+    persistSecrets: (secrets) => persisted.push(secrets),
+    apiFactory: ({ onTokenUpdate }) => { setTimeout(() => onTokenUpdate('rt-2'), 0); return api; }
+  });
+  await driver.connect();
+  assert.equal(driver.status().state, 'connected');
+
+  const cameras = await driver.listCameras();
+  assert.deepEqual(cameras, [{ id: '77', name: 'Front Door', brand: 'ring', canStream: true, canArm: false, kind: 'doorbell' }]);
+
+  const systems = await driver.listSystems();
+  assert.deepEqual(systems, [{ id: 'loc1', name: 'Home', armed: false, canArm: true }]);
+
+  const jpeg = await driver.getSnapshot('77');
+  assert.ok(Buffer.isBuffer(jpeg) && jpeg.length === 2);
+
+  const session = await driver.createSdpSession('77', 'my-offer');
+  assert.equal(session.answerSdp, 'answer-for:my-offer');
+  session.close();
+
+  const events = [];
+  driver.on('motion', (event) => events.push(event));
+  driver.on('doorbell', (event) => events.push({ ...event, bell: true }));
+  api._fire.motion.fire({});
+  api._fire.doorbell.fire({});
+  assert.equal(events.length, 2);
+  assert.equal(events[0].cameraId, '77');
+  assert.equal(events[1].bell, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(persisted.some((secrets) => secrets.refreshToken === 'rt-2'), 'rotated token persisted');
+});
+
+test('ring driver: without a refresh token it reports a clear error state', async () => {
+  const driver = new RingDriver({
+    account: { id: 'r1', name: 'ring@a.c' },
+    secrets: { email: 'ring@a.c' },
+    apiFactory: () => { throw new Error('should not be called'); }
+  });
+  await driver.connect();
+  assert.equal(driver.status().state, 'error');
+  assert.match(driver.status().message, /sign in/i);
+});
+
 const { discoverCameras } = require('../core/camera/onvif-discovery');
 
 test('onvif discovery: dedupes and survives probe errors', async () => {
