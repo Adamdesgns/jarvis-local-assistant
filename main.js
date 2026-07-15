@@ -505,6 +505,17 @@ function setupIpc() {
   ipcMain.handle('cameras:systems', () => cameras.listSystems());
   ipcMain.handle('cameras:add-ring', (_event, payload) => cameras.addRingAccount(payload || {}));
   ipcMain.handle('cameras:live-answer', (_event, payload) => cameras.answerLiveView(String(payload?.key || ''), String(payload?.offerSdp || '')));
+  ipcMain.handle('cameras:describe', async (_event, key) => {
+    const shot = await cameras.getSnapshot(String(key || ''), { manual: true });
+    if (!shot.ok) return { ok: false, message: shot.message };
+    const camera = (await cameras.listCameras()).find((item) => item.key === String(key));
+    const described = await ai.describeCameraFrame(shot.jpegBase64, camera?.name || 'Camera');
+    if (!described.ok) {
+      return { ok: false, message: 'No vision model answered. Install one with "ollama pull gemma3:4b", or allow cloud analysis in Settings.' };
+    }
+    log.write({ type: 'camera', command: 'describe camera', response: described.text, source: 'cameras' });
+    return { ok: true, text: described.text, jpegBase64: shot.jpegBase64 };
+  });
   ipcMain.handle('cameras:set-armed', (_event, payload) => cameras.setArmed(String(payload?.key || ''), Boolean(payload?.armed)));
   ipcMain.handle('cameras:add-rtsp', (_event, payload) => cameras.addRtspAccount(payload || {}));
   ipcMain.handle('cameras:remove-account', (_event, accountId) => cameras.removeAccount(String(accountId || '')));
@@ -552,20 +563,6 @@ app.whenReady().then(async () => {
   documents = new DocumentService({ config, shell, emit: sendEverywhere });
   ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config }));
   ollama = new OllamaService({ config, emit: sendEverywhere });
-  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log });
-  folderWatch = new FolderWatchService({
-    config,
-    emit: sendEverywhere,
-    notify: (title, body) => {
-      if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
-    }
-  });
-  localVoice = new LocalVoiceService({
-    voiceRoot: voiceDataRoot(),
-    scriptPath: packagedScript('local_voice.py'),
-    config,
-    emit: sendEverywhere
-  });
   go2rtc = new Go2RtcManager({
     binaryPath: app.isPackaged
       ? path.join(process.resourcesPath, 'go2rtc', 'go2rtc.exe')
@@ -579,8 +576,28 @@ app.whenReady().then(async () => {
       if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
     }
   });
+  // Smart alerts: describe the frame with the local vision model when the
+  // user has AI descriptions turned on. Failures fall back to generic text.
+  cameras.describeFrame = async (jpegBase64, context) => {
+    if (config.getSettings().cameraAiDescriptions !== true) return null;
+    const described = await ai.describeCameraFrame(jpegBase64, context.name);
+    return described.ok ? described.text : null;
+  };
   cameras.init();
-
+  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras });
+  folderWatch = new FolderWatchService({
+    config,
+    emit: sendEverywhere,
+    notify: (title, body) => {
+      if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
+    }
+  });
+  localVoice = new LocalVoiceService({
+    voiceRoot: voiceDataRoot(),
+    scriptPath: packagedScript('local_voice.py'),
+    config,
+    emit: sendEverywhere
+  });
   try {
     const gpu = await app.getGPUInfo('basic');
     const device = gpu?.gpuDevice?.find((item) => item.active) || gpu?.gpuDevice?.[0];

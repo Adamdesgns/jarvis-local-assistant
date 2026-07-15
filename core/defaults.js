@@ -28,6 +28,9 @@ const DEFAULT_SETTINGS = {
   motionMode: 'cinematic',
   hiddenModules: ['performance', 'memory', 'activity', 'quick-commands', 'projects', 'file-explorer', 'document-viewer', 'cameras'],
   cameraAccounts: [],
+  cameraAiDescriptions: true,
+  cameraCloudVision: false,
+  cameraVisionModel: 'gemma3:4b',
   moduleLayout: {
     tasks: { x: 74, y: 8, w: 24, h: 58 },
     performance: { x: 2, y: 8, w: 22, h: 44 },

@@ -51,7 +51,8 @@ contextBridge.exposeInMainWorld('jarvis', {
     systems: () => ipcRenderer.invoke('cameras:systems'),
     setArmed: (key, armed) => ipcRenderer.invoke('cameras:set-armed', { key, armed }),
     addRing: (payload) => ipcRenderer.invoke('cameras:add-ring', payload),
-    liveAnswer: (key, offerSdp) => ipcRenderer.invoke('cameras:live-answer', { key, offerSdp })
+    liveAnswer: (key, offerSdp) => ipcRenderer.invoke('cameras:live-answer', { key, offerSdp }),
+    describe: (key) => ipcRenderer.invoke('cameras:describe', key)
   },
   onCamerasAlert: (callback) => on('cameras:alert', callback),
   onCamerasChanged: (callback) => on('cameras:changed', callback),

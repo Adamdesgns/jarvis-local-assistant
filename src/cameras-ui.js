@@ -91,6 +91,7 @@
       <div class="camera-tile-bar">
         <span class="camera-name"></span><b class="camera-brand"></b>
         <button class="camera-refresh" title="Take a fresh picture">↻</button>
+        <button class="camera-describe" title="Ask the AI what it sees">🔎 AI</button>
         <button class="camera-live" title="Live view">▶ LIVE</button>
         <button class="camera-remove" title="Remove this camera's account">×</button>
       </div>
@@ -99,6 +100,18 @@
     article.querySelector('.camera-brand').textContent = camera.brand.toUpperCase();
     article.querySelector('img').alt = camera.name;
     article.querySelector('.camera-refresh').addEventListener('click', () => refresh(article, camera, true));
+    article.querySelector('.camera-describe').addEventListener('click', async () => {
+      const stamp = article.querySelector('.camera-stamp');
+      stamp.textContent = 'Looking…';
+      const described = await window.jarvis.cameras.describe(camera.key);
+      if (described.ok && described.jpegBase64) {
+        const img = article.querySelector('img');
+        img.src = `data:image/jpeg;base64,${described.jpegBase64}`;
+        img.hidden = false;
+        article.querySelector('.camera-view-empty').hidden = true;
+      }
+      stamp.textContent = described.ok ? described.text : (described.message || 'Could not describe the picture.');
+    });
     article.querySelector('.camera-live').addEventListener('click', () => toggleLive(article, camera));
     article.querySelector('.camera-remove').addEventListener('click', async () => {
       await window.jarvis.cameras.removeAccount(camera.accountId);

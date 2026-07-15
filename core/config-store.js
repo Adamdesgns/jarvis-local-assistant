@@ -73,7 +73,7 @@ class ConfigStore {
       'wakeSensitivity', 'startWithWindows', 'minimizeToOrb', 'orbAlwaysOnTop',
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
-      'cameraAccounts'
+      'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {

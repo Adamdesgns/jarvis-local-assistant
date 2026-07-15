@@ -53,7 +53,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -61,7 +61,33 @@ class CommandRouter {
     this.memory = memory;
     this.tasks = tasks;
     this.log = log;
+    this.cameras = cameras || null;
     this.pending = new Map();
+  }
+
+  // "Who's at the front door?" — match a camera by name, grab a fresh frame,
+  // and let the vision model answer. Returns null when no camera matches.
+  async #cameraLook(text) {
+    if (!this.cameras) return null;
+    const match = text.match(/(?:who|what)(?:'s| is)\s+(?:at|on|outside|in front of)\s+(?:the\s+|my\s+)?(.+?)\??$/i)
+      || text.match(/(?:show|check)\s+(?:me\s+)?(?:the\s+|my\s+)?(.+?)\s+camera\??$/i);
+    if (!match) return null;
+    const wanted = match[1].trim().toLowerCase();
+    let cameras = [];
+    try { cameras = await this.cameras.listCameras(); } catch { return null; }
+    const camera = cameras.find((item) => item.name.toLowerCase() === wanted)
+      || cameras.find((item) => item.name.toLowerCase().includes(wanted) || wanted.includes(item.name.toLowerCase()));
+    if (!camera) return null;
+    const shot = await this.cameras.getSnapshot(camera.key, { manual: true });
+    if (!shot.ok) return this.#result(`I could not get a picture from ${camera.name}. ${shot.message}`, 'cameras', { success: false });
+    if (typeof this.ai.describeCameraFrame !== 'function') {
+      return this.#result(`I took a picture from ${camera.name}, but no vision model is set up to describe it.`, 'cameras', { success: false });
+    }
+    const described = await this.ai.describeCameraFrame(shot.jpegBase64, camera.name);
+    if (!described.ok) {
+      return this.#result(`I took a picture from ${camera.name}, but could not describe it. Install a vision model with "ollama pull gemma3:4b", or allow cloud analysis in Settings.`, 'cameras', { success: false });
+    }
+    return this.#result(`${camera.name}: ${described.text}`, 'cameras');
   }
 
   async handle(rawText, project = 'general', stream = {}) {
@@ -86,6 +112,12 @@ class CommandRouter {
     const settings = this.config.getSettings();
     let result;
     const smallTalk = smallTalkReply(text);
+
+    const cameraLook = await this.#cameraLook(text);
+    if (cameraLook) {
+      this.#log(text, cameraLook);
+      return cameraLook;
+    }
 
     if (smallTalk) {
       result = this.#result(smallTalk, 'local-core');

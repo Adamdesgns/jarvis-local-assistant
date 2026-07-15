@@ -296,13 +296,17 @@ class AIService {
     return { ...result, sources: passages.map((p, i) => ({ n: i + 1, name: p.name, path: p.path, page: p.page, section: p.section })) };
   }
 
-  // Describe a screenshot with a vision-capable cloud model. base64 is raw PNG.
+  // Describe an image with a vision-capable cloud model. base64 defaults to
+  // PNG (screenshots); camera frames pass context.mimeType = 'image/jpeg'
+  // and context.subject to replace the screenshot framing.
   async describeImage(base64, question, context = {}) {
     const provider = this.cloudProvider();
     const settings = this.config.getSettings();
+    const mimeType = context.mimeType || 'image/png';
+    const framing = context.subject || "You are looking at a screenshot of the user's screen.";
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60000);
-    const instruction = `${this.prompt(settings, context)}\n\nYou are looking at a screenshot of the user's screen. ${question}`;
+    const instruction = `${this.prompt(settings, context)}\n\n${framing} ${question}`;
     try {
       if (provider === 'anthropic') {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -312,7 +316,7 @@ class AIService {
             model: settings.anthropicModel || 'claude-sonnet-5',
             max_tokens: 700,
             messages: [{ role: 'user', content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } },
+              { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
               { type: 'text', text: instruction }
             ] }]
           }),
@@ -332,7 +336,7 @@ class AIService {
             model: settings.openaiModel || 'gpt-5-mini',
             input: [{ role: 'user', content: [
               { type: 'input_text', text: instruction },
-              { type: 'input_image', image_url: `data:image/png;base64,${base64}` }
+              { type: 'input_image', image_url: `data:${mimeType};base64,${base64}` }
             ] }],
             max_output_tokens: 700,
             store: false
@@ -348,6 +352,46 @@ class AIService {
       throw new Error('No Cloud Brain key is saved for vision.');
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  // Describe a camera frame. Local vision model first — frames only leave
+  // this computer when the user explicitly turned on cloud camera analysis.
+  async describeCameraFrame(jpegBase64, subject) {
+    const settings = this.config.getSettings();
+    const question = 'In one short sentence, describe who or what is visible and anything notable (people, vehicles, packages, animals). If nothing is happening, say so plainly.';
+    const framing = `You are looking at a still frame from the security camera called "${subject}".`;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25000);
+      try {
+        const response = await fetch(`${settings.ollamaUrl || 'http://127.0.0.1:11434'}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: settings.cameraVisionModel || 'gemma3:4b',
+            stream: false,
+            messages: [{ role: 'user', content: `${framing} ${question}`, images: [jpegBase64] }]
+          }),
+          signal: controller.signal
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || `Ollama returned ${response.status}.`);
+        const text = String(payload?.message?.content || '').trim();
+        if (!text) throw new Error('The local vision model returned no description.');
+        return { ok: true, source: 'ollama-vision', text };
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch (localError) {
+      if (settings.cameraCloudVision === true && this.hasCloudKey()) {
+        try {
+          return await this.describeImage(jpegBase64, question, { mimeType: 'image/jpeg', subject: framing });
+        } catch (cloudError) {
+          return { ok: false, text: '', detail: `${localError.message} / ${cloudError.message}` };
+        }
+      }
+      return { ok: false, text: '', detail: localError.message };
     }
   }
 
