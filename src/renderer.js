@@ -740,6 +740,8 @@ function openSettings() {
   $('setting-profile-name').value = state.settings.profileName || 'User';
   $('setting-voice').checked = Boolean(state.settings.voiceEnabled);
   $('setting-wake').checked = Boolean(state.settings.wakeWordEnabled);
+  $('setting-camera-ai').checked = state.settings.cameraAiDescriptions !== false;
+  $('setting-camera-cloud').checked = state.settings.cameraCloudVision === true;
   $('setting-orb').checked = Boolean(state.settings.minimizeToOrb);
   $('setting-top').checked = Boolean(state.settings.orbAlwaysOnTop);
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
@@ -760,6 +762,8 @@ async function saveSettings(event) {
     ollamaModel: $('setting-ollama-model').value.trim() || 'qwen3:8b',
     voiceEnabled: $('setting-voice').checked,
     wakeWordEnabled: $('setting-wake').checked,
+    cameraAiDescriptions: $('setting-camera-ai').checked,
+    cameraCloudVision: $('setting-camera-cloud').checked,
     minimizeToOrb: $('setting-orb').checked,
     orbAlwaysOnTop: $('setting-top').checked,
     startWithWindows: $('setting-startup').checked,
