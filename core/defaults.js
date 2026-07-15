@@ -8,7 +8,7 @@ function windowsHomeFolder(name) {
 }
 
 const DEFAULT_SETTINGS = {
-  settingsVersion: 5,
+  settingsVersion: 6,
   profileName: 'User',
   assistantName: 'JARVIS',
   aiMode: 'local',
@@ -26,7 +26,8 @@ const DEFAULT_SETTINGS = {
   minimizeToOrb: true,
   orbAlwaysOnTop: true,
   motionMode: 'cinematic',
-  hiddenModules: ['performance', 'memory', 'activity', 'quick-commands', 'projects', 'file-explorer', 'document-viewer'],
+  hiddenModules: ['performance', 'memory', 'activity', 'quick-commands', 'projects', 'file-explorer', 'document-viewer', 'cameras'],
+  cameraAccounts: [],
   moduleLayout: {
     tasks: { x: 74, y: 8, w: 24, h: 58 },
     performance: { x: 2, y: 8, w: 22, h: 44 },
@@ -35,7 +36,8 @@ const DEFAULT_SETTINGS = {
     'quick-commands': { x: 2, y: 54, w: 22, h: 38 },
     projects: { x: 74, y: 8, w: 24, h: 38 },
     'file-explorer': { x: 12, y: 6, w: 76, h: 78 },
-    'document-viewer': { x: 18, y: 5, w: 64, h: 76 }
+    'document-viewer': { x: 18, y: 5, w: 64, h: 76 },
+    cameras: { x: 26, y: 8, w: 46, h: 60 }
   },
   searchRoots: [
     windowsHomeFolder('Documents'),

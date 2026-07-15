@@ -90,3 +90,19 @@ test('rtsp driver: lists cameras from secrets and exposes stream sources', async
   await assert.rejects(() => driver.getSnapshot('front'), (e) => e.code === 'NOT_SUPPORTED');
   await assert.rejects(() => driver.setArmed('front', true), (e) => e.code === 'NOT_SUPPORTED');
 });
+
+const { mergeSettings: mergeS } = require('../core/config-store');
+const { DEFAULT_SETTINGS: DEFAULTS } = require('../core/defaults');
+
+test('settings v6: camera module hidden by default and migrated for old saves', () => {
+  assert.equal(DEFAULTS.settingsVersion, 6);
+  assert.deepEqual(DEFAULTS.cameraAccounts, []);
+  assert.ok(DEFAULTS.hiddenModules.includes('cameras'));
+  assert.ok(DEFAULTS.moduleLayout.cameras);
+  const migrated = mergeS(DEFAULTS, { settingsVersion: 5, hiddenModules: [] });
+  assert.ok(migrated.hiddenModules.includes('cameras'));
+  assert.equal(migrated.settingsVersion, 6);
+  // Old saves must not lose camera accounts on merge.
+  const kept = mergeS(DEFAULTS, { settingsVersion: 6, cameraAccounts: [{ id: 'a1', brand: 'rtsp', name: 'Home' }] });
+  assert.equal(kept.cameraAccounts.length, 1);
+});
