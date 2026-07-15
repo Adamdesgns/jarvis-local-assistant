@@ -106,3 +106,86 @@ test('settings v6: camera module hidden by default and migrated for old saves', 
   const kept = mergeS(DEFAULTS, { settingsVersion: 6, cameraAccounts: [{ id: 'a1', brand: 'rtsp', name: 'Home' }] });
   assert.equal(kept.cameraAccounts.length, 1);
 });
+
+const { CameraService } = require('../core/camera/camera-service');
+
+function fakeConfig() {
+  let settings = { cameraAccounts: [] };
+  const secrets = {};
+  return {
+    getSettings: () => JSON.parse(JSON.stringify(settings)),
+    updateSettings: (patch) => { settings = { ...settings, ...patch }; return settings; },
+    getSecret: (name) => secrets[name] || '',
+    setSecret: (name, value) => { if (!value) delete secrets[name]; else secrets[name] = value; },
+    _secrets: secrets
+  };
+}
+
+function fakeGo2rtc() {
+  const streams = new Map();
+  return {
+    start: async () => ({ ok: true }),
+    stop: async () => {},
+    setStream: async (name, source) => streams.set(name, source),
+    removeStream: async (name) => streams.delete(name),
+    snapshot: async () => Buffer.from([0xff, 0xd8, 0xff]),
+    whepUrl: (name) => `http://127.0.0.1:9999/api/webrtc?src=${name}`,
+    getStatus: () => ({ installed: true, running: true, message: 'ok' }),
+    _streams: streams
+  };
+}
+
+test('camera service: rtsp account lifecycle, snapshots via helper, live view', async () => {
+  const config = fakeConfig();
+  const go2rtc = fakeGo2rtc();
+  const logged = [];
+  const service = new CameraService({
+    config, go2rtc, emit: () => {}, log: { write: (entry) => logged.push(entry) }
+  });
+  await service.init();
+
+  const added = await service.addRtspAccount({ name: 'Home', cameras: [{ name: 'Front Door', url: 'rtsp://u:p@192.168.1.20/s1' }] });
+  assert.equal(added.ok, true);
+  const accounts = service.listAccounts();
+  assert.equal(accounts.length, 1);
+  assert.ok(!JSON.stringify(accounts).includes('rtsp://'), 'secrets must not leak in account listings');
+  assert.ok(!JSON.stringify(config.getSettings()).includes('rtsp://'), 'URLs must not be in settings.json');
+
+  const cameras = await service.listCameras();
+  assert.equal(cameras.length, 1);
+  assert.equal(cameras[0].name, 'Front Door');
+
+  const shot = await service.getSnapshot(cameras[0].key, { manual: true });
+  assert.equal(shot.ok, true);
+  assert.ok(shot.jpegBase64.length > 0);
+  assert.ok(logged.some((entry) => entry.type === 'camera'));
+
+  const live = await service.openLiveView(cameras[0].key);
+  assert.equal(live.ok, true);
+  assert.match(live.whepUrl, /api\/webrtc/);
+  assert.equal(go2rtc._streams.size, 1);
+  await service.closeLiveView(cameras[0].key);
+  assert.equal(go2rtc._streams.size, 0);
+
+  const removed = await service.removeAccount(accounts[0].id);
+  assert.equal(removed.ok, true);
+  assert.equal((await service.listCameras()).length, 0);
+  assert.equal(Object.keys(config._secrets).length, 0, 'secret deleted with account');
+});
+
+test('camera service: cooldown blocks automatic snapshots but not manual ones', async () => {
+  const config = fakeConfig();
+  const service = new CameraService({ config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} } });
+  await service.init();
+  await service.addRtspAccount({ name: 'Home', cameras: [{ name: 'Cam', url: 'rtsp://u:p@h/s' }] });
+  const [camera] = await service.listCameras();
+  // Force a cooldown as battery-brand drivers will set (rtsp default is 0).
+  service.drivers.get(camera.accountId).snapshotCooldownMs = 600000;
+  const first = await service.getSnapshot(camera.key, { manual: false });
+  assert.equal(first.ok, true);
+  const second = await service.getSnapshot(camera.key, { manual: false });
+  assert.equal(second.ok, false);
+  assert.match(second.message, /battery|recent/i);
+  const manual = await service.getSnapshot(camera.key, { manual: true });
+  assert.equal(manual.ok, true);
+});
