@@ -185,3 +185,9 @@ body.busy .ai-stop{display:inline-block}
 .camera-system-state.armed{color:var(--amber)}
 .camera-arm{background:none;border:1px solid rgba(255,178,31,.3);color:var(--amber);font:600 8px/1 var(--ui);padding:5px 8px;cursor:pointer}
 .camera-arm.confirming{background:rgba(255,178,31,.18);border-color:var(--amber)}
+
+#autonomy-cards { position:absolute; right:28px; bottom:150px; z-index:24; display:flex; flex-direction:column; gap:8px; width:264px; pointer-events:none; }
+.autonomy-card { display:flex; gap:10px; align-items:center; padding:10px; pointer-events:auto; cursor:pointer; background:linear-gradient(145deg,rgba(8,19,25,.96),rgba(2,8,12,.92)); border:1px solid rgba(255,178,31,.38); box-shadow:0 14px 44px rgba(0,0,0,.45),0 0 26px rgba(255,150,0,.09); animation:assemble .45s cubic-bezier(.15,.9,.2,1); }
+.autonomy-card img { width:64px; height:48px; object-fit:cover; border:1px solid var(--line); }
+.autonomy-card b { display:block; color:var(--amber); font:600 8px/1 var(--tech); letter-spacing:.16em; }
+.autonomy-card span { display:block; margin-top:5px; color:#9eb5bb; font-size:10px; line-height:1.35; }

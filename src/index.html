@@ -177,6 +177,8 @@
         </article>
       </section>
 
+      <div id="autonomy-cards"></div>
+
       <section class="response-dock">
         <div class="response-line"><span>JARVIS</span><p id="jarvis-response">Core systems are coming online.</p><button id="ai-stop" class="ai-stop" type="button" title="Stop this response">■ STOP</button></div>
         <form id="command-form" class="command-form">
@@ -271,6 +273,17 @@
             <label class="toggle-row"><span><b>ALWAYS ON TOP</b><small>Keep the small orb visible</small></span><input id="setting-top" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>START WITH WINDOWS</b><small>Launch automatically at sign-in</small></span><input id="setting-startup" type="checkbox"><i></i></label>
             <label>ANIMATION MODE<select id="setting-motion"><option value="cinematic">FULL CINEMATIC</option><option value="fast">FAST</option><option value="reduced">REDUCED MOTION</option></select></label>
+          </section>
+          <section>
+            <h3>AUTONOMY</h3>
+            <label class="toggle-row"><span><b>AUTONOMY MASTER SWITCH</b><small>Off: JARVIS never speaks or acts on his own</small></span><input id="setting-autonomy" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>SPEAK THE DOORBELL</b><small>Say who is at the door out loud</small></span><input id="setting-autonomy-doorbell" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>"SOMEONE'S HERE" CARD</b><small>Show a doorbell card with the camera picture</small></span><input id="setting-autonomy-card" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>SPOKEN MOTION SUMMARY</b><small>Say motion alerts out loud</small></span><input id="setting-autonomy-motion" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>NIGHT-ONLY MOTION ALERTS</b><small>Quiet motion pop-ups during the day</small></span><input id="setting-autonomy-night" type="checkbox"><i></i></label>
+            <label>NIGHT STARTS<select id="setting-autonomy-night-start"></select></label>
+            <label>NIGHT ENDS<select id="setting-autonomy-night-end"></select></label>
+            <small>Everything here is off until you turn it on. Autonomy only announces — it never sends, spends, deletes, or runs anything without asking.</small>
           </section>
           <section>
             <h3>PROJECT WORKSPACES</h3>

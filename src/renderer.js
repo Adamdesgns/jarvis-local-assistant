@@ -610,6 +610,41 @@ function pushTimeline(label) {
   setTimeout(() => { if (item.parentNode) item.remove(); }, 12000);
 }
 
+function fillHourSelect(select) {
+  if (select.options.length) return;
+  for (let hour = 0; hour < 24; hour += 1) {
+    const option = document.createElement('option');
+    option.value = String(hour);
+    const clock = hour % 12 === 0 ? 12 : hour % 12;
+    option.textContent = `${clock} ${hour < 12 ? 'AM' : 'PM'}`;
+    select.appendChild(option);
+  }
+}
+
+function showAutonomyCard(card) {
+  const holder = $('autonomy-cards');
+  if (!holder) return;
+  const item = document.createElement('div');
+  item.className = 'autonomy-card';
+  const text = document.createElement('div');
+  const title = document.createElement('b');
+  title.textContent = card.title || 'JARVIS NOTICED';
+  const body = document.createElement('span');
+  body.textContent = card.body || '';
+  text.append(title, body);
+  if (card.jpegBase64) {
+    const photo = document.createElement('img');
+    photo.src = `data:image/jpeg;base64,${card.jpegBase64}`;
+    photo.alt = 'Camera picture';
+    item.appendChild(photo);
+  }
+  item.appendChild(text);
+  item.addEventListener('click', () => item.remove());
+  holder.prepend(item);
+  while (holder.children.length > 3) holder.lastChild.remove();
+  setTimeout(() => { if (item.parentNode) item.remove(); }, 30000);
+}
+
 function looksLikeScreenView(command) {
   return /\b(?:look at|what(?:'s| is) on|read|check|see|analyze|describe)\s+(?:my|the)\s+screen\b|\bwhat am i (?:looking at|seeing)\b|\btake a (?:screenshot|screen shot)\b/i.test(command);
 }
@@ -746,6 +781,16 @@ function openSettings() {
   $('setting-top').checked = Boolean(state.settings.orbAlwaysOnTop);
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
   $('setting-motion').value = state.settings.motionMode || 'cinematic';
+  fillHourSelect($('setting-autonomy-night-start'));
+  fillHourSelect($('setting-autonomy-night-end'));
+  $('setting-autonomy').checked = state.settings.autonomyEnabled === true;
+  const autonomyRules = state.settings.autonomyRules || {};
+  $('setting-autonomy-doorbell').checked = autonomyRules.speakDoorbell === true;
+  $('setting-autonomy-card').checked = autonomyRules.someoneHereCard === true;
+  $('setting-autonomy-motion').checked = autonomyRules.speakMotion === true;
+  $('setting-autonomy-night').checked = autonomyRules.nightMotionOnly === true;
+  $('setting-autonomy-night-start').value = String(state.settings.autonomyNightStart ?? 21);
+  $('setting-autonomy-night-end').value = String(state.settings.autonomyNightEnd ?? 7);
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured);
   if (!state.updateUrl) applyUpdateInfo({ current: state.version });
   $('settings-modal').showModal();
@@ -768,6 +813,15 @@ async function saveSettings(event) {
     orbAlwaysOnTop: $('setting-top').checked,
     startWithWindows: $('setting-startup').checked,
     motionMode: $('setting-motion').value,
+    autonomyEnabled: $('setting-autonomy').checked,
+    autonomyRules: {
+      speakDoorbell: $('setting-autonomy-doorbell').checked,
+      nightMotionOnly: $('setting-autonomy-night').checked,
+      someoneHereCard: $('setting-autonomy-card').checked,
+      speakMotion: $('setting-autonomy-motion').checked
+    },
+    autonomyNightStart: Number($('setting-autonomy-night-start').value),
+    autonomyNightEnd: Number($('setting-autonomy-night-end').value),
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots
   };
@@ -1105,6 +1159,10 @@ function bindEvents() {
   window.jarvis.onWakeStatus(renderVoiceStatus);
   window.jarvis.onOllamaStatus(renderOllamaStatus);
   window.jarvis.onTasksChanged(renderTasks);
+  window.jarvis.onAutonomyEvent((action) => {
+    if (action.speak) speak(action.speak);
+    if (action.card) showAutonomyCard(action.card);
+  });
   window.jarvis.onFileStart((payload) => { if (!state.searchActive) startSearchExperience(payload.query); $('scan-label').textContent = 'SCANNING APPROVED LOCATIONS'; });
   window.jarvis.onFileProgress((payload) => { $('scan-path').textContent = payload.directory; $('scan-counter').textContent = `${payload.scannedFolders} FOLDERS · ${payload.scannedItems} ITEMS`; });
   window.jarvis.onFileMatch((payload) => { $('scan-label').textContent = 'POSSIBLE MATCH DETECTED'; if (payload.file) { state.searchResults = [payload.file, ...state.searchResults.filter((item) => item.path !== payload.file.path)].slice(0, 30); renderFileRows(state.searchResults, true); } });
