@@ -12,6 +12,7 @@ function mergeSettings(defaults, saved) {
   result.applications = { ...clone(defaults.applications), ...((saved || {}).applications || {}) };
   result.moduleLayout = { ...clone(defaults.moduleLayout), ...((saved || {}).moduleLayout || {}) };
   result.routines = { ...clone(defaults.routines || {}), ...((saved || {}).routines || {}) };
+  result.autonomyRules = { ...clone(defaults.autonomyRules || {}), ...((saved || {}).autonomyRules || {}) };
   if (Number(saved?.settingsVersion || 0) < 5) {
     result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'document-viewer'])];
   }
@@ -73,7 +74,8 @@ class ConfigStore {
       'wakeSensitivity', 'startWithWindows', 'minimizeToOrb', 'orbAlwaysOnTop',
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
-      'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel'
+      'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
+      'autonomyEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {

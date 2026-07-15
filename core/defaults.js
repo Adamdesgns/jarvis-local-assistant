@@ -31,6 +31,15 @@ const DEFAULT_SETTINGS = {
   cameraAiDescriptions: true,
   cameraCloudVision: false,
   cameraVisionModel: 'gemma3:4b',
+  autonomyEnabled: false,
+  autonomyRules: {
+    speakDoorbell: false,
+    nightMotionOnly: false,
+    someoneHereCard: false,
+    speakMotion: false
+  },
+  autonomyNightStart: 21,
+  autonomyNightEnd: 7,
   moduleLayout: {
     tasks: { x: 74, y: 8, w: 24, h: 58 },
     performance: { x: 2, y: 8, w: 22, h: 44 },

@@ -85,3 +85,25 @@ test('autonomy: act tier never self-approves', () => {
   assert.deepEqual(decideAct('blocked'), { allowed: false, log: true });
   assert.equal(decideAct('anything-unknown').allowed, false, 'unknown classifications are refused');
 });
+
+const { mergeSettings } = require('../core/config-store');
+const { DEFAULT_SETTINGS } = require('../core/defaults');
+
+test('autonomy settings: everything defaults OFF and old saves merge safely', () => {
+  assert.equal(DEFAULT_SETTINGS.autonomyEnabled, false);
+  assert.deepEqual(DEFAULT_SETTINGS.autonomyRules, {
+    speakDoorbell: false, nightMotionOnly: false, someoneHereCard: false, speakMotion: false
+  });
+  assert.equal(DEFAULT_SETTINGS.autonomyNightStart, 21);
+  assert.equal(DEFAULT_SETTINGS.autonomyNightEnd, 7);
+
+  // An old save with no autonomy keys gets the defaults.
+  const old = mergeSettings(DEFAULT_SETTINGS, { settingsVersion: 6 });
+  assert.equal(old.autonomyEnabled, false);
+  assert.equal(old.autonomyRules.speakDoorbell, false);
+
+  // A partial saved rules object keeps unknown-at-save-time rules at default.
+  const partial = mergeSettings(DEFAULT_SETTINGS, { settingsVersion: 6, autonomyRules: { speakDoorbell: true } });
+  assert.equal(partial.autonomyRules.speakDoorbell, true);
+  assert.equal(partial.autonomyRules.speakMotion, false, 'missing rules fall back to defaults');
+});
