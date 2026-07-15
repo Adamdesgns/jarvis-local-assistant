@@ -154,3 +154,21 @@ body.busy .ai-stop{display:inline-block}
 .response-line p{white-space:pre-wrap;overflow:visible;text-overflow:clip;font-size:11px;line-height:1.6}
 .response-line::-webkit-scrollbar{width:6px}
 .response-line::-webkit-scrollbar-thumb{background:rgba(255,178,31,.25)}
+
+/* Cameras module */
+.cameras-content{display:flex;flex-direction:column;gap:8px;overflow:auto}
+.camera-add-form{display:flex;flex-direction:column;gap:6px;border:1px solid rgba(255,178,31,.25);padding:10px}
+.camera-hint{font:400 10px/1.5 var(--ui);color:#b5c9ce;margin:0}
+.camera-add-actions{display:flex;gap:6px}
+.camera-status{font:400 10px/1.4 var(--ui);color:var(--amber);margin:0;min-height:12px}
+.camera-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.camera-empty{font:400 11px/1.6 var(--ui);color:#b5c9ce;opacity:.7}
+.camera-tile{border:1px solid rgba(255,178,31,.2);background:rgba(2,7,11,.6);display:flex;flex-direction:column}
+.camera-view{position:relative;aspect-ratio:16/9;background:#03090d;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.camera-view img,.camera-view video{width:100%;height:100%;object-fit:cover}
+.camera-view-empty{font:600 9px/1 var(--ui);letter-spacing:.12em;color:#4d646b}
+.camera-tile-bar{display:flex;align-items:center;gap:6px;padding:6px 8px}
+.camera-name{font:600 10px/1 var(--ui);color:#d8e6ea;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.camera-brand{font:600 8px/1 var(--ui);color:var(--amber);opacity:.8}
+.camera-tile-bar button{background:none;border:1px solid rgba(255,178,31,.3);color:var(--amber);font:600 8px/1 var(--ui);padding:4px 6px;cursor:pointer}
+.camera-stamp{font:400 9px/1.4 var(--ui);color:#7b949b;padding:0 8px 6px;min-height:14px}

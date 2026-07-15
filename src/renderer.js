@@ -3,7 +3,8 @@ const RESET_LAYOUT = {
   tasks: { x: 74, y: 8, w: 24, h: 58 }, performance: { x: 2, y: 8, w: 22, h: 44 },
   memory: { x: 2, y: 54, w: 24, h: 36 }, activity: { x: 74, y: 62, w: 24, h: 32 },
   'quick-commands': { x: 2, y: 54, w: 22, h: 38 }, projects: { x: 74, y: 8, w: 24, h: 38 },
-  'file-explorer': { x: 12, y: 6, w: 76, h: 78 }, 'document-viewer': { x: 18, y: 5, w: 64, h: 76 }
+  'file-explorer': { x: 12, y: 6, w: 76, h: 78 }, 'document-viewer': { x: 18, y: 5, w: 64, h: 76 },
+  cameras: { x: 26, y: 8, w: 46, h: 60 }
 };
 const state = {
   settings: {},
@@ -924,7 +925,7 @@ function bindEvents() {
   document.querySelectorAll('[data-hide]').forEach((button) => button.addEventListener('click', () => toggleModule(button.closest('.module').dataset.module, false)));
   document.querySelectorAll('[data-collapse]').forEach((button) => button.addEventListener('click', () => button.closest('.module').classList.toggle('collapsed')));
   $('reset-layout').addEventListener('click', () => {
-    state.hiddenModules = ['performance','memory','activity','quick-commands','projects','file-explorer','document-viewer'];
+    state.hiddenModules = ['performance','memory','activity','quick-commands','projects','file-explorer','document-viewer','cameras'];
     for (const key of Object.keys(state.layout)) delete state.layout[key];
     Object.assign(state.layout, JSON.parse(JSON.stringify(RESET_LAYOUT)));
     renderModuleVisibility(); scheduleLayoutSave(); showToast('Default layout restored.');

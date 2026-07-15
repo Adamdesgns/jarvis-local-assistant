@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src http://127.0.0.1:* ws://127.0.0.1:*;">
     <title>JARVIS · Local Assistant</title>
     <link rel="stylesheet" href="styles.css">
   </head>
@@ -128,6 +128,21 @@
           <div class="module-content document-content"><pre id="document-output">Ask JARVIS to read or summarize a document.</pre></div>
           <i class="resize-handle"></i>
         </article>
+
+        <article class="module hidden-module" data-module="cameras">
+          <header class="module-header drag-handle"><div><span>09 // SURVEILLANCE</span><h2>CAMERAS</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Add cameras">＋ ADD</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content cameras-content">
+            <form id="camera-add-form" class="camera-add-form" hidden>
+              <p class="camera-hint">Add a local network camera. The address looks like rtsp://username:password@192.168.1.20/stream1 — it is stored encrypted on this computer.</p>
+              <input id="camera-add-name" placeholder="Camera name (Front Door)">
+              <input id="camera-add-url" placeholder="rtsp://username:password@camera-address/stream">
+              <div class="camera-add-actions"><button type="button" id="camera-scan">SCAN NETWORK</button><button type="submit">SAVE CAMERA</button><button type="button" id="camera-add-cancel">CANCEL</button></div>
+              <p id="camera-add-status" class="camera-status" role="status"></p>
+            </form>
+            <div id="camera-grid" class="camera-grid"><p class="camera-empty">No cameras yet. Select ＋ ADD to connect one.</p></div>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
       </section>
 
       <section class="response-dock">
@@ -156,6 +171,7 @@
         <button data-toggle-module="activity"><i></i><span><b>Activity</b><small>Recent completed commands</small></span></button>
         <button data-toggle-module="quick-commands"><i></i><span><b>Quick Commands</b><small>One-click actions</small></span></button>
         <button data-toggle-module="document-viewer"><i></i><span><b>Document Viewer</b><small>Full summaries and document analysis</small></span></button>
+        <button data-toggle-module="cameras"><i></i><span><b>Cameras</b><small>Live view and snapshots from your security cameras</small></span></button>
       </div>
       <button id="reset-layout" class="drawer-reset">RESET DEFAULT LAYOUT</button>
     </aside>
@@ -286,5 +302,6 @@
     <script src="hologram.js"></script>
     <script src="layout-engine.js"></script>
     <script src="renderer.js"></script>
+    <script src="cameras-ui.js"></script>
   </body>
 </html>

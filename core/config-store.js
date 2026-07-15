@@ -15,7 +15,11 @@ function mergeSettings(defaults, saved) {
   if (Number(saved?.settingsVersion || 0) < 5) {
     result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'document-viewer'])];
   }
-  result.settingsVersion = 5;
+  if (Number(saved?.settingsVersion || 0) < 6) {
+    result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'cameras'])];
+  }
+  result.settingsVersion = 6;
+  result.cameraAccounts = Array.isArray(result.cameraAccounts) ? result.cameraAccounts : [];
   if (!['local', 'cloud', 'auto'].includes(result.aiMode)) result.aiMode = 'local';
   // Never allow a stale V1 address to redirect the private local Ollama connection.
   result.ollamaUrl = 'http://127.0.0.1:11434';
@@ -68,7 +72,8 @@ class ConfigStore {
       'voiceEnabled', 'localVoiceEnabled', 'localVoiceModel', 'wakeWordEnabled',
       'wakeSensitivity', 'startWithWindows', 'minimizeToOrb', 'orbAlwaysOnTop',
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',
-      'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines'
+      'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
+      'cameraAccounts'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {
