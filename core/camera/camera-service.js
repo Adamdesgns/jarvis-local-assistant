@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { RtspDriver } = require('./drivers/rtsp-driver');
+const { BlinkDriver } = require('./drivers/blink-driver');
 
 function streamName(key) { return `cam_${key.replace(/[^a-zA-Z0-9]+/g, '_')}`; }
 
@@ -11,7 +12,7 @@ class CameraService {
     this.emit = emit || (() => {});
     this.log = log || { write: () => {} };
     this.go2rtc = go2rtc;
-    this.driverClasses = driverClasses || { rtsp: RtspDriver };
+    this.driverClasses = driverClasses || { rtsp: RtspDriver, blink: BlinkDriver };
     this.drivers = new Map(); // accountId -> driver
     this.lastAutoSnapshot = new Map(); // camera key -> timestamp
     this.liveViews = new Set(); // stream names
@@ -65,6 +66,62 @@ class CameraService {
     this.emit('cameras:changed', {});
     this.log.write({ type: 'camera', command: 'add cameras', response: `Added ${list.length} local camera${list.length === 1 ? '' : 's'} to "${cleanName}".`, source: 'cameras' });
     return { ok: true, message: `Added ${list.length} camera${list.length === 1 ? '' : 's'}.` };
+  }
+
+  async addBlinkAccount({ email, password }) {
+    const cleanEmail = String(email || '').trim();
+    const cleanPassword = String(password || '');
+    if (!cleanEmail || !cleanPassword) return { ok: false, message: 'Enter your Blink email and password first.' };
+    const account = { id: crypto.randomUUID().slice(0, 8), brand: 'blink', name: cleanEmail };
+    this.config.setSecret(this.#secretKey(account.id), JSON.stringify({
+      email: cleanEmail, password: cleanPassword, uniqueId: crypto.randomUUID()
+    }));
+    const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
+    this.config.updateSettings({ cameraAccounts: accounts });
+    await this.#instantiate(account);
+    const driver = this.drivers.get(account.id);
+    const status = driver?.status() || { state: 'error', message: 'The Blink connection could not start.' };
+    if (status.state === 'error') {
+      await this.removeAccount(account.id);
+      return { ok: false, message: status.message };
+    }
+    this.emit('cameras:changed', {});
+    this.log.write({ type: 'camera', command: 'add blink account', response: `Connected Blink account ${cleanEmail}.`, source: 'cameras' });
+    return { ok: true, needsPin: status.state === 'verify', accountId: account.id, message: status.message || 'Blink is connected.' };
+  }
+
+  async submitBlinkPin(accountId, pin) {
+    const driver = this.drivers.get(accountId);
+    if (!driver || typeof driver.submitPin !== 'function') return { ok: false, message: 'That Blink account is no longer set up.' };
+    const result = await driver.submitPin(pin);
+    if (result.ok) this.emit('cameras:changed', {});
+    return result;
+  }
+
+  async listSystems() {
+    const systems = [];
+    for (const [accountId, driver] of this.drivers) {
+      try {
+        for (const system of await driver.listSystems()) {
+          systems.push({ ...system, accountId, key: `${accountId}:${system.id}` });
+        }
+      } catch {}
+    }
+    return systems;
+  }
+
+  async setArmed(systemKey, armed) {
+    const [accountId, systemId] = String(systemKey || '').split(':');
+    const driver = this.drivers.get(accountId);
+    if (!driver) return { ok: false, message: 'That system is no longer set up.' };
+    try {
+      await driver.setArmed(Number(systemId), Boolean(armed));
+      this.emit('cameras:changed', {});
+      this.log.write({ type: 'camera', command: armed ? 'camera arm' : 'camera disarm', response: `${armed ? 'Armed' : 'Disarmed'} system ${systemKey}.`, source: 'cameras' });
+      return { ok: true, message: armed ? 'System armed.' : 'System disarmed.' };
+    } catch (error) {
+      return { ok: false, message: `Could not change arming: ${error.message}` };
+    }
   }
 
   async removeAccount(accountId) {

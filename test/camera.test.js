@@ -193,6 +193,48 @@ test('camera service: cooldown blocks automatic snapshots but not manual ones', 
   assert.equal(manual.ok, true);
 });
 
+test('camera service: blink account flow with PIN, systems, and arming', async () => {
+  const config = fakeConfig();
+  const logged = [];
+  class TestBlinkDriver extends BlinkDriver {
+    constructor(options) {
+      super({
+        ...options,
+        clientFactory: () => fakeBlinkClient({
+          login: async () => ({ token: 't1', accountId: 1, clientId: 2, tier: 'u1', verificationRequired: true })
+        })
+      });
+      this.freshWaitMs = 0;
+    }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: (entry) => logged.push(entry) },
+    driverClasses: { blink: TestBlinkDriver }
+  });
+  await service.init();
+
+  const added = await service.addBlinkAccount({ email: 'a@b.c', password: 'pw' });
+  assert.equal(added.ok, true);
+  assert.equal(added.needsPin, true);
+  assert.ok(!JSON.stringify(config.getSettings()).includes('pw'), 'password only in secrets');
+
+  const pinned = await service.submitBlinkPin(added.accountId, '4321');
+  assert.equal(pinned.ok, true);
+
+  const cameras = await service.listCameras();
+  assert.equal(cameras.length, 3);
+  assert.ok(cameras.every((camera) => camera.brand === 'blink'));
+
+  const systems = await service.listSystems();
+  assert.equal(systems.length, 1);
+  assert.equal(systems[0].armed, false);
+  assert.equal(systems[0].key, `${added.accountId}:55`);
+
+  const armed = await service.setArmed(systems[0].key, true);
+  assert.equal(armed.ok, true);
+  assert.ok(logged.some((entry) => entry.command === 'camera arm'));
+});
+
 const { discoverCameras } = require('../core/camera/onvif-discovery');
 
 test('onvif discovery: dedupes and survives probe errors', async () => {
