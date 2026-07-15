@@ -14,7 +14,7 @@
   document.getElementById('camera-add-cancel').addEventListener('click', () => { addForm.hidden = true; });
 
   // Brand tabs: LOCAL (RTSP) | BLINK
-  const panes = { rtsp: document.getElementById('camera-pane-rtsp'), blink: document.getElementById('camera-pane-blink') };
+  const panes = { rtsp: document.getElementById('camera-pane-rtsp'), blink: document.getElementById('camera-pane-blink'), ring: document.getElementById('camera-pane-ring') };
   document.querySelectorAll('[data-camera-brand]').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('[data-camera-brand]').forEach((other) => other.classList.toggle('active', other === tab));
     for (const [brand, pane] of Object.entries(panes)) pane.hidden = brand !== tab.dataset.cameraBrand;
@@ -142,9 +142,17 @@
         peer.addEventListener('icegatheringstatechange', () => { if (peer.iceGatheringState === 'complete') resolve(); });
         setTimeout(resolve, 2000);
       });
-      const response = await fetch(live.whepUrl, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: peer.localDescription.sdp });
-      if (!response.ok) throw new Error(`helper answered ${response.status}`);
-      await peer.setRemoteDescription({ type: 'answer', sdp: await response.text() });
+      let answerSdp;
+      if (live.mode === 'sdp-bridge') {
+        const bridged = await window.jarvis.cameras.liveAnswer(camera.key, peer.localDescription.sdp);
+        if (!bridged.ok) throw new Error(bridged.message || 'live view refused');
+        answerSdp = bridged.answerSdp;
+      } else {
+        const response = await fetch(live.whepUrl, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: peer.localDescription.sdp });
+        if (!response.ok) throw new Error(`helper answered ${response.status}`);
+        answerSdp = await response.text();
+      }
+      await peer.setRemoteDescription({ type: 'answer', sdp: answerSdp });
       video.hidden = false; img.hidden = true;
       article.querySelector('.camera-view-empty').hidden = true;
       button.textContent = '■ STOP';
@@ -168,6 +176,43 @@
       article.querySelector('.camera-stamp').textContent = '';
     }
   }
+
+  // Ring sign-in: same shape as Blink, but the code round-trips the whole
+  // login (Ring only issues the token when email+password+code go together).
+  const ringEmail = document.getElementById('ring-email');
+  const ringPassword = document.getElementById('ring-password');
+  const ringCodeRow = document.getElementById('ring-code-row');
+  const ringCode = document.getElementById('ring-code');
+  let ringPending = null; // {email, password} kept until the code arrives
+
+  document.getElementById('ring-cancel').addEventListener('click', () => {
+    addForm.hidden = true; ringPassword.value = ''; ringCodeRow.hidden = true; ringPending = null;
+  });
+
+  async function ringSignIn(code) {
+    addStatus.textContent = code ? 'Checking the code…' : 'Signing in to Ring…';
+    const payload = ringPending || { email: ringEmail.value, password: ringPassword.value };
+    const result = await window.jarvis.cameras.addRing({ ...payload, code });
+    if (!result.ok) {
+      addStatus.textContent = result.message || 'Ring sign-in failed.';
+      ringPending = null; ringPassword.value = ''; ringCodeRow.hidden = true;
+      return;
+    }
+    if (result.needs2fa) {
+      ringPending = payload;
+      ringCodeRow.hidden = false;
+      addStatus.textContent = result.message || 'Enter the code Ring sent you.';
+      ringCode.focus();
+      return;
+    }
+    ringPending = null; ringPassword.value = ''; ringCode.value = ''; ringCodeRow.hidden = true;
+    addStatus.textContent = result.message || 'Ring is connected.';
+    addForm.hidden = true;
+    render();
+  }
+
+  document.getElementById('ring-signin').addEventListener('click', () => ringSignIn(''));
+  document.getElementById('ring-verify').addEventListener('click', () => ringSignIn(ringCode.value));
 
   // Systems strip: arm/disarm with an explicit two-step confirmation.
   const systemsStrip = document.getElementById('camera-systems');
@@ -225,6 +270,19 @@
       refresh(article, camera, false);
     }
   }
+
+  // Alert badge: refresh the tile and stamp the alert text on it.
+  window.jarvis.onCamerasAlert((alert) => {
+    const article = grid.querySelector(`[data-key="${alert.key}"]`);
+    if (!article) return;
+    if (alert.jpegBase64) {
+      const img = article.querySelector('img');
+      img.src = `data:image/jpeg;base64,${alert.jpegBase64}`;
+      img.hidden = false;
+      article.querySelector('.camera-view-empty').hidden = true;
+    }
+    article.querySelector('.camera-stamp').textContent = `⚠ ${alert.body}`;
+  });
 
   window.jarvis.onCamerasChanged(() => render());
   render();
