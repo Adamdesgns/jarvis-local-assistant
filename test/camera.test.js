@@ -372,6 +372,30 @@ test('ring driver: without a refresh token it reports a clear error state', asyn
   assert.match(driver.status().message, /sign in/i);
 });
 
+test('router: "who\'s at the front door" answers from a camera frame', async () => {
+  const { CommandRouter } = require('../core/router');
+  const router = new CommandRouter({
+    config: { getSettings: () => ({ projects: {} }) },
+    tools: {},
+    ai: {
+      describeCameraFrame: async (_jpeg, subject) => ({ ok: true, text: `a courier at ${subject}` }),
+      reply: async () => ({ ok: true, text: 'I have no camera by that name.', source: 'local-core' })
+    },
+    memory: { list: () => [], search: () => [] },
+    tasks: { list: () => [], summary: () => ({ open: 0, overdue: 0, tasks: [] }) },
+    log: { write: () => {} },
+    cameras: {
+      listCameras: async () => [{ key: 'a1:9', id: '9', name: 'Front Door', brand: 'blink' }],
+      getSnapshot: async () => ({ ok: true, jpegBase64: 'abc' })
+    }
+  });
+  const answer = await router.handle("Who's at the front door?");
+  assert.match(answer.response, /Front Door: a courier/);
+  // Unknown camera names fall through to normal handling, not an error.
+  const fallthrough = await router.handle("Who's at the moon base?");
+  assert.doesNotMatch(fallthrough.response || '', /moon base:/i);
+});
+
 const { discoverCameras } = require('../core/camera/onvif-discovery');
 
 test('onvif discovery: dedupes and survives probe errors', async () => {
