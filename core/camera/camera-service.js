@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const { RtspDriver } = require('./drivers/rtsp-driver');
 const { BlinkDriver } = require('./drivers/blink-driver');
 const { RingDriver } = require('./drivers/ring-driver');
+const { NestDriver } = require('./drivers/nest-driver');
 
 const ALERT_DEDUPE_MS = 60000;
 
@@ -16,7 +17,7 @@ class CameraService {
     this.log = log || { write: () => {} };
     this.notify = notify || (() => {});
     this.go2rtc = go2rtc;
-    this.driverClasses = driverClasses || { rtsp: RtspDriver, blink: BlinkDriver, ring: RingDriver };
+    this.driverClasses = driverClasses || { rtsp: RtspDriver, blink: BlinkDriver, ring: RingDriver, nest: NestDriver };
     this.drivers = new Map(); // accountId -> driver
     this.lastAutoSnapshot = new Map(); // camera key -> timestamp
     this.liveViews = new Set(); // go2rtc stream names
@@ -150,6 +151,38 @@ class CameraService {
       this.emit('cameras:changed', {});
       this.log.write({ type: 'camera', command: 'add ring account', response: `Connected Ring account ${cleanEmail}.`, source: 'cameras' });
       return { ok: true, message: 'Ring is connected.' };
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
+  }
+
+  // Nest "Advanced setup": user-supplied Device Access project + OAuth
+  // client; the browser sign-in runs through a one-shot loopback server.
+  async addNestAccount({ projectId, clientId, clientSecret }, { openExternal, oauthFlow } = {}) {
+    const project = String(projectId || '').trim();
+    const id = String(clientId || '').trim();
+    const secret = String(clientSecret || '').trim();
+    if (!project || !id || !secret) {
+      return { ok: false, message: 'Fill in all three Google values first — project ID, client ID, and client secret.' };
+    }
+    try {
+      const flow = oauthFlow || ((args) => require('./nest-oauth').runOauthFlow({ ...args, openExternal }));
+      const token = await flow({ projectId: project, clientId: id, clientSecret: secret });
+      const account = { id: crypto.randomUUID().slice(0, 8), brand: 'nest', name: `Nest · ${project.slice(0, 12)}` };
+      this.config.setSecret(this.#secretKey(account.id), JSON.stringify({
+        projectId: project, clientId: id, clientSecret: secret, ...token
+      }));
+      const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
+      this.config.updateSettings({ cameraAccounts: accounts });
+      await this.#instantiate(account);
+      const status = this.drivers.get(account.id)?.status();
+      if (status?.state === 'error') {
+        await this.removeAccount(account.id);
+        return { ok: false, message: status.message };
+      }
+      this.emit('cameras:changed', {});
+      this.log.write({ type: 'camera', command: 'add nest account', response: `Connected Nest project ${project}.`, source: 'cameras' });
+      return { ok: true, message: 'Nest is connected. Nest cameras are live-view only and do not send motion alerts yet.' };
     } catch (error) {
       return { ok: false, message: error.message };
     }
