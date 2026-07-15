@@ -133,7 +133,7 @@
           <header class="module-header drag-handle"><div><span>09 // SURVEILLANCE</span><h2>CAMERAS</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Add cameras">＋ ADD</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content cameras-content">
             <form id="camera-add-form" class="camera-add-form" hidden>
-              <div class="camera-brand-tabs"><button type="button" class="active" data-camera-brand="rtsp">LOCAL (RTSP)</button><button type="button" data-camera-brand="blink">BLINK</button><button type="button" data-camera-brand="ring">RING</button></div>
+              <div class="camera-brand-tabs"><button type="button" class="active" data-camera-brand="rtsp">LOCAL (RTSP)</button><button type="button" data-camera-brand="blink">BLINK</button><button type="button" data-camera-brand="ring">RING</button><button type="button" data-camera-brand="nest">NEST (ADVANCED)</button></div>
               <div id="camera-pane-rtsp" class="camera-pane">
                 <p class="camera-hint">Add a local network camera. The address looks like rtsp://username:password@192.168.1.20/stream1 — it is stored encrypted on this computer.</p>
                 <input id="camera-add-name" placeholder="Camera name (Front Door)">
@@ -159,6 +159,14 @@
                   <input id="ring-code" inputmode="numeric" placeholder="Code from Ring">
                   <button type="button" id="ring-verify">VERIFY CODE</button>
                 </div>
+              </div>
+              <div id="camera-pane-nest" class="camera-pane" hidden>
+                <p class="camera-hint">Advanced setup. Google requires a one-time $5 Device Access registration and a small console setup before Nest cameras can connect. In the Google console, create a Device Access project and an OAuth client, then paste the three values below. Nest cameras are live-view only and do not send motion alerts yet.</p>
+                <div class="camera-add-actions"><button type="button" id="nest-console">OPEN GOOGLE CONSOLE</button></div>
+                <input id="nest-project" placeholder="Device Access project ID" autocomplete="off">
+                <input id="nest-client-id" placeholder="OAuth client ID" autocomplete="off">
+                <input id="nest-client-secret" type="password" placeholder="OAuth client secret" autocomplete="off">
+                <div class="camera-add-actions"><button type="button" id="nest-signin">START GOOGLE SIGN-IN</button><button type="button" id="nest-cancel">CANCEL</button></div>
               </div>
               <p id="camera-add-status" class="camera-status" role="status"></p>
             </form>

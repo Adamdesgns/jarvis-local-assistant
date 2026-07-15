@@ -396,6 +396,99 @@ test('router: "who\'s at the front door" answers from a camera frame', async () 
   assert.doesNotMatch(fallthrough.response || '', /moon base:/i);
 });
 
+const nestClient = require('../core/camera/nest-client');
+
+test('nest client: consent URL, token exchange, device listing, webrtc command', async () => {
+  const url = nestClient.authUrl({ projectId: 'proj-1', clientId: 'cid-1', redirectUri: 'http://127.0.0.1:9/cb' });
+  assert.match(url, /^https:\/\/nestservices\.google\.com\/partnerconnections\/proj-1\/auth\?/);
+  assert.ok(url.includes('client_id=cid-1'));
+  assert.ok(url.includes('access_type=offline'));
+  assert.ok(url.includes(encodeURIComponent('https://www.googleapis.com/auth/sdm.service')));
+
+  const calls = [];
+  const fetchFn = async (target, options = {}) => {
+    calls.push({ target, options });
+    if (target.includes('oauth2.googleapis.com/token')) {
+      return { ok: true, json: async () => ({ refresh_token: 'rt', access_token: 'at', expires_in: 3600 }) };
+    }
+    if (target.endsWith('/devices')) {
+      return { ok: true, json: async () => ({ devices: [
+        { name: 'enterprises/proj-1/devices/dev-1', type: 'sdm.devices.types.DOORBELL',
+          traits: { 'sdm.devices.traits.Info': { customName: 'Front Door' }, 'sdm.devices.traits.CameraLiveStream': { supportedProtocols: ['WEB_RTC'] } } },
+        { name: 'enterprises/proj-1/devices/dev-2', type: 'sdm.devices.types.THERMOSTAT', traits: {} }
+      ] }) };
+    }
+    if (target.includes(':executeCommand')) {
+      return { ok: true, json: async () => ({ results: { answerSdp: 'nest-answer', mediaSessionId: 'ms-1' } }) };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+
+  const token = await nestClient.exchangeCode({ clientId: 'cid-1', clientSecret: 'sec', code: 'code-1', redirectUri: 'http://127.0.0.1:9/cb', fetchFn });
+  assert.equal(token.refreshToken, 'rt');
+  assert.ok(token.expiresAt > Date.now());
+  assert.ok(calls[0].options.body.includes('grant_type=authorization_code'));
+
+  const devices = await nestClient.listDevices({ accessToken: 'at', fetchFn }, 'proj-1');
+  assert.deepEqual(devices, [{ id: 'dev-1', name: 'Front Door', protocols: ['WEB_RTC'] }]);
+
+  const stream = await nestClient.generateWebRtcStream({ accessToken: 'at', fetchFn }, 'proj-1', 'dev-1', 'my-offer');
+  assert.equal(stream.answerSdp, 'nest-answer');
+  const command = calls.find((call) => call.target.includes(':executeCommand'));
+  assert.ok(command.target.includes('enterprises/proj-1/devices/dev-1'));
+  assert.ok(command.options.body.includes('GenerateWebRtcStream'));
+});
+
+const { NestDriver } = require('../core/camera/drivers/nest-driver');
+
+test('nest driver: refreshes token, lists live-only cameras, bridges sdp', async () => {
+  const persisted = [];
+  const fakeClient = {
+    refreshAccessToken: async () => ({ accessToken: 'at-2', expiresAt: Date.now() + 3600000 }),
+    listDevices: async () => ([{ id: 'dev-1', name: 'Front Door', protocols: ['WEB_RTC'] }]),
+    generateWebRtcStream: async (_s, _p, _d, offer) => ({ answerSdp: `ans:${offer}`, mediaSessionId: 'ms' }),
+    generateRtspStream: async () => ({ rtspUrl: 'rtsps://nest/stream' })
+  };
+  const driver = new NestDriver({
+    account: { id: 'n1', name: 'Nest' },
+    secrets: { projectId: 'proj-1', clientId: 'cid', clientSecret: 'sec', refreshToken: 'rt' },
+    persistSecrets: (secrets) => persisted.push(secrets),
+    client: fakeClient
+  });
+  await driver.connect();
+  assert.equal(driver.status().state, 'connected');
+  assert.ok(persisted.some((secrets) => secrets.accessToken === 'at-2'));
+
+  const cameras = await driver.listCameras();
+  assert.deepEqual(cameras, [{ id: 'dev-1', name: 'Front Door', brand: 'nest', canStream: true, canArm: false, kind: 'camera', liveOnly: true }]);
+  assert.deepEqual(await driver.listSystems(), []);
+
+  const session = await driver.createSdpSession('dev-1', 'offer-x');
+  assert.equal(session.answerSdp, 'ans:offer-x');
+  session.close();
+  await assert.rejects(() => driver.getSnapshot('dev-1'), (e) => e.code === 'NOT_SUPPORTED');
+});
+
+test('camera service: nest account added through an injected oauth flow', async () => {
+  const config = fakeConfig();
+  class FakeNest extends NestDriver {
+    async connect() { this.setState('connected'); }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { nest: FakeNest }
+  });
+  await service.init();
+  const added = await service.addNestAccount(
+    { projectId: 'proj-1', clientId: 'cid', clientSecret: 'sec' },
+    { oauthFlow: async () => ({ refreshToken: 'rt-9', accessToken: 'at-9', expiresAt: Date.now() + 1000 }) }
+  );
+  assert.equal(added.ok, true);
+  assert.equal(service.listAccounts()[0].brand, 'nest');
+  assert.ok(config._secrets[`cameraAccount:${service.listAccounts()[0].id}`].includes('rt-9'));
+  assert.ok(!JSON.stringify(config.getSettings()).includes('sec'), 'client secret only in secrets');
+});
+
 const { discoverCameras } = require('../core/camera/onvif-discovery');
 
 test('onvif discovery: dedupes and survives probe errors', async () => {

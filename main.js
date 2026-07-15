@@ -505,6 +505,8 @@ function setupIpc() {
   ipcMain.handle('cameras:systems', () => cameras.listSystems());
   ipcMain.handle('cameras:add-ring', (_event, payload) => cameras.addRingAccount(payload || {}));
   ipcMain.handle('cameras:live-answer', (_event, payload) => cameras.answerLiveView(String(payload?.key || ''), String(payload?.offerSdp || '')));
+  ipcMain.handle('cameras:add-nest', (_event, payload) => cameras.addNestAccount(payload || {}, { openExternal: (url) => shell.openExternal(url) }));
+  ipcMain.handle('external:nest-console', () => shell.openExternal('https://console.nest.google.com/device-access'));
   ipcMain.handle('cameras:describe', async (_event, key) => {
     const shot = await cameras.getSnapshot(String(key || ''), { manual: true });
     if (!shot.ok) return { ok: false, message: shot.message };
