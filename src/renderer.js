@@ -54,11 +54,13 @@ function setCoreState(coreState, kicker) {
   document.body.classList.toggle('listening', coreState === 'listening');
   document.body.classList.toggle('recording', coreState === 'listening');
   window.jarvisHologram?.setState(coreState);
+  window.JarvisCommandCenter?.setJarvisState?.(coreState);
   window.jarvis.setUIState(coreState, kicker || labels[coreState]);
 }
 
 function setResponse(message) {
   $('jarvis-response').textContent = message;
+  window.JarvisCommandCenter?.setResponse?.(message);
 }
 
 function showDocumentOutput(title, content) {
