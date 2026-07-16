@@ -1,5 +1,17 @@
 # JARVIS Changelog
 
+## Unreleased (command-center-skin branch)
+
+### Added — Command Center skin (switchable)
+- New SKIN setting: switch between Classic Amber and a cyan Command Center
+  dashboard, saved and applied without a restart. Classic stays the default.
+- The Command Center shows real data — CPU/RAM/GPU, projects, tasks, activity,
+  and a glanceable cameras panel — and its colour tracks JARVIS's state
+  (listening, thinking, speaking, working).
+- Command bar, dock, FOCUS mode, and minimize-to-orb all use the real app
+  actions; documents open as an overlay. Weather and Network panels are
+  coming next.
+
 ## Unreleased (autonomy-engine branch)
 
 ### Added — Autonomy engine + camera reactions (slice 1)
