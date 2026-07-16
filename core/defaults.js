@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS = {
   autonomyNightStart: 21,
   autonomyNightEnd: 7,
   skin: 'classic',
+  voiceName: '',
   moduleLayout: {
     tasks: { x: 74, y: 8, w: 24, h: 58 },
     performance: { x: 2, y: 8, w: 22, h: 44 },

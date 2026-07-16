@@ -173,10 +173,50 @@ async function connectOpenAI() {
 
 function selectVoice() {
   const voices = speechSynthesis.getVoices();
-  const preferred = ['Ryan', 'Guy', 'George', 'Daniel', 'David', 'Mark'];
-  return preferred.map((name) => voices.find((voice) => voice.name.includes(name))).find(Boolean)
+  // A voice the user picked in Settings always wins.
+  if (state.settings.voiceName) {
+    const chosen = voices.find((voice) => voice.name === state.settings.voiceName);
+    if (chosen) return chosen;
+  }
+  // Auto: chase the JARVIS feel — a British male voice first, then any British,
+  // then a known male voice, then any English voice at all.
+  const britishMale = ['Ryan', 'George', 'Daniel'];
+  return voices.find((voice) => voice.lang === 'en-GB' && britishMale.some((name) => voice.name.includes(name)))
+    || voices.find((voice) => britishMale.some((name) => voice.name.includes(name)))
+    || voices.find((voice) => voice.lang === 'en-GB')
+    || voices.find((voice) => ['Guy', 'David', 'Mark'].some((name) => voice.name.includes(name)))
     || voices.find((voice) => voice.lang.startsWith('en'))
     || null;
+}
+
+function populateVoiceSelect() {
+  const select = $('setting-voice-name');
+  if (!select) return;
+  const voices = speechSynthesis.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith('en'));
+  const rank = (voice) => (voice.lang === 'en-GB' ? 0 : 10) + (/Ryan|George|Daniel|Guy|David|Mark/i.test(voice.name) ? 0 : 2);
+  voices.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  select.replaceChildren();
+  const auto = document.createElement('option');
+  auto.value = ''; auto.textContent = 'AUTO · BRITISH IF AVAILABLE';
+  select.appendChild(auto);
+  for (const voice of voices) {
+    const option = document.createElement('option');
+    option.value = voice.name;
+    option.textContent = `${voice.name} · ${voice.lang}${voice.lang === 'en-GB' ? ' · UK' : ''}`;
+    select.appendChild(option);
+  }
+  select.value = state.settings.voiceName || '';
+}
+
+function auditionVoice() {
+  if (!('speechSynthesis' in window)) return;
+  const name = $('setting-voice-name').value;
+  const voice = name ? speechSynthesis.getVoices().find((item) => item.name === name) : selectVoice();
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance('Good evening. All systems are online and at your service.');
+  if (voice) utterance.voice = voice;
+  utterance.rate = .98; utterance.pitch = .88; utterance.volume = .92;
+  speechSynthesis.speak(utterance);
 }
 
 function speak(message, retry = false) {
@@ -828,6 +868,7 @@ function openSettings() {
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
   $('setting-motion').value = state.settings.motionMode || 'cinematic';
   $('setting-skin').value = state.settings.skin || 'classic';
+  populateVoiceSelect();
   fillHourSelect($('setting-autonomy-night-start'));
   fillHourSelect($('setting-autonomy-night-end'));
   $('setting-autonomy').checked = state.settings.autonomyEnabled === true;
@@ -861,6 +902,7 @@ async function saveSettings(event) {
     startWithWindows: $('setting-startup').checked,
     motionMode: $('setting-motion').value,
     skin: $('setting-skin').value,
+    voiceName: $('setting-voice-name').value,
     autonomyEnabled: $('setting-autonomy').checked,
     autonomyRules: {
       speakDoorbell: $('setting-autonomy-doorbell').checked,
@@ -1208,6 +1250,8 @@ function bindEvents() {
   window.jarvis.onOllamaStatus(renderOllamaStatus);
   window.jarvis.onTasksChanged(renderTasks);
   $('setting-skin').addEventListener('change', (event) => applySkin(event.target.value));
+  $('audition-voice').addEventListener('click', auditionVoice);
+  speechSynthesis.addEventListener?.('voiceschanged', () => { if ($('settings-modal').open) populateVoiceSelect(); });
   window.jarvis.onAutonomyEvent((action) => {
     if (action.speak) speak(action.speak);
     if (action.card) showAutonomyCard(action.card);
