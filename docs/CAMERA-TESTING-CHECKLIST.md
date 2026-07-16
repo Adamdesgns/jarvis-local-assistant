@@ -159,6 +159,66 @@ verify this end-to-end without your Google project.
 
 ---
 
+## Section 4 — Autonomy rules (added July 15, after the autonomy build)
+
+These four rules were built today. They only exist on the **autonomy-engine**
+branch, which is the version currently checked out on your PC — so just start
+JARVIS normally (`npm start`) and you're testing the right build. Best done
+right after Section 1, while your Ring doorbell is handy.
+
+**Everything off = nothing changes (the most important test)**
+1. Open Settings and find the new **AUTONOMY** section.
+   - Expected: every switch is OFF, night hours show 9 PM and 7 AM.
+2. Close Settings without changing anything. Ring the doorbell.
+   - Expected: exactly what you saw in Section 1 — a Windows notification and
+     the tile stamp. No speaking, no card. JARVIS must not act on its own
+     while the master switch is off.
+
+**Speak the doorbell**
+3. Settings → AUTONOMY → turn on **AUTONOMY MASTER SWITCH** and
+   **SPEAK THE DOORBELL** → SAVE SETTINGS.
+4. Also check **SPOKEN REPLIES** is on in the BEHAVIOR section (autonomy
+   speaks through the same voice — if voice is off, nothing anywhere speaks).
+5. Ring the doorbell. Wait up to ~10 seconds (the AI needs a moment to look
+   at the picture).
+   - Expected: JARVIS says the alert out loud — with a vision model it's a
+     description like "Front Door: a person in a blue coat," otherwise
+     "someone pressed the doorbell."
+6. Open the Activity module (module list → Activity).
+   - Expected: an entry from source **autonomy** for what it just did.
+
+**"Someone's here" card**
+7. Turn on **"SOMEONE'S HERE" CARD** → SAVE → ring the doorbell again
+   (wait at least 1 minute after the last ring — alerts are deduped for 60
+   seconds, so ringing too soon does nothing on purpose).
+   - Expected: an amber card slides in above the command bar, bottom-right,
+     with the camera picture and the alert text.
+8. Click the card — it disappears. (Left alone, it removes itself after 30
+   seconds.)
+
+**Spoken motion summary**
+9. Turn on **SPOKEN MOTION SUMMARY** → SAVE → walk in front of a Ring motion
+   camera (again, wait out the 60-second dedupe).
+   - Expected: JARVIS speaks the motion alert.
+
+**Night-only motion alerts (daytime test)**
+10. Turn on **NIGHT-ONLY MOTION ALERTS** → SAVE. During the day, walk in
+    front of the camera once more.
+    - Expected: **no** Windows notification pop-up and **no** spoken motion
+      alert — but the camera tile still updates and the Activity log still
+      records the alert. Quiet, not blind.
+11. Now set **NIGHT STARTS** to the current hour → SAVE → trigger motion
+    again.
+    - Expected: the pop-up and spoken alert come back (you made "night" start
+      now). Set NIGHT STARTS back to 9 PM afterwards.
+12. Ring the doorbell during the "day" window with night-only still on.
+    - Expected: the doorbell still notifies — it is never silenced.
+
+**Kill switch**
+13. Turn **AUTONOMY MASTER SWITCH** off (leave the rule switches on) → SAVE →
+    ring the doorbell.
+    - Expected: back to plain Section-1 behavior. One switch stops it all.
+
 ## What I already checked (you don't need to)
 
 - All 60 automated tests pass, including a new one for the Ring arm/disarm fix.
