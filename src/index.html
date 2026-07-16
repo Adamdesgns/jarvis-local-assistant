@@ -6,8 +6,10 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src http://127.0.0.1:* ws://127.0.0.1:*;">
     <title>JARVIS · Local Assistant</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="command-center.css">
   </head>
-  <body>
+  <body data-skin="classic">
+    <div id="classic-root">
     <div class="ambient-grid"></div>
     <div class="scanlines"></div>
 
@@ -192,6 +194,42 @@
         <div class="voice-line"><i id="voice-dot"></i><span id="voice-status">CHECKING LOCAL VOICE</span></div>
       </section>
     </main>
+    </div><!-- /#classic-root -->
+
+    <div id="cc-root">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark"><i></i><i></i><i></i></span><div><strong>J.A.R.V.I.S.</strong><small>JUST A RATHER VERY INTELLIGENT SYSTEM</small></div></div>
+        <div class="top-metrics"><span><small>CPU</small><b id="cc-cpu-top">--%</b></span><span><small>GPU</small><b id="cc-gpu-top">--%</b></span><span><small>MEM</small><b id="cc-mem-top">--%</b></span><span><small>NET</small><b class="online">ONLINE</b></span><span><small>BRAIN</small><b id="cc-brain">LOCAL</b></span></div>
+        <div class="clock"><strong id="cc-time">--:--</strong><small id="cc-date">SYSTEM CLOCK</small></div>
+      </header>
+
+      <nav class="mode-switch"><button data-cc-mode="command" class="active">COMMAND</button><button data-cc-mode="focus">FOCUS</button><button data-cc-mode="orb">ORB</button></nav>
+
+      <div class="workspace">
+        <aside class="column">
+          <section class="panel"><div class="panel-head"><div><span>01 / SYSTEM</span><h2>PERFORMANCE</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><div class="meter-row"><div class="meter" id="cc-meter-cpu" style="--value:0deg"><strong id="cc-cpu"><small>%</small></strong><span>CPU</span></div><div class="meter" id="cc-meter-ram" style="--value:0deg"><strong id="cc-ram"><small>%</small></strong><span>RAM</span></div><div class="meter" id="cc-meter-gpu" style="--value:0deg"><strong id="cc-gpu"><small>%</small></strong><span>GPU</span></div></div><div class="telemetry"><span>GPU <b id="cc-gpu-name">—</b></span><span>UPTIME <b id="cc-uptime">—</b></span></div></div></section>
+          <section class="panel"><div class="panel-head"><div><span>02 / PROJECTS</span><h2>ACTIVE WORKSPACES</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body" id="cc-projects"></div></section>
+          <section class="panel"><div class="panel-head"><div><span>03 / MEMORY</span><h2>TODAY'S TASKS</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body" id="cc-tasks"></div></section>
+        </aside>
+
+        <section class="core-stage">
+          <div class="core-heading"><span>NEURAL INTERFACE</span><i></i><b>CORE 01</b></div>
+          <button id="cc-core" aria-label="Activate JARVIS"><span class="ring ring-outer"></span><span class="ring ring-ticks"></span><span class="ring ring-mid"></span><span class="ring ring-data"><b>01</b><b>17</b><b>46</b><b>92</b></span><span class="core-orb"><i></i><b></b></span><span class="cross-x"></span><span class="cross-y"></span></button>
+          <div class="core-status"><span class="state-pip"></span><small>CURRENT STATE</small><strong id="cc-state">STANDBY</strong><p id="cc-state-message">All systems ready</p></div>
+          <div class="waveform" id="cc-waveform"></div>
+          <form class="command" id="cc-command-form"><span>›</span><input id="cc-command-input" placeholder="TYPE A COMMAND OR SAY “HEY JARVIS”" autocomplete="off"><button type="submit">EXECUTE</button></form>
+          <div class="dock"><button data-cc-action="voice"><i>◉</i><span>VOICE</span></button><button data-cc-action="search"><i>⌕</i><span>SEARCH</span></button><button data-cc-action="vision"><i>⌾</i><span>VISION</span></button><button data-cc-action="note"><i>＋</i><span>NOTE</span></button><button data-cc-action="minimize"><i>◇</i><span>MINIMIZE</span></button></div>
+        </section>
+
+        <aside class="column">
+          <section class="panel"><div class="panel-head"><div><span>04 / SURVEILLANCE</span><h2>CAMERAS</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body" id="cc-cameras"><p class="cc-empty">No cameras configured.</p></div></section>
+          <section class="panel"><div class="panel-head"><div><span>05 / LOG</span><h2>ACTIVITY TIMELINE</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body activity" id="cc-activity"></div></section>
+        </aside>
+      </div>
+
+      <div class="vision-alert" id="cc-vision-alert"><i></i> SCREEN VISION ACTIVE <button id="cc-disable-vision">DISABLE</button></div>
+      <footer><span>JARVIS CORE v1.0.0</span><i>ENCRYPTED LOCAL MEMORY</i><span>ALL SYSTEMS NOMINAL</span></footer>
+    </div><!-- /#cc-root -->
 
     <aside id="module-drawer" class="module-drawer">
       <header><div><span>INTERFACE</span><h2>MODULE LIBRARY</h2></div><button id="close-modules">×</button></header>
@@ -348,7 +386,9 @@
     <div id="toast" class="toast"></div>
     <script src="hologram.js"></script>
     <script src="layout-engine.js"></script>
+    <script src="skins.js"></script>
     <script src="renderer.js"></script>
+    <script src="command-center.js"></script>
     <script src="cameras-ui.js"></script>
   </body>
 </html>

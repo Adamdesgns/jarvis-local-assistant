@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>J.A.R.V.I.S. Command Center</title>
+  <!--
+    J.A.R.V.I.S. COMMAND CENTER - STANDALONE PROTOTYPE
+    -------------------------------------------------
+    This is a complete offline HTML/CSS/JavaScript implementation.
+    No frameworks, external fonts, images, CDNs, APIs or build tools are required.
+
+    CLAUDE INTEGRATION NOTE:
+    This file is the visual and interaction source for the Command Center.
+    Integrate its markup, styles and state behavior into Adam's existing Electron
+    J.A.R.V.I.S. renderer. Replace simulated metrics and command results with safe
+    preload.js APIs and existing Electron IPC services. Do not create a second app.
+  -->
+  <style>
+    :root{
+      --ink:#04070b;--deep:#020508;--panel:rgba(7,18,27,.86);
+      --line:rgba(94,216,255,.28);--cyan:#58d8ff;--bright:#b9f3ff;
+      --muted:#6f9baa;--success:#73ffc1;--warning:#ffd36a;
+      --working:#ff9d57;--danger:#ff705e;--state:#58d8ff
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:var(--deep);color:#d6f8ff}
+    body{font-family:"Arial Narrow","Roboto Condensed","Segoe UI",sans-serif;overflow:hidden}
+    button,input{font:inherit}button{color:inherit}
+
+    #app{position:relative;min-height:100vh;overflow:hidden;padding:78px 22px 42px;letter-spacing:.04em;
+      background:radial-gradient(circle at 50% 48%,rgba(11,105,139,.17),transparent 31%),
+      linear-gradient(rgba(43,179,221,.035) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(43,179,221,.035) 1px,transparent 1px),#03070b;
+      background-size:auto,40px 40px,40px 40px,auto}
+    #app:before,#app:after{content:"";position:fixed;inset:0;pointer-events:none;z-index:80}
+    #app:before{box-shadow:inset 0 0 130px #000,inset 0 0 28px rgba(65,215,255,.12)}
+    #app:after{opacity:.15;background:repeating-linear-gradient(0deg,transparent 0 3px,#a5efff 4px)}
+
+    .topbar{position:absolute;inset:0 0 auto;height:62px;z-index:60;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 24px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(6,18,27,.98),rgba(4,11,17,.82));box-shadow:0 8px 30px rgba(0,0,0,.5)}
+    .brand{display:flex;align-items:center;gap:11px}.brand strong{display:block;font-size:18px;letter-spacing:.35em;color:#e5fbff;text-shadow:0 0 15px var(--cyan)}.brand small{display:block;margin-top:4px;font-size:7px;letter-spacing:.22em;color:var(--muted)}
+    .brand-mark{width:32px;height:32px;position:relative;display:grid;place-items:center;border:1px solid var(--cyan);transform:rotate(45deg);box-shadow:0 0 14px rgba(49,211,255,.35)}
+    .brand-mark i{position:absolute;width:16px;height:1px;background:var(--cyan)}.brand-mark i:nth-child(2){transform:rotate(60deg)}.brand-mark i:nth-child(3){transform:rotate(-60deg)}
+    .top-metrics{display:flex;align-items:stretch;height:100%}.top-metrics span{min-width:76px;display:flex;justify-content:center;flex-direction:column;gap:4px;text-align:center;border-left:1px solid rgba(87,212,255,.13)}.top-metrics span:last-child{border-right:1px solid rgba(87,212,255,.13)}.top-metrics small{color:#527e8d;font-size:8px;letter-spacing:.18em}.top-metrics b{font-size:11px}.online{color:var(--success)}
+    .clock{text-align:right}.clock strong{display:block;font-size:20px;letter-spacing:.17em}.clock small{font-size:8px;color:var(--muted);letter-spacing:.18em}
+
+    .mode-switch{position:absolute;top:68px;left:50%;transform:translateX(-50%);z-index:65;display:flex;padding:3px;border:1px solid rgba(91,215,255,.18);background:rgba(3,10,15,.9);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+    .mode-switch button{background:transparent;border:0;padding:6px 13px;font-size:8px;letter-spacing:.17em;cursor:pointer;color:#578292}.mode-switch button.active{color:#d8faff;background:rgba(62,202,244,.12);box-shadow:inset 0 -1px var(--cyan)}
+
+    .workspace{position:relative;z-index:10;min-height:calc(100vh - 120px);display:grid;grid-template-columns:minmax(255px,300px) minmax(510px,1fr) minmax(255px,300px);gap:18px;align-items:center}
+    .column{align-self:stretch;display:flex;flex-direction:column;justify-content:center;gap:12px;padding-top:20px;transition:.35s}
+    .panel{position:relative;z-index:20;min-width:220px;background:linear-gradient(135deg,rgba(7,23,34,.95),rgba(4,12,19,.78));border:1px solid rgba(84,213,255,.23);clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);box-shadow:inset 0 0 25px rgba(40,164,206,.035),0 14px 30px rgba(0,0,0,.3);touch-action:none}
+    .panel:before{content:"";position:absolute;inset:0 auto auto 12px;width:42%;height:1px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+    .panel-head{cursor:move;user-select:none;padding:12px 13px 9px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(92,214,255,.1);background:linear-gradient(90deg,rgba(61,192,235,.07),transparent)}
+    .panel-head span{display:block;color:#4b7b8c;font-size:7px;letter-spacing:.2em}.panel-head h2{margin:3px 0 0;font-size:10px;letter-spacing:.17em}.panel-dots{display:flex;gap:4px}.panel-dots i{width:5px;height:5px;border:1px solid #4c9ab3;transform:rotate(45deg)}.panel-dots i:first-child{background:var(--cyan);box-shadow:0 0 6px var(--cyan)}.panel-body{padding:11px 13px 12px}
+
+    .meter-row{display:flex;justify-content:space-around;gap:8px}.meter{--value:90deg;width:63px;aspect-ratio:1;display:grid;place-content:center;text-align:center;border-radius:50%;background:radial-gradient(circle,#071018 55%,transparent 56%),conic-gradient(var(--cyan) var(--value),rgba(88,216,255,.1) 0);box-shadow:0 0 12px rgba(69,205,245,.13);position:relative}.meter:before{content:"";position:absolute;inset:6px;border:1px dashed rgba(88,216,255,.24);border-radius:50%}.meter strong{font-size:15px}.meter strong small{font-size:7px;color:var(--muted)}.meter span{font-size:6px;color:var(--muted)}
+    .telemetry{margin-top:9px;display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid rgba(88,216,255,.09)}.telemetry span{color:#4f7886;font-size:7px}.telemetry b{color:#b6e9f3;margin-left:4px}
+    .project{width:100%;display:grid;grid-template-columns:30px 1fr auto;gap:9px;align-items:center;padding:7px 0;border:0;border-bottom:1px solid rgba(83,200,238,.08);background:none;text-align:left;cursor:pointer}.project>i{width:27px;aspect-ratio:1;display:grid;place-content:center;border:1px solid rgba(84,213,255,.25);font-size:8px;font-style:normal;color:var(--cyan)}.project b,.project small{display:block}.project b{font-size:8px;letter-spacing:.12em}.project small{font-size:7px;color:#557d8a}.project em{font-style:normal;font-size:6px;color:#537987}.project:hover b{color:var(--cyan)}
+    .task{display:grid;grid-template-columns:14px 1fr auto;gap:7px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(83,200,238,.08);font-size:8px;cursor:pointer}.task input{appearance:none;width:11px;height:11px;border:1px solid #3c7a90}.task input:checked{background:var(--cyan);box-shadow:inset 0 0 0 3px #061018,0 0 7px var(--cyan)}.task small{color:#527988;font-size:6px}.task:has(input:checked) span{text-decoration:line-through;color:#55727c}
+
+    .core-stage{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:24px 0 0}.core-stage:before{content:"";position:absolute;width:min(46vw,650px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(47,189,232,.09),transparent 68%);filter:blur(12px)}
+    .core-heading{width:min(42vw,610px);display:flex;align-items:center;gap:9px;color:#4e8192;font-size:7px;letter-spacing:.2em}.core-heading i{height:1px;flex:1;background:linear-gradient(90deg,rgba(82,211,250,.5),transparent)}.core-heading b{color:#74cce7}
+    #core{position:relative;width:min(38vw,510px);aspect-ratio:1;margin:-2px 0 -8px;border:0;background:transparent;border-radius:50%;cursor:pointer;filter:drop-shadow(0 0 16px rgba(43,197,239,.15))}
+    .ring{position:absolute;border-radius:50%;inset:0;display:block}.ring-outer{border:1px solid rgba(85,213,255,.29);background:repeating-conic-gradient(from 4deg,rgba(99,221,255,.65) 0 1deg,transparent 1deg 5deg);mask:radial-gradient(circle,transparent 65%,#000 66% 67%,transparent 68% 82%,#000 83% 84%,transparent 85%);animation:spin 36s linear infinite}.ring-ticks{inset:9%;border:1px solid rgba(86,216,255,.18);background:repeating-conic-gradient(transparent 0 2.5deg,rgba(96,219,255,.56) 2.5deg 3deg);mask:radial-gradient(circle,transparent 73%,#000 74% 79%,transparent 80%);animation:reverseSpin 24s linear infinite}.ring-mid{inset:20%;border:1px dashed rgba(97,219,255,.34);box-shadow:inset 0 0 22px rgba(58,202,245,.09),0 0 18px rgba(58,202,245,.05);animation:spin 18s linear infinite}.ring-mid:before,.ring-mid:after{content:"";position:absolute;inset:-6px;border:4px double transparent;border-top-color:var(--state);border-radius:50%}.ring-mid:after{inset:14%;transform:rotate(155deg)}
+    .ring-data{inset:12%;animation:reverseSpin 38s linear infinite}.ring-data b{position:absolute;color:#548da0;font-size:7px;font-weight:400}.ring-data b:nth-child(1){left:48%;top:0}.ring-data b:nth-child(2){right:0;top:48%}.ring-data b:nth-child(3){left:48%;bottom:0}.ring-data b:nth-child(4){left:0;top:48%}
+    .core-orb{position:absolute;inset:32%;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 38% 35%,#d7fbff 0 2%,var(--state) 4%,#05789e 20%,#031622 55%,#01080d 72%);box-shadow:0 0 9px var(--state),0 0 35px rgba(70,213,255,.55),0 0 85px rgba(45,192,235,.28),inset -18px -20px 28px #01070b;transition:.35s}.core-orb:before,.core-orb:after{content:"";position:absolute;inset:-11%;border:1px solid rgba(105,231,255,.55);border-radius:46% 54% 58% 42%;animation:wobble 8s linear infinite}.core-orb:after{inset:-20%;opacity:.3;animation-direction:reverse;animation-duration:12s}.core-orb i{width:48%;aspect-ratio:1;border:1px solid #bcf5ff;border-radius:50%;box-shadow:0 0 11px #b9f5ff,inset 0 0 12px #4dd7ff}.core-orb b{position:absolute;width:5px;aspect-ratio:1;border-radius:50%;background:white;box-shadow:0 0 12px 4px white}
+    #core:hover .core-orb{transform:scale(1.07);box-shadow:0 0 12px var(--state),0 0 52px rgba(70,213,255,.75),0 0 100px rgba(45,192,235,.35)}
+    .cross-x,.cross-y{position:absolute;background:linear-gradient(90deg,transparent,rgba(96,220,255,.22),transparent)}.cross-x{width:90%;height:1px;left:5%;top:50%}.cross-y{height:90%;width:1px;left:50%;top:5%;background:linear-gradient(transparent,rgba(96,220,255,.22),transparent)}
+    .listening .core-orb,.speaking .core-orb{animation:pulse .55s ease-in-out infinite alternate}.thinking .ring-mid{animation-duration:3s}.working .ring-outer{animation-duration:6s}
+    .core-status{position:relative;text-align:center;min-width:240px}.core-status small{display:block;font-size:6px;letter-spacing:.27em;color:#4a7888}.core-status strong{display:block;margin-top:4px;color:var(--state);font-size:17px;letter-spacing:.32em;text-shadow:0 0 15px var(--state)}.core-status p{margin:5px 0 0;font-size:8px;color:#709aa8}.state-pip{position:absolute;left:17px;top:17px;width:5px;height:5px;background:var(--state);transform:rotate(45deg);box-shadow:0 0 8px var(--state)}
+    .waveform{height:24px;display:flex;align-items:center;gap:2px;margin-top:9px}.waveform i{display:block;width:2px;height:3px;background:#477a8b}.waveform.active i{background:var(--state);box-shadow:0 0 4px var(--state);animation:wave .7s ease-in-out infinite alternate;animation-delay:calc(var(--i)*-30ms)}
+    .command{width:min(43vw,620px);height:38px;margin-top:7px;display:grid;grid-template-columns:28px 1fr auto;align-items:center;border:1px solid rgba(83,212,253,.3);background:rgba(4,14,21,.9);clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);box-shadow:0 0 18px rgba(48,190,234,.06)}.command>span{text-align:right;color:var(--cyan);font-size:19px}.command input{height:100%;border:0;outline:0;color:#c7f3fc;background:transparent;padding:0 10px;font-size:8px;letter-spacing:.13em}.command input::placeholder{color:#496d79}.command button{height:100%;border:0;border-left:1px solid rgba(83,212,253,.2);background:rgba(69,203,244,.07);color:var(--cyan);font-size:7px;letter-spacing:.16em;padding:0 14px;cursor:pointer}
+    .dock{display:flex;margin-top:10px;padding:4px;gap:3px;background:rgba(3,12,18,.85);border:1px solid rgba(75,190,226,.14)}.dock button{min-width:72px;border:0;background:transparent;padding:5px 8px;cursor:pointer;color:#5d8d9d;transition:.2s}.dock button:hover{color:#d3f8ff;background:rgba(80,210,250,.09)}.dock i{font-style:normal;display:block;font-size:15px;color:var(--cyan);text-shadow:0 0 8px rgba(76,215,255,.5)}.dock span{display:block;font-size:6px;letter-spacing:.15em;margin-top:2px}.dock .danger i,.dock .danger span{color:var(--danger)}
+
+    .weather{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}.weather>strong{font-size:37px;font-weight:300;letter-spacing:-.04em;color:white}.weather span b,.weather span small{display:block}.weather span b{font-size:8px}.weather span small{color:#5a818e;font-size:7px;margin-top:3px}.weather>i{font-style:normal;color:#8de9ff;font-size:22px;text-shadow:0 0 16px #55dcff}.weather-strip{display:grid;grid-template-columns:repeat(4,1fr);margin-top:10px;padding-top:8px;border-top:1px solid rgba(84,205,244,.1);text-align:center}.weather-strip span+span{border-left:1px solid rgba(84,205,244,.09)}.weather-strip b,.weather-strip small{display:block;font-size:6px}.weather-strip small{color:#8dc1d0;margin-top:3px}
+    .network-head{display:flex;gap:22px}.network-head small{display:block;font-size:6px;color:#527a87}.network-head b{font-size:10px}.bars{height:35px;display:flex;align-items:end;gap:2px;margin:9px 0;border-bottom:1px solid rgba(86,211,250,.13);background:linear-gradient(rgba(80,203,242,.06) 1px,transparent 1px);background-size:100% 9px}.bars i{flex:1;min-height:3px;background:linear-gradient(#77e4ff,#167fa3);box-shadow:0 0 3px rgba(75,216,255,.3)}.connection{display:grid;grid-template-columns:8px 1fr auto;gap:7px;align-items:center}.connection>i{width:5px;aspect-ratio:1;background:#60ffb8;border-radius:50%;box-shadow:0 0 8px #60ffb8}.connection b,.connection small{display:block;font-size:7px}.connection small{color:#527786;margin-top:2px}.connection em{font-style:normal;font-size:8px;color:#69dfff}
+    .activity>div{display:grid;grid-template-columns:9px 1fr;gap:7px;position:relative;padding:0 0 11px}.activity>div:not(:last-child):before{content:"";position:absolute;left:2px;top:7px;bottom:1px;width:1px;background:rgba(83,201,239,.17)}.activity i{width:5px;height:5px;margin-top:2px;border:1px solid #4e8ba0;transform:rotate(45deg)}.activity i.hot{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 7px var(--cyan)}.activity b,.activity small{display:block;font-size:7px}.activity small{color:#4f7684;margin-top:3px}
+    .vision-alert{display:none;position:fixed;top:70px;right:24px;z-index:100;border:1px solid rgba(255,81,67,.5);padding:8px 10px;color:#ff8d81;background:rgba(39,6,6,.94);font-size:8px;letter-spacing:.14em;box-shadow:0 0 20px rgba(255,70,53,.18)}.vision-alert.show{display:block}.vision-alert i{display:inline-block;width:6px;height:6px;border-radius:50%;background:#ff5547;box-shadow:0 0 8px #ff5547;animation:blink 1s infinite}.vision-alert button{border:0;margin-left:10px;padding:4px 7px;background:#3c0e0a;color:#ff9b91;font-size:6px;cursor:pointer}
+    footer{position:absolute;z-index:60;inset:auto 0 0;height:28px;padding:0 22px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(74,190,225,.16);background:rgba(3,10,15,.9);color:#4b7582;font-size:6px;letter-spacing:.16em}footer i{font-style:normal;color:#5fb990}
+
+    #app.focus .column{opacity:.13;filter:blur(1px);pointer-events:none}#app.focus .workspace{grid-template-columns:220px 1fr 220px}#app.focus #core{width:min(46vw,620px)}
+    .orb-screen{display:none;position:fixed;inset:0;z-index:120;place-content:center;gap:30px;background:radial-gradient(circle,rgba(20,124,160,.13),transparent 28%),#020508}.orb-screen.show{display:grid}.compact-orb{width:240px;height:240px;border:0;background:transparent;cursor:pointer;position:relative}.orb-rings{position:absolute;inset:20px;border:1px solid rgba(78,216,255,.35);border-radius:50%;animation:spin 20s linear infinite;background:repeating-conic-gradient(transparent 0 13deg,rgba(87,220,255,.65) 14deg 15deg);mask:radial-gradient(circle,transparent 0 54%,#000 55% 56%,transparent 57% 68%,#000 69% 70%,transparent 71%)}.compact-core{position:absolute;inset:82px;border-radius:50%;background:radial-gradient(circle at 42% 38%,#fff 0 4%,#68e6ff 7%,#086a8e 38%,#02070a 72%);box-shadow:0 0 18px #68e6ff,0 0 55px #1ba7d7,inset -8px -10px 18px #010609}.compact-core:before,.compact-core:after{content:"";position:absolute;inset:-28px;border:1px solid rgba(90,220,255,.36);border-radius:47% 53% 55% 45%;animation:wobble 8s linear infinite}.compact-core:after{inset:-48px;opacity:.35;animation-direction:reverse;animation-duration:12s}.compact-orb em{position:absolute;inset:auto 0 -10px;font-style:normal;color:#69dcff;letter-spacing:.28em;font-size:10px}.return{border:1px solid rgba(75,209,250,.3);padding:10px 16px;background:rgba(51,188,229,.06);color:#6bcfeb;letter-spacing:.18em;font-size:8px;cursor:pointer}
+
+    @keyframes spin{to{transform:rotate(360deg)}}@keyframes reverseSpin{to{transform:rotate(-360deg)}}@keyframes wobble{to{transform:rotate(360deg);border-radius:55% 45% 38% 62%}}@keyframes pulse{to{transform:scale(1.08);filter:brightness(1.35)}}@keyframes blink{50%{opacity:.25}}@keyframes wave{to{height:calc(5px + (var(--i) % 8)*2px)}}
+    @media(max-width:1050px){.workspace{grid-template-columns:230px minmax(440px,1fr) 230px;gap:8px}#app{padding-inline:10px}.top-metrics span{min-width:58px}.meter{width:53px}#core{width:42vw}.panel-body{padding-inline:9px}.dock button{min-width:61px}}
+    @media(max-width:820px){body{overflow:auto}#app{overflow:visible;padding:72px 12px 46px}.topbar{grid-template-columns:1fr auto;height:58px;padding:0 12px}.top-metrics{display:none}.brand small{display:none}.workspace{display:flex;flex-direction:column}.core-stage{order:-1;width:100%;min-height:650px}#core{width:min(90vw,500px)}.core-heading,.command{width:min(94vw,620px)}.column{width:100%;display:grid;grid-template-columns:1fr 1fr;align-self:auto}.panel{min-height:150px}.mode-switch{top:63px}.clock strong{font-size:15px}#app.focus .column{display:none}.dock{max-width:95vw;overflow-x:auto}footer{position:fixed}}
+    @media(max-width:560px){.column{grid-template-columns:1fr}.core-stage{min-height:560px}#core{width:96vw}.dock button{min-width:59px}.brand strong{font-size:13px}.clock{display:none}.mode-switch{right:8px;left:auto;transform:none}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important}}
+  </style>
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark"><i></i><i></i><i></i></span><div><strong>J.A.R.V.I.S.</strong><small>JUST A RATHER VERY INTELLIGENT SYSTEM</small></div></div>
+      <div class="top-metrics"><span><small>CPU</small><b>18%</b></span><span><small>GPU</small><b>12%</b></span><span><small>MEM</small><b>41%</b></span><span><small>NET</small><b class="online">ONLINE</b></span><span><small>BRAIN</small><b>LOCAL</b></span></div>
+      <div class="clock"><strong id="time">--:--</strong><small id="date">SYSTEM CLOCK</small></div>
+    </header>
+
+    <nav class="mode-switch"><button data-mode="command" class="active">COMMAND</button><button data-mode="focus">FOCUS</button><button data-mode="orb">ORB</button></nav>
+
+    <div class="workspace">
+      <aside class="column">
+        <section class="panel"><div class="panel-head"><div><span>01 / SYSTEM</span><h2>PERFORMANCE</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><div class="meter-row"><div class="meter" style="--value:65deg"><strong>18<small>%</small></strong><span>CPU</span></div><div class="meter" style="--value:148deg"><strong>41<small>%</small></strong><span>RAM</span></div><div class="meter" style="--value:43deg"><strong>12<small>%</small></strong><span>GPU</span></div></div><div class="telemetry"><span>CORE TEMP <b>47°C</b></span><span>UPTIME <b>06:14:32</b></span></div></div></section>
+        <section class="panel"><div class="panel-head"><div><span>02 / PROJECTS</span><h2>ACTIVE WORKSPACES</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><button class="project"><i>AN</i><span><b>ANVIL SYSTEMS</b><small>12 files · updated 8m</small></span><em>OPEN</em></button><button class="project"><i>TB</i><span><b>THE BENCH</b><small>Market brief ready</small></span><em>OPEN</em></button><button class="project"><i>JV</i><span><b>JARVIS CORE</b><small>Command Center v1</small></span><em>OPEN</em></button></div></section>
+        <section class="panel"><div class="panel-head"><div><span>03 / MEMORY</span><h2>TODAY'S TASKS</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><label class="task"><input type="checkbox" checked><span>Verify voice service</span><small>DONE</small></label><label class="task"><input type="checkbox"><span>Review project handoff</span><small>09:30</small></label><label class="task"><input type="checkbox"><span>Generate daily report</span><small>23:59</small></label></div></section>
+      </aside>
+
+      <section class="core-stage">
+        <div class="core-heading"><span>NEURAL INTERFACE</span><i></i><b>CORE 01</b></div>
+        <button id="core" aria-label="Activate JARVIS"><span class="ring ring-outer"></span><span class="ring ring-ticks"></span><span class="ring ring-mid"></span><span class="ring ring-data"><b>01</b><b>17</b><b>46</b><b>92</b></span><span class="core-orb"><i></i><b></b></span><span class="cross-x"></span><span class="cross-y"></span></button>
+        <div class="core-status"><span class="state-pip"></span><small>CURRENT STATE</small><strong id="state">STANDBY</strong><p id="stateMessage">All systems ready</p></div>
+        <div class="waveform" id="waveform"></div>
+        <form class="command" id="commandForm"><span>›</span><input id="commandInput" placeholder="TYPE A COMMAND OR SAY ‘HEY JARVIS’" autocomplete="off"><button>EXECUTE</button></form>
+        <div class="dock"><button data-action="voice"><i>◉</i><span>VOICE</span></button><button data-action="search"><i>⌕</i><span>SEARCH</span></button><button data-action="vision"><i>⌾</i><span>VISION</span></button><button data-action="note"><i>＋</i><span>NOTE</span></button><button data-action="minimize"><i>◇</i><span>MINIMIZE</span></button></div>
+      </section>
+
+      <aside class="column">
+        <section class="panel"><div class="panel-head"><div><span>04 / ENVIRONMENT</span><h2>LUCEDALE, MS</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><div class="weather"><strong>86°</strong><span><b>PARTLY CLOUDY</b><small>Feels like 92° · Humidity 74%</small></span><i>☼</i></div><div class="weather-strip"><span><b>10 PM</b><small>83°</small></span><span><b>12 AM</b><small>80°</small></span><span><b>2 AM</b><small>78°</small></span><span><b>6 AM</b><small>76°</small></span></div></div></section>
+        <section class="panel"><div class="panel-head"><div><span>05 / NETWORK</span><h2>CONNECTION STATUS</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><div class="network-head"><span><small>LATENCY</small><b>32 ms</b></span><span><small>DOWNLOAD</small><b>184 Mbps</b></span></div><div class="bars" id="bars"></div><div class="connection"><i></i><span><b>STARLINK</b><small>Secure connection</small></span><em>98%</em></div></div></section>
+        <section class="panel"><div class="panel-head"><div><span>06 / LOG</span><h2>ACTIVITY TIMELINE</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body activity" id="activity"><div><i class="hot"></i><span><b>Voice service initialized</b><small>Just now</small></span></div><div><i></i><span><b>Local memory synchronized</b><small>6 min ago</small></span></div><div><i></i><span><b>Approved folders indexed</b><small>10 min ago</small></span></div></div></section>
+      </aside>
+    </div>
+
+    <div class="vision-alert" id="visionAlert"><i></i> SCREEN VISION ACTIVE <button id="disableVision">DISABLE</button></div>
+    <footer><span>JARVIS CORE v1.0.0</span><i>ENCRYPTED LOCAL MEMORY</i><span>ALL SYSTEMS NOMINAL</span></footer>
+  </main>
+
+  <section class="orb-screen" id="orbScreen"><button class="compact-orb" id="compactOrb"><span class="orb-rings"></span><b class="compact-core"></b><em id="orbState">STANDBY</em></button><button class="return" id="returnButton">OPEN COMMAND CENTER</button></section>
+
+  <script>
+    /*
+      CLAUDE: Replace simulated transitions below with real events from the
+      existing Electron preload bridge. Keep setJarvisState() as the single UI
+      state entry point so the core, waveform, color and orb stay synchronized.
+    */
+    const STATES={
+      STANDBY:{color:'#58d8ff',message:'All systems ready'},
+      LISTENING:{color:'#8bf7ff',message:'Listening for your command'},
+      THINKING:{color:'#ffd36a',message:'Analyzing request'},
+      SPEAKING:{color:'#7affc7',message:'Response channel active'},
+      WORKING:{color:'#ff9d57',message:'Executing approved action'},
+      ERROR:{color:'#ff705e',message:'Action requires attention'},
+      OFFLINE:{color:'#6f7c82',message:'Local services unavailable'}
+    };
+    const app=document.getElementById('app'),core=document.getElementById('core');
+    const stateLabel=document.getElementById('state'),stateMessage=document.getElementById('stateMessage');
+    const waveform=document.getElementById('waveform'),activity=document.getElementById('activity');
+    const orbScreen=document.getElementById('orbScreen'),orbState=document.getElementById('orbState');
+    let currentState='STANDBY',visionEnabled=false,sequence=[];
+
+    for(let i=0;i<44;i++){const bar=document.createElement('i');bar.style.setProperty('--i',i);waveform.appendChild(bar)}
+    [24,37,28,51,43,62,58,75,61,84,73,91,67,78,54,68,47,55,39,49].forEach(v=>{const bar=document.createElement('i');bar.style.height=v+'%';document.getElementById('bars').appendChild(bar)});
+
+    function updateClock(){const now=new Date();document.getElementById('time').textContent=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});document.getElementById('date').textContent=now.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}).toUpperCase()}
+    updateClock();setInterval(updateClock,1000);
+
+    function setJarvisState(name){
+      const next=STATES[name]||STATES.ERROR;currentState=STATES[name]?name:'ERROR';
+      document.documentElement.style.setProperty('--state',next.color);
+      stateLabel.textContent=currentState;stateMessage.textContent=next.message;orbState.textContent=currentState;
+      core.className=currentState.toLowerCase();waveform.classList.toggle('active',currentState!=='STANDBY');
+    }
+    function stopSequence(){sequence.forEach(clearTimeout);sequence=[]}
+    function runDemo(start,result){
+      stopSequence();setJarvisState(start);
+      sequence.push(setTimeout(()=>setJarvisState('THINKING'),900));
+      sequence.push(setTimeout(()=>{setJarvisState(start==='WORKING'?'WORKING':'SPEAKING');addActivity(result)},2100));
+      sequence.push(setTimeout(()=>setJarvisState('STANDBY'),4200));
+    }
+    function addActivity(text){
+      activity.querySelectorAll('i.hot').forEach(i=>i.classList.remove('hot'));
+      const row=document.createElement('div');row.innerHTML='<i class="hot"></i><span><b></b><small>Just now</small></span>';row.querySelector('b').textContent=text;activity.prepend(row);
+      while(activity.children.length>4)activity.lastElementChild.remove();
+    }
+
+    core.addEventListener('click',()=>runDemo('LISTENING','Voice command received'));
+    document.getElementById('compactOrb').addEventListener('click',()=>runDemo('LISTENING','Voice command received'));
+    document.getElementById('commandForm').addEventListener('submit',event=>{event.preventDefault();const input=document.getElementById('commandInput'),text=input.value.trim();if(!text)return;input.value='';runDemo('WORKING','Command completed: '+text)});
+
+    function showMode(mode){
+      document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+      app.classList.toggle('focus',mode==='focus');orbScreen.classList.toggle('show',mode==='orb');
+    }
+    document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>showMode(button.dataset.mode)));
+    document.getElementById('returnButton').addEventListener('click',()=>showMode('command'));
+
+    function setVision(enabled){visionEnabled=enabled;document.getElementById('visionAlert').classList.toggle('show',enabled);const button=document.querySelector('[data-action="vision"]');button.classList.toggle('danger',enabled);button.querySelector('span').textContent=enabled?'VISION ON':'VISION';runDemo('WORKING',enabled?'Screen vision enabled':'Screen vision disabled')}
+    document.getElementById('disableVision').addEventListener('click',()=>setVision(false));
+    document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',()=>{
+      const action=button.dataset.action;
+      if(action==='voice')runDemo('LISTENING','Voice channel opened');
+      if(action==='search')runDemo('WORKING','Computer search completed');
+      if(action==='vision')setVision(!visionEnabled);
+      if(action==='note')runDemo('WORKING','New note created');
+      if(action==='minimize')showMode('orb');
+    }));
+
+    // Draggable modules. Electron integration should preserve the existing repaired
+    // display-scaling and saved-layout implementation instead of relying only on this demo.
+    document.querySelectorAll('.panel').forEach(panel=>{
+      const handle=panel.querySelector('.panel-head');let dragging=false,startX=0,startY=0,left=0,top=0;
+      handle.addEventListener('pointerdown',event=>{
+        const rect=panel.getBoundingClientRect();dragging=true;startX=event.clientX;startY=event.clientY;left=rect.left;top=rect.top;
+        panel.style.position='fixed';panel.style.left=left+'px';panel.style.top=top+'px';panel.style.width=rect.width+'px';panel.style.margin='0';panel.style.zIndex='70';handle.setPointerCapture(event.pointerId)
+      });
+      handle.addEventListener('pointermove',event=>{if(!dragging)return;const maxX=innerWidth-panel.offsetWidth-8,maxY=innerHeight-panel.offsetHeight-8;panel.style.left=Math.max(8,Math.min(maxX,left+event.clientX-startX))+'px';panel.style.top=Math.max(8,Math.min(maxY,top+event.clientY-startY))+'px'});
+      handle.addEventListener('pointerup',()=>{dragging=false;panel.style.zIndex='20'});
+    });
+
+    // Optional Electron bridge example. Claude should adapt names to the real preload API.
+    if(window.jarvis){
+      window.jarvis.onJarvisState?.(payload=>setJarvisState(payload.state));
+      window.jarvis.onActivity?.(payload=>addActivity(payload.title));
+    }
+  </script>
+</body>
+</html>
