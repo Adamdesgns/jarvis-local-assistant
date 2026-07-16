@@ -132,6 +132,48 @@
     try { renderProjects((typeof state !== 'undefined' && state.settings && state.settings.projects) || {}); } catch {}
   }
 
+  function focusCommand(prefill) {
+    const input = el('cc-command-input');
+    if (!input) return;
+    if (prefill) input.value = prefill;
+    input.focus();
+  }
+
+  function setMode(mode) {
+    document.querySelectorAll('#cc-root [data-cc-mode]').forEach((b) => b.classList.toggle('active', b.dataset.ccMode === mode));
+    const root = el('cc-root');
+    if (mode === 'focus') { root && root.classList.add('focus'); return; }
+    root && root.classList.remove('focus');
+    // ORB reuses the real minimize-to-orb window, not the prototype's fake screen.
+    if (mode === 'orb') window.jarvis.showWidget();
+  }
+
+  function runAction(action) {
+    if (action === 'voice') return startRecording('manual');
+    if (action === 'search') return focusCommand('find ');
+    if (action === 'note') return focusCommand('remember ');
+    if (action === 'vision') return describeScreen('What is on my screen right now?');
+    if (action === 'minimize') return window.jarvis.showWidget();
+  }
+
+  function wireActions() {
+    const form = el('cc-command-form');
+    if (form) form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = el('cc-command-input');
+      const text = input.value.trim();
+      if (text) { input.value = ''; executeCommand(text); }
+    });
+    document.querySelectorAll('#cc-root [data-cc-action]').forEach((b) => b.addEventListener('click', () => runAction(b.dataset.ccAction)));
+    document.querySelectorAll('#cc-root [data-cc-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.ccMode)));
+    const core = el('cc-core');
+    if (core) core.addEventListener('click', () => startRecording('manual'));
+    const disableVision = el('cc-disable-vision');
+    if (disableVision) disableVision.addEventListener('click', () => { const a = el('cc-vision-alert'); if (a) a.classList.remove('show'); });
+    // Reflect the real screen-vision indicator on the Command Center banner.
+    window.jarvis.onScreenViewing(({ active }) => { const a = el('cc-vision-alert'); if (a) a.classList.toggle('show', Boolean(active)); });
+  }
+
   function init() {
     if (started) return;
     started = true;
@@ -141,6 +183,7 @@
     // Live telemetry only while the Command Center is the visible skin.
     setInterval(async () => { if (isActive()) { try { renderPerf(await window.jarvis.telemetry()); } catch {} } }, 4000);
     window.jarvis.onTasksChanged((tasks) => renderTasks(tasks));
+    wireActions();
   }
 
   function activate() { refreshAll(); }
