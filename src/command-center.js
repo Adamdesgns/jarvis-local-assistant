@@ -108,6 +108,61 @@
     });
   }
 
+  function renderCameras(list) {
+    const box = el('cc-cameras');
+    if (!box) return;
+    box.replaceChildren();
+    if (!list || !list.length) { box.innerHTML = '<p class="cc-empty">No cameras configured.</p>'; return; }
+    for (const camera of list) {
+      const row = document.createElement('div');
+      row.className = 'cc-cam';
+      row.dataset.ccKey = camera.key;
+      const img = document.createElement('img'); img.alt = ''; img.hidden = true;
+      const copy = document.createElement('span');
+      const b = document.createElement('b'); b.textContent = camera.name || 'Camera';
+      const small = document.createElement('small'); small.className = 'cc-cam-stamp'; small.textContent = 'Live';
+      copy.append(b, small);
+      const em = document.createElement('em'); em.textContent = (camera.brand || '').toUpperCase();
+      row.append(img, copy, em);
+      box.append(row);
+    }
+  }
+
+  function handleCameraAlert(alert) {
+    const box = el('cc-cameras');
+    if (!box) return;
+    const row = box.querySelector(`[data-cc-key="${alert.key}"]`);
+    if (row) {
+      const stamp = row.querySelector('.cc-cam-stamp');
+      if (stamp) stamp.textContent = `⚠ ${alert.body}`;
+      if (alert.jpegBase64) { const img = row.querySelector('img'); img.src = `data:image/jpeg;base64,${alert.jpegBase64}`; img.hidden = false; }
+    }
+  }
+
+  // The autonomy "someone's here" card also surfaces at the top of the panel.
+  function handleAutonomy(action) {
+    if (!action || !action.card) return;
+    const box = el('cc-cameras');
+    if (!box) return;
+    const row = document.createElement('div');
+    row.className = 'cc-cam';
+    if (action.card.jpegBase64) { const img = document.createElement('img'); img.src = `data:image/jpeg;base64,${action.card.jpegBase64}`; row.append(img); }
+    const copy = document.createElement('span');
+    const b = document.createElement('b'); b.textContent = action.card.title || "SOMEONE'S HERE";
+    const small = document.createElement('small'); small.textContent = action.card.body || '';
+    copy.append(b, small); row.append(copy);
+    box.prepend(row);
+    while (box.children.length > 6) box.lastElementChild.remove();
+  }
+
+  function showDocument(title, content) {
+    const overlay = el('cc-doc-overlay');
+    if (!overlay) return;
+    const t = el('cc-doc-title'); if (t) t.textContent = String(title || 'DOCUMENT').toUpperCase();
+    const body = el('cc-doc-body'); if (body) body.textContent = String(content || '');
+    overlay.hidden = false;
+  }
+
   // Drive the whole Command Center colour + labels from the app's real state.
   function setJarvisState(jarvisState) {
     const map = window.JarvisSkins.mapState(jarvisState);
@@ -183,10 +238,19 @@
     // Live telemetry only while the Command Center is the visible skin.
     setInterval(async () => { if (isActive()) { try { renderPerf(await window.jarvis.telemetry()); } catch {} } }, 4000);
     window.jarvis.onTasksChanged((tasks) => renderTasks(tasks));
+    window.jarvis.onCamerasChanged(async () => { try { renderCameras(await window.jarvis.cameras.list()); } catch {} });
+    window.jarvis.onCamerasAlert((alert) => handleCameraAlert(alert));
+    window.jarvis.onAutonomyEvent((action) => handleAutonomy(action));
+    const docClose = el('cc-doc-close');
+    if (docClose) docClose.addEventListener('click', () => { const o = el('cc-doc-overlay'); if (o) o.hidden = true; });
     wireActions();
   }
 
-  function activate() { refreshAll(); }
+  async function refreshCameras() {
+    try { renderCameras(await window.jarvis.cameras.list()); } catch {}
+  }
 
-  window.JarvisCommandCenter = { init, activate, setJarvisState, setResponse, renderTasks, renderActivity, renderProjects };
+  function activate() { refreshAll(); refreshCameras(); }
+
+  window.JarvisCommandCenter = { init, activate, setJarvisState, setResponse, renderTasks, renderActivity, renderProjects, showDocument };
 })();

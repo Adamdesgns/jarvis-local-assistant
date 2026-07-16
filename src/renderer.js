@@ -69,6 +69,7 @@ function showDocumentOutput(title, content) {
   state.hiddenModules = state.hiddenModules.filter((item) => item !== 'document-viewer');
   renderModuleVisibility();
   scheduleLayoutSave();
+  window.JarvisCommandCenter?.showDocument?.(title, content);
 }
 
 function renderOllamaStatus(status = {}) {

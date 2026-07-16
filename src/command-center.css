@@ -97,6 +97,12 @@ body[data-skin="command-center"] #classic-root { display: none; }
   &.focus .column{opacity:.13;filter:blur(1px);pointer-events:none}
   &.focus .workspace{grid-template-columns:220px 1fr 220px}
   &.focus #cc-core{width:min(46vw,620px)}
+
+  .cc-overlay{position:fixed;inset:0;z-index:110;display:grid;place-items:center;background:rgba(2,6,10,.7);backdrop-filter:blur(3px)}
+  .cc-overlay[hidden]{display:none}
+  .cc-overlay-card{width:min(70vw,640px);max-height:78vh;display:flex;flex-direction:column;background:linear-gradient(135deg,rgba(7,23,34,.98),rgba(4,12,19,.95));border:1px solid rgba(84,213,255,.35);clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 30px rgba(45,192,235,.12)}
+  .cc-overlay-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(92,214,255,.14)}.cc-overlay-head b{font-size:10px;letter-spacing:.17em;color:#d8faff}.cc-overlay-head button{border:0;background:none;color:var(--cyan);font-size:16px;cursor:pointer}
+  .cc-overlay-body{padding:14px;overflow:auto;font-size:11px;line-height:1.6;color:#cbeef7;white-space:pre-wrap}
 }
 
 @keyframes cc-spin{to{transform:rotate(360deg)}}
