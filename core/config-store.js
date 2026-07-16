@@ -75,7 +75,8 @@ class ConfigStore {
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
-      'autonomyEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd'
+      'autonomyEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
+      'skin'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {
