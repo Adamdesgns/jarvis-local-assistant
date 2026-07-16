@@ -42,6 +42,7 @@ let router;
 let go2rtc;
 let cameras;
 let autonomy;
+let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
 
@@ -164,6 +165,9 @@ function createWidgetWindow() {
     }
   });
   widgetWindow.loadFile(path.join(__dirname, 'src', 'widget.html'));
+  widgetWindow.webContents.on('did-finish-load', () => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:skin', currentSkin);
+  });
   attachEditingShortcuts(widgetWindow);
   widgetWindow.on('close', (event) => {
     if (!isQuitting) { event.preventDefault(); widgetWindow.hide(); }
@@ -537,6 +541,10 @@ function setupIpc() {
   ipcMain.on('ui:state', (_event, payload) => {
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:state', payload);
   });
+  ipcMain.on('ui:skin', (_event, skin) => {
+    currentSkin = skin || 'classic';
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:skin', currentSkin);
+  });
   ipcMain.on('window:control', (_event, action) => {
     if (!mainWindow) return;
     if (action === 'minimize') showOrb();
@@ -562,6 +570,7 @@ app.whenReady().then(async () => {
   config = new ConfigStore(app.getPath('userData'), safeStorage);
   log = new ActivityLog(app.getPath('userData'));
   autonomy = new AutonomyService({ config, emit: sendEverywhere, log });
+  currentSkin = config.getSettings().skin || 'classic';
   memory = new MemoryStore(app.getPath('userData'));
   tasks = new TaskStore(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });

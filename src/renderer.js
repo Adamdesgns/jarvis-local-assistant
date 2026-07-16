@@ -647,6 +647,8 @@ function applySkin(name) {
   document.body.dataset.skin = dataSkin;
   // Pause the amber canvas sphere when it isn't the visible skin.
   window.jarvisHologram?.setPaused?.(pauseCanvas);
+  // Keep the floating orb's colour in sync with the active skin.
+  window.jarvis.setSkin?.(dataSkin);
   if (dataSkin === 'command-center') {
     if (!commandCenterReady && window.JarvisCommandCenter) { window.JarvisCommandCenter.init(); commandCenterReady = true; }
     window.JarvisCommandCenter?.activate?.();

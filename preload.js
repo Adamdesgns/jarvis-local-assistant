@@ -100,5 +100,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   onFileComplete: (callback) => on('files:complete', callback),
   onTasksChanged: (callback) => on('tasks:changed', callback),
   setUIState: (state, message) => ipcRenderer.send('ui:state', { state, message }),
-  onUIState: (callback) => on('ui:state', callback)
+  onUIState: (callback) => on('ui:state', callback),
+  setSkin: (skin) => ipcRenderer.send('ui:skin', skin),
+  onSkin: (callback) => on('ui:skin', callback)
 });
