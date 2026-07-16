@@ -191,3 +191,12 @@ body.busy .ai-stop{display:inline-block}
 .autonomy-card img { width:64px; height:48px; object-fit:cover; border:1px solid var(--line); }
 .autonomy-card b { display:block; color:var(--amber); font:600 8px/1 var(--tech); letter-spacing:.16em; }
 .autonomy-card span { display:block; margin-top:5px; color:#9eb5bb; font-size:10px; line-height:1.35; }
+
+/* Password reveal toggle — eye button beside every password field */
+.pw-field { position:relative; display:flex; align-items:stretch; }
+.pw-field > input { flex:1; min-width:0; }
+.settings-grid .pw-field { margin-top:7px; }
+.settings-grid .pw-field > input { margin-top:0; }
+.pw-toggle { flex:0 0 34px; display:flex; align-items:center; justify-content:center; border:0; border-left:1px solid rgba(255,178,31,.18); background:rgba(255,178,31,.06); color:var(--muted); cursor:pointer; }
+.pw-toggle:hover { color:var(--amber); }
+.pw-toggle svg { width:15px; height:15px; }

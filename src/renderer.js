@@ -610,6 +610,34 @@ function pushTimeline(label) {
   setTimeout(() => { if (item.parentNode) item.remove(); }, 12000);
 }
 
+// Add a show/hide eye toggle to every password field (camera sign-ins and
+// API keys) so you can verify what you typed. Runs once at startup; wraps each
+// input in a flex row with the toggle beside it.
+const PW_EYE_SHOW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5C7 5 3 9.5 2 12c1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>';
+const PW_EYE_HIDE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 4.3 3.3 3 21 20.7 19.7 22l-3.3-3.2A11.8 11.8 0 0 1 12 19C7 19 3 14.5 2 12a13 13 0 0 1 3.6-4.8L2 4.3Zm7.1 7.1 3.5 3.5a2 2 0 0 1-3.5-3.5ZM12 7c5 0 9 4.5 10 7a13.2 13.2 0 0 1-2.2 3.1l-2.9-2.9A4 4 0 0 0 12 8h-.4L9.5 5.9A11.7 11.7 0 0 1 12 7Z"/></svg>';
+
+function initPasswordReveals() {
+  document.querySelectorAll('input[type="password"]').forEach((input) => {
+    if (input.closest('.pw-field')) return;
+    const wrap = document.createElement('span');
+    wrap.className = 'pw-field';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'pw-toggle';
+    toggle.setAttribute('aria-label', 'Show password');
+    toggle.innerHTML = PW_EYE_SHOW;
+    toggle.addEventListener('click', () => {
+      const nowHidden = input.type === 'text';
+      input.type = nowHidden ? 'password' : 'text';
+      toggle.innerHTML = nowHidden ? PW_EYE_SHOW : PW_EYE_HIDE;
+      toggle.setAttribute('aria-label', nowHidden ? 'Show password' : 'Hide password');
+    });
+    wrap.appendChild(toggle);
+  });
+}
+
 function fillHourSelect(select) {
   if (select.options.length) return;
   for (let hour = 0; hour < 24; hour += 1) {
@@ -1170,7 +1198,7 @@ function bindEvents() {
 }
 
 async function initialize() {
-  bindEvents(); bindModuleLayout(); setCoreState('processing', 'LOCAL BOOT SEQUENCE');
+  bindEvents(); bindModuleLayout(); initPasswordReveals(); setCoreState('processing', 'LOCAL BOOT SEQUENCE');
   try {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
