@@ -638,6 +638,19 @@ function initPasswordReveals() {
   });
 }
 
+let commandCenterReady = false;
+function applySkin(name) {
+  const { dataSkin, pauseCanvas } = window.JarvisSkins.resolveSkin(name);
+  document.body.dataset.skin = dataSkin;
+  // Pause the amber canvas sphere when it isn't the visible skin.
+  window.jarvisHologram?.setPaused?.(pauseCanvas);
+  if (dataSkin === 'command-center') {
+    if (!commandCenterReady && window.JarvisCommandCenter) { window.JarvisCommandCenter.init(); commandCenterReady = true; }
+    window.JarvisCommandCenter?.activate?.();
+    window.JarvisCommandCenter?.setJarvisState?.('ready');
+  }
+}
+
 function fillHourSelect(select) {
   if (select.options.length) return;
   for (let hour = 0; hour < 24; hour += 1) {
@@ -809,6 +822,7 @@ function openSettings() {
   $('setting-top').checked = Boolean(state.settings.orbAlwaysOnTop);
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
   $('setting-motion').value = state.settings.motionMode || 'cinematic';
+  $('setting-skin').value = state.settings.skin || 'classic';
   fillHourSelect($('setting-autonomy-night-start'));
   fillHourSelect($('setting-autonomy-night-end'));
   $('setting-autonomy').checked = state.settings.autonomyEnabled === true;
@@ -841,6 +855,7 @@ async function saveSettings(event) {
     orbAlwaysOnTop: $('setting-top').checked,
     startWithWindows: $('setting-startup').checked,
     motionMode: $('setting-motion').value,
+    skin: $('setting-skin').value,
     autonomyEnabled: $('setting-autonomy').checked,
     autonomyRules: {
       speakDoorbell: $('setting-autonomy-doorbell').checked,
@@ -1187,6 +1202,7 @@ function bindEvents() {
   window.jarvis.onWakeStatus(renderVoiceStatus);
   window.jarvis.onOllamaStatus(renderOllamaStatus);
   window.jarvis.onTasksChanged(renderTasks);
+  $('setting-skin').addEventListener('change', (event) => applySkin(event.target.value));
   window.jarvis.onAutonomyEvent((action) => {
     if (action.speak) speak(action.speak);
     if (action.card) showAutonomyCard(action.card);
@@ -1202,6 +1218,7 @@ async function initialize() {
   try {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
+    applySkin(state.settings.skin || 'classic');
     state.tasks = bootstrap.tasks;
     state.memories = bootstrap.memories;
     state.activity = bootstrap.recentActivity;

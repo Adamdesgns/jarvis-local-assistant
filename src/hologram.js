@@ -214,7 +214,14 @@
       ctx.restore();
     }
 
+    setPaused(paused) {
+      this._paused = Boolean(paused);
+      if (!this._paused && !this._running) { this._running = true; requestAnimationFrame((time) => this.draw(time)); }
+    }
+
     draw(time) {
+      if (this._paused) { this._running = false; return; }
+      this._running = true;
       this.audioLevel += (this.targetAudio - this.audioLevel) * .16;
       this.explosion += (this.explosionTarget - this.explosion) * .11;
       this.ctx.clearRect(0, 0, this.width, this.height);
