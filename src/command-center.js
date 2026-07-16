@@ -223,6 +223,9 @@
     document.querySelectorAll('#cc-root [data-cc-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.ccMode)));
     const core = el('cc-core');
     if (core) core.addEventListener('click', () => startRecording('manual'));
+    // Settings gear: the way back to the Classic skin (and all other config).
+    const gear = el('cc-settings');
+    if (gear) gear.addEventListener('click', () => openSettings());
     const disableVision = el('cc-disable-vision');
     if (disableVision) disableVision.addEventListener('click', () => { const a = el('cc-vision-alert'); if (a) a.classList.remove('show'); });
     // Reflect the real screen-vision indicator on the Command Center banner.

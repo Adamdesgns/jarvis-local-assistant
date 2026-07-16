@@ -200,10 +200,18 @@
       <header class="topbar">
         <div class="brand"><span class="brand-mark"><i></i><i></i><i></i></span><div><strong>J.A.R.V.I.S.</strong><small>JUST A RATHER VERY INTELLIGENT SYSTEM</small></div></div>
         <div class="top-metrics"><span><small>CPU</small><b id="cc-cpu-top">--%</b></span><span><small>GPU</small><b id="cc-gpu-top">--%</b></span><span><small>MEM</small><b id="cc-mem-top">--%</b></span><span><small>NET</small><b class="online">ONLINE</b></span><span><small>BRAIN</small><b id="cc-brain">LOCAL</b></span></div>
-        <div class="clock"><strong id="cc-time">--:--</strong><small id="cc-date">SYSTEM CLOCK</small></div>
+        <div class="cc-top-right">
+          <div class="clock"><strong id="cc-time">--:--</strong><small id="cc-date">SYSTEM CLOCK</small></div>
+          <div class="cc-actions">
+            <button id="cc-settings" class="cc-icon tip-below" data-tip="Settings — switch skin, voice, folders" aria-label="Settings">⚙</button>
+            <button class="cc-icon tip-below" data-window="minimize" data-tip="Minimize" aria-label="Minimize">—</button>
+            <button class="cc-icon tip-below" data-window="maximize" data-tip="Maximize" aria-label="Maximize">▢</button>
+            <button class="cc-icon cc-close tip-below" data-window="close" data-tip="Close" aria-label="Close">✕</button>
+          </div>
+        </div>
       </header>
 
-      <nav class="mode-switch"><button data-cc-mode="command" class="active">COMMAND</button><button data-cc-mode="focus">FOCUS</button><button data-cc-mode="orb">ORB</button></nav>
+      <nav class="mode-switch"><button data-cc-mode="command" class="active tip-below" data-tip="Full dashboard">COMMAND</button><button data-cc-mode="focus" class="tip-below" data-tip="Dim panels, enlarge the core">FOCUS</button><button data-cc-mode="orb" class="tip-below" data-tip="Minimize to the floating orb">ORB</button></nav>
 
       <div class="workspace">
         <aside class="column">
@@ -218,7 +226,7 @@
           <div class="core-status"><span class="state-pip"></span><small>CURRENT STATE</small><strong id="cc-state">STANDBY</strong><p id="cc-state-message">All systems ready</p></div>
           <div class="waveform" id="cc-waveform"></div>
           <form class="command" id="cc-command-form"><span>›</span><input id="cc-command-input" placeholder="TYPE A COMMAND OR SAY “HEY JARVIS”" autocomplete="off"><button type="submit">EXECUTE</button></form>
-          <div class="dock"><button data-cc-action="voice"><i>◉</i><span>VOICE</span></button><button data-cc-action="search"><i>⌕</i><span>SEARCH</span></button><button data-cc-action="vision"><i>⌾</i><span>VISION</span></button><button data-cc-action="note"><i>＋</i><span>NOTE</span></button><button data-cc-action="minimize"><i>◇</i><span>MINIMIZE</span></button></div>
+          <div class="dock"><button data-cc-action="voice" data-tip="Push to talk"><i>◉</i><span>VOICE</span></button><button data-cc-action="search" data-tip="Search your files"><i>⌕</i><span>SEARCH</span></button><button data-cc-action="vision" data-tip="Look at my screen"><i>⌾</i><span>VISION</span></button><button data-cc-action="note" data-tip="Save a quick note"><i>＋</i><span>NOTE</span></button><button data-cc-action="minimize" data-tip="Minimize to the orb"><i>◇</i><span>MINIMIZE</span></button></div>
         </section>
 
         <aside class="column">

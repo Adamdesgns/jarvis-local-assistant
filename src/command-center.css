@@ -38,6 +38,18 @@ body[data-skin="command-center"] #classic-root { display: none; }
   .top-metrics span:last-child{border-right:1px solid rgba(87,212,255,.13)}
   .top-metrics small{color:#527e8d;font-size:8px;letter-spacing:.18em}.top-metrics b{font-size:11px}.online{color:var(--success)}
   .clock{text-align:right}.clock strong{display:block;font-size:20px;letter-spacing:.17em}.clock small{font-size:8px;color:var(--muted);letter-spacing:.18em}
+  .topbar{-webkit-app-region:drag}
+  .cc-top-right{display:flex;align-items:center;justify-content:flex-end;gap:16px}
+  .cc-actions{display:flex;align-items:center;gap:4px;-webkit-app-region:no-drag}
+  .cc-icon{width:30px;height:30px;border:1px solid rgba(84,213,255,.18);background:rgba(6,16,22,.7);color:#7fb6c8;font-size:13px;cursor:pointer;display:grid;place-items:center;border-radius:2px;transition:.16s}
+  .cc-icon:hover{color:#d8faff;border-color:rgba(84,213,255,.5);background:rgba(62,202,244,.1)}
+  .cc-icon.cc-close:hover{color:#fff;background:#b42c20;border-color:#b42c20}
+  .cc-icon:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .mode-switch,.dock button,.command,.project,.task input,#cc-core{-webkit-app-region:no-drag}
+  /* Hover tooltips — a little popup naming each control */
+  [data-tip]{position:relative}
+  [data-tip]:hover::after,[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);background:rgba(3,12,18,.98);border:1px solid rgba(84,213,255,.4);color:#d8faff;font-family:var(--tech);font-size:9px;letter-spacing:.08em;padding:5px 9px;white-space:nowrap;z-index:130;pointer-events:none;box-shadow:0 8px 20px rgba(0,0,0,.55)}
+  .tip-below[data-tip]:hover::after,.tip-below[data-tip]:focus-visible::after{bottom:auto;top:calc(100% + 8px)}
 
   .mode-switch{position:absolute;top:68px;left:50%;transform:translateX(-50%);z-index:65;display:flex;padding:3px;border:1px solid rgba(91,215,255,.18);background:rgba(3,10,15,.9);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
   .mode-switch button{background:transparent;border:0;padding:6px 13px;font-size:8px;letter-spacing:.17em;cursor:pointer;color:#578292}
