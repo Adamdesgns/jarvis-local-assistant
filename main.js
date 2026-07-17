@@ -23,6 +23,7 @@ const { checkForUpdate } = require('./core/update-check');
 const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
+const { ORB_DEFAULT, resizeAroundCenter, clampToWorkArea } = require('./core/orb-bounds');
 
 let mainWindow;
 let widgetWindow;
@@ -141,14 +142,40 @@ function createMainWindow() {
   }
 }
 
+function orbWorkArea(bounds) {
+  const display = screen.getDisplayMatching({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: bounds.size, height: bounds.size });
+  return display.workArea;
+}
+
+function currentOrbBounds() {
+  const [x, y] = widgetWindow.getPosition();
+  const [size] = widgetWindow.getSize();
+  return { x, y, size };
+}
+
+let orbSaveTimer = null;
+function persistOrbBounds() {
+  clearTimeout(orbSaveTimer);
+  orbSaveTimer = setTimeout(() => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    try { config.updateSettings({ orbBounds: currentOrbBounds() }); } catch {}
+  }, 400);
+}
+
 function createWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) return widgetWindow;
   const { workArea } = screen.getPrimaryDisplay();
+  const saved = config?.getSettings().orbBounds;
+  const wanted = saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
+    ? { x: saved.x, y: saved.y, size: saved.size || ORB_DEFAULT }
+    : { x: workArea.x + workArea.width - 160, y: workArea.y + workArea.height - 170, size: ORB_DEFAULT };
+  // Clamp against whichever display the saved spot is nearest — monitors change.
+  const bounds = clampToWorkArea(wanted, orbWorkArea(wanted));
   widgetWindow = new BrowserWindow({
-    width: 132,
-    height: 132,
-    x: workArea.x + workArea.width - 160,
-    y: workArea.y + workArea.height - 170,
+    width: bounds.size,
+    height: bounds.size,
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
     transparent: true,
     frame: false,
     resizable: false,
@@ -538,6 +565,37 @@ function setupIpc() {
 
   ipcMain.on('widget:show', showOrb);
   ipcMain.on('widget:restore', restoreMainWindow);
+  // Orb drag: the widget reports gesture start/move/end; main reads the global
+  // cursor so window movement stays exact regardless of renderer coordinates.
+  let orbDrag = null;
+  ipcMain.on('widget:drag-start', () => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    const [x, y] = widgetWindow.getPosition();
+    orbDrag = { win: { x, y }, cursor: screen.getCursorScreenPoint() };
+  });
+  ipcMain.on('widget:drag-move', () => {
+    if (!orbDrag || !widgetWindow || widgetWindow.isDestroyed()) return;
+    const cursor = screen.getCursorScreenPoint();
+    widgetWindow.setPosition(
+      Math.round(orbDrag.win.x + cursor.x - orbDrag.cursor.x),
+      Math.round(orbDrag.win.y + cursor.y - orbDrag.cursor.y)
+    );
+  });
+  ipcMain.on('widget:drag-end', () => {
+    orbDrag = null;
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    const clamped = clampToWorkArea(currentOrbBounds(), orbWorkArea(currentOrbBounds()));
+    widgetWindow.setBounds({ x: Math.round(clamped.x), y: Math.round(clamped.y), width: clamped.size, height: clamped.size });
+    persistOrbBounds();
+  });
+  // Orb resize: scroll wheel grows/shrinks around the centre, clamped on-screen.
+  ipcMain.on('widget:resize', (_event, direction) => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    const resized = resizeAroundCenter(currentOrbBounds(), direction > 0 ? 1 : -1);
+    const clamped = clampToWorkArea(resized, orbWorkArea(resized));
+    widgetWindow.setBounds({ x: Math.round(clamped.x), y: Math.round(clamped.y), width: clamped.size, height: clamped.size });
+    persistOrbBounds();
+  });
   ipcMain.on('ui:state', (_event, payload) => {
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:state', payload);
   });

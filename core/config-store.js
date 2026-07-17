@@ -76,7 +76,7 @@ class ConfigStore {
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
       'autonomyEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
-      'skin', 'voiceName'
+      'skin', 'voiceName', 'orbBounds'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {
