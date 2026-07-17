@@ -3,7 +3,9 @@ const label = document.getElementById('orb-label');
 
 function setState(payload = {}) {
   const state = payload.state || 'ready';
-  orb.className = `orb ${state === 'exploding' ? 'searching' : state}`;
+  // Keep any pop-* animation classes alive through state changes.
+  const pops = [...orb.classList].filter((name) => name.startsWith('pop-'));
+  orb.className = ['orb', state === 'exploding' ? 'searching' : state, ...pops].join(' ');
   label.textContent = state === 'exploding' ? 'SEARCHING' : state.toUpperCase();
 }
 
@@ -49,6 +51,16 @@ document.body.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 orb.addEventListener('contextmenu', (event) => { event.preventDefault(); window.jarvis.restoreMain(); });
+// Easter egg: past either size limit the orb pops (explode/vanish), then
+// respawns bottom-right — main.js runs the timing, we just play the theatre.
+window.jarvis.onWidgetPop?.((kind) => {
+  orb.classList.add(kind === 'explode' ? 'pop-explode' : 'pop-vanish');
+});
+window.jarvis.onWidgetPopReset?.(() => {
+  orb.classList.remove('pop-explode', 'pop-vanish');
+  orb.classList.add('pop-in');
+  setTimeout(() => orb.classList.remove('pop-in'), 600);
+});
 // Match the orb's colour to the active skin (amber Classic / cyan Command Center).
 window.jarvis.onSkin?.((skin) => { document.body.dataset.skin = skin || 'classic'; });
 window.jarvis.onWakeDetected(() => setState({ state: 'listening' }));

@@ -33,4 +33,21 @@ function clampToWorkArea(bounds, workArea) {
   };
 }
 
-module.exports = { ORB_MIN, ORB_MAX, ORB_STEP, ORB_DEFAULT, nextOrbSize, resizeAroundCenter, clampToWorkArea };
+// Easter egg: scrolling past either limit pops the orb — it explodes at max,
+// vanishes at min, and (handled by main.js) respawns bottom-right shortly after.
+function resizeOutcome(bounds, direction) {
+  if (direction > 0 && bounds.size >= ORB_MAX) return { type: 'explode' };
+  if (direction < 0 && bounds.size <= ORB_MIN) return { type: 'vanish' };
+  return { type: 'resize', bounds: resizeAroundCenter(bounds, direction) };
+}
+
+// The orb's home: tucked into the bottom-right corner of a work area.
+function defaultOrbBounds(workArea) {
+  return {
+    x: workArea.x + workArea.width - ORB_DEFAULT - 28,
+    y: workArea.y + workArea.height - ORB_DEFAULT - 38,
+    size: ORB_DEFAULT
+  };
+}
+
+module.exports = { ORB_MIN, ORB_MAX, ORB_STEP, ORB_DEFAULT, nextOrbSize, resizeAroundCenter, clampToWorkArea, resizeOutcome, defaultOrbBounds };

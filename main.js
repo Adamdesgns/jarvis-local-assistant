@@ -23,7 +23,7 @@ const { checkForUpdate } = require('./core/update-check');
 const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
-const { ORB_DEFAULT, resizeAroundCenter, clampToWorkArea } = require('./core/orb-bounds');
+const { ORB_DEFAULT, clampToWorkArea, resizeOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 
 let mainWindow;
 let widgetWindow;
@@ -168,7 +168,7 @@ function createWidgetWindow() {
   const saved = config?.getSettings().orbBounds;
   const wanted = saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
     ? { x: saved.x, y: saved.y, size: saved.size || ORB_DEFAULT }
-    : { x: workArea.x + workArea.width - 160, y: workArea.y + workArea.height - 170, size: ORB_DEFAULT };
+    : defaultOrbBounds(workArea);
   // Clamp against whichever display the saved spot is nearest — monitors change.
   const bounds = clampToWorkArea(wanted, orbWorkArea(wanted));
   widgetWindow = new BrowserWindow({
@@ -589,12 +589,30 @@ function setupIpc() {
     persistOrbBounds();
   });
   // Orb resize: scroll wheel grows/shrinks around the centre, clamped on-screen.
+  // Scrolling past either limit triggers the pop: explode at max / vanish at
+  // min, hide for ~3 seconds, then respawn bottom-right at the default size.
+  let orbPopping = false;
   ipcMain.on('widget:resize', (_event, direction) => {
-    if (!widgetWindow || widgetWindow.isDestroyed()) return;
-    const resized = resizeAroundCenter(currentOrbBounds(), direction > 0 ? 1 : -1);
-    const clamped = clampToWorkArea(resized, orbWorkArea(resized));
-    widgetWindow.setBounds({ x: Math.round(clamped.x), y: Math.round(clamped.y), width: clamped.size, height: clamped.size });
-    persistOrbBounds();
+    if (orbPopping || !widgetWindow || widgetWindow.isDestroyed()) return;
+    const outcome = resizeOutcome(currentOrbBounds(), direction > 0 ? 1 : -1);
+    if (outcome.type === 'resize') {
+      const clamped = clampToWorkArea(outcome.bounds, orbWorkArea(outcome.bounds));
+      widgetWindow.setBounds({ x: Math.round(clamped.x), y: Math.round(clamped.y), width: clamped.size, height: clamped.size });
+      persistOrbBounds();
+      return;
+    }
+    orbPopping = true;
+    widgetWindow.webContents.send('widget:pop', outcome.type);
+    setTimeout(() => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide(); }, 650);
+    setTimeout(() => {
+      orbPopping = false;
+      if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      const home = defaultOrbBounds(screen.getPrimaryDisplay().workArea);
+      widgetWindow.setBounds({ x: home.x, y: home.y, width: home.size, height: home.size });
+      widgetWindow.webContents.send('widget:pop-reset');
+      widgetWindow.showInactive();
+      persistOrbBounds();
+    }, 3650);
   });
   ipcMain.on('ui:state', (_event, payload) => {
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:state', payload);

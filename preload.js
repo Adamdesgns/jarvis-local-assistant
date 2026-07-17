@@ -88,6 +88,8 @@ contextBridge.exposeInMainWorld('jarvis', {
   widgetDragMove: () => ipcRenderer.send('widget:drag-move'),
   widgetDragEnd: () => ipcRenderer.send('widget:drag-end'),
   widgetResize: (direction) => ipcRenderer.send('widget:resize', direction),
+  onWidgetPop: (callback) => on('widget:pop', callback),
+  onWidgetPopReset: (callback) => on('widget:pop-reset', callback),
   windowControl: (action) => ipcRenderer.send('window:control', action),
   onWakeDetected: (callback) => on('wake:detected', callback),
   onWakeStatus: (callback) => on('voice:status', callback),
