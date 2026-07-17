@@ -77,9 +77,11 @@ body[data-skin="command-center"] #classic-root { display: none; }
   .task small{color:#527988;font-size:6px}.task:has(input:checked) span{text-decoration:line-through;color:#55727c}
 
   .core-stage{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:24px 0 0}
-  .core-stage:before{content:"";position:absolute;width:min(46vw,650px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(47,189,232,.09),transparent 68%);filter:blur(12px)}
+  .core-stage:before{content:"";position:absolute;width:min(46vw,62vh,650px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(47,189,232,.09),transparent 68%);filter:blur(12px)}
   .core-heading{width:min(42vw,610px);display:flex;align-items:center;gap:9px;color:#4e8192;font-size:7px;letter-spacing:.2em}.core-heading i{height:1px;flex:1;background:linear-gradient(90deg,rgba(82,211,250,.5),transparent)}.core-heading b{color:#74cce7}
-  #cc-core{position:relative;width:min(38vw,510px);aspect-ratio:1;margin:-2px 0 -8px;border:0;background:transparent;border-radius:50%;cursor:pointer;filter:drop-shadow(0 0 16px rgba(43,197,239,.15))}
+  /* Cap by height too: on wide screens a width-only size grows the sphere past
+     what the window can hold and shoves the dock under the Windows taskbar. */
+  #cc-core{position:relative;width:min(38vw,52vh,510px);aspect-ratio:1;margin:-2px 0 -8px;border:0;background:transparent;border-radius:50%;cursor:pointer;filter:drop-shadow(0 0 16px rgba(43,197,239,.15))}
   .ring{position:absolute;border-radius:50%;inset:0;display:block}
   .ring-outer{border:1px solid rgba(85,213,255,.29);background:repeating-conic-gradient(from 4deg,rgba(99,221,255,.65) 0 1deg,transparent 1deg 5deg);mask:radial-gradient(circle,transparent 65%,#000 66% 67%,transparent 68% 82%,#000 83% 84%,transparent 85%);animation:cc-spin 36s linear infinite}
   .ring-ticks{inset:9%;border:1px solid rgba(86,216,255,.18);background:repeating-conic-gradient(transparent 0 2.5deg,rgba(96,219,255,.56) 2.5deg 3deg);mask:radial-gradient(circle,transparent 73%,#000 74% 79%,transparent 80%);animation:cc-reverseSpin 24s linear infinite}
@@ -108,7 +110,7 @@ body[data-skin="command-center"] #classic-root { display: none; }
 
   &.focus .column{opacity:.13;filter:blur(1px);pointer-events:none}
   &.focus .workspace{grid-template-columns:220px 1fr 220px}
-  &.focus #cc-core{width:min(46vw,620px)}
+  &.focus #cc-core{width:min(46vw,60vh,620px)}
 
   .cc-overlay{position:fixed;inset:0;z-index:110;display:grid;place-items:center;background:rgba(2,6,10,.7);backdrop-filter:blur(3px)}
   .cc-overlay[hidden]{display:none}
