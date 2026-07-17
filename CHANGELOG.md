@@ -1,5 +1,18 @@
 # JARVIS Changelog
 
+## Unreleased (agentic-brain branch)
+
+### Added — Agentic brain (multi-step tools on every model)
+- JARVIS can now take several steps from one request — search, read a file,
+  then act — on the local brain AND the cloud brain. (Previously the cloud
+  brain had no tools at all; it could only talk.)
+- New tool: it can read a file's contents (approved folders only), not just
+  find it — so "find the invoice, read the total, add a task" works end to end.
+- One provider-agnostic loop drives Ollama, OpenAI, and Claude alike, so all
+  three brains have the same abilities; only the model's raw smarts differ.
+- Each step shows as a live status line while it works. Destructive actions
+  still only happen through approval cards.
+
 ## Unreleased (command-center-skin branch)
 
 ### Added — Command Center skin (switchable)
