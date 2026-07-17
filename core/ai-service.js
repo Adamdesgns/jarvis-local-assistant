@@ -1,4 +1,6 @@
 const { toolSpecs, executeToolCall } = require('./tool-registry');
+const { runAgent } = require('./agent-loop');
+const { normalizeOllama, normalizeOpenAI, normalizeAnthropic, anthropicTools } = require('./brain-adapters');
 
 // Folds one parsed NDJSON chunk from Ollama's streaming chat API into an
 // accumulator of { content, toolCalls }. Exported for tests.
@@ -395,27 +397,199 @@ class AIService {
     }
   }
 
+  // ---- Agentic reply: one multi-step loop, three provider adapters. ----
+
+  #initialMessages(text, context) {
+    const settings = this.config.getSettings();
+    return [
+      { role: 'system', content: context.systemOverride || this.prompt(settings, context) },
+      ...(context.systemOverride ? [] : this.#history(context.project)),
+      { role: 'user', content: String(text) }
+    ];
+  }
+
+  async #ollamaAgent(text, context) {
+    const settings = this.config.getSettings();
+    const baseUrl = 'http://127.0.0.1:11434';
+    const controller = new AbortController();
+    this.activeController = controller;
+    this.cancelledByUser = false;
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    try {
+      const tagsResponse = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal });
+      if (!tagsResponse.ok) throw new Error(`Ollama connection returned ${tagsResponse.status}.`);
+      const tags = await tagsResponse.json();
+      const installed = tags.models || [];
+      const requested = settings.ollamaModel || 'qwen3:8b';
+      const selected = installed.find((item) => String(item.name || item.model) === requested)
+        || installed.find((item) => !/embed/i.test(String(item.name || item.model || '')))
+        || installed[0];
+      if (!selected) throw new Error('Ollama is running, but it has no model installed.');
+      const model = String(selected.name || selected.model);
+      const adapter = { chat: (messages, specs, opts) => this.#ollamaChat(model, messages, specs, opts, controller, context) };
+      const messages = this.#initialMessages(text, context);
+      const { text: answer, usedTools } = await runAgent({ adapter, registry: this.registry || [], messages, onStep: context.onStep });
+      if (!answer) throw new Error('The local model returned no text.');
+      if (!context.systemOverride) this.#remember(context.project, text, answer);
+      return { ok: true, source: 'ollama', text: answer, usedTools };
+    } finally { clearTimeout(timeout); }
+  }
+
+  async #ollamaChat(model, messages, specs, opts, controller, context) {
+    const wire = messages.map((m) => {
+      if (m.role === 'assistant' && Array.isArray(m.toolCalls)) {
+        return { role: 'assistant', content: m.content || '', tool_calls: m.toolCalls.map((c) => ({ function: { name: c.name, arguments: c.arguments || {} } })) };
+      }
+      if (m.role === 'tool') return { role: 'tool', content: m.content };
+      return { role: m.role, content: m.content };
+    });
+    const response = await fetch('http://127.0.0.1:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, stream: true, messages: wire, ...(specs && specs.length ? { tools: specs } : {}), options: { temperature: 0.35, num_ctx: 8192 } }),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      let detail = '';
+      try { detail = (await response.json())?.error; } catch {}
+      throw new Error(detail || `Local model returned ${response.status}.`);
+    }
+    const streaming = Boolean(opts && opts.stream && typeof context.onChunk === 'function');
+    if (streaming) context.onReset?.();
+    const state = { content: '', toolCalls: [] };
+    let buffered = '';
+    let insideThink = false;
+    const handleLine = (line) => {
+      if (!line) return;
+      let parsed;
+      try { parsed = JSON.parse(line); } catch { return; }
+      const before = state.content.length;
+      accumulateStreamChunk(state, parsed);
+      if (streaming && state.content.length > before) {
+        const addition = state.content.slice(before);
+        if (addition.includes('<think>')) insideThink = true;
+        if (!insideThink) context.onChunk(addition);
+        if (addition.includes('</think>')) insideThink = false;
+      }
+    };
+    for await (const piece of response.body) {
+      buffered += Buffer.from(piece).toString('utf8');
+      let index;
+      while ((index = buffered.indexOf('\n')) >= 0) { handleLine(buffered.slice(0, index).trim()); buffered = buffered.slice(index + 1); }
+    }
+    handleLine(buffered.trim());
+    return normalizeOllama({ content: state.content.replace(/<think>[\s\S]*?<\/think>/g, ''), tool_calls: state.toolCalls });
+  }
+
+  async #openaiAgent(text, context) {
+    const settings = this.config.getSettings();
+    const apiKey = this.config.getSecret('openaiKey');
+    if (!apiKey) throw new Error('OpenAI Cloud Brain needs an API key in Settings.');
+    const adapter = { chat: (messages, specs) => this.#openaiChat(settings, apiKey, messages, specs) };
+    const messages = this.#initialMessages(text, context);
+    const { text: answer, usedTools } = await runAgent({ adapter, registry: this.registry || [], messages, onStep: context.onStep });
+    if (!answer) throw new Error('OpenAI returned no text.');
+    if (!context.systemOverride) this.#remember(context.project, text, answer);
+    return { ok: true, source: 'openai', text: answer, usedTools };
+  }
+
+  async #openaiChat(settings, apiKey, messages, specs) {
+    const wire = messages.map((m) => {
+      if (m.role === 'assistant' && Array.isArray(m.toolCalls)) {
+        return { role: 'assistant', content: m.content || null, tool_calls: m.toolCalls.map((c) => ({ id: c.id || `call_${c.name}`, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) } })) };
+      }
+      if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId || `call_${m.name}`, content: m.content };
+      return { role: m.role, content: m.content };
+    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: settings.openaiModel || 'gpt-5-mini', messages: wire, ...(specs && specs.length ? { tools: specs, tool_choice: 'auto' } : {}), max_tokens: 900 }),
+        signal: controller.signal
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
+      return normalizeOpenAI(payload.choices?.[0]?.message || {});
+    } finally { clearTimeout(timeout); }
+  }
+
+  async #anthropicAgent(text, context) {
+    const settings = this.config.getSettings();
+    const apiKey = this.config.getSecret('anthropicKey');
+    if (!apiKey) throw new Error('Claude Cloud Brain needs an API key in Settings.');
+    const adapter = { chat: (messages, specs) => this.#anthropicChat(settings, apiKey, messages, specs) };
+    const messages = this.#initialMessages(text, context);
+    const { text: answer, usedTools } = await runAgent({ adapter, registry: this.registry || [], messages, onStep: context.onStep });
+    if (!answer) throw new Error('Claude returned no text.');
+    if (!context.systemOverride) this.#remember(context.project, text, answer);
+    return { ok: true, source: 'anthropic', text: answer, usedTools };
+  }
+
+  async #anthropicChat(settings, apiKey, messages, specs) {
+    const system = messages.find((m) => m.role === 'system')?.content || '';
+    const convo = [];
+    for (const m of messages.filter((item) => item.role !== 'system')) {
+      if (m.role === 'tool') {
+        // Claude needs every tool_result for one turn in a single user message.
+        const block = { type: 'tool_result', tool_use_id: m.toolCallId || `tu_${m.name}`, content: m.content };
+        const last = convo[convo.length - 1];
+        if (last && last._toolResults) last.content.push(block);
+        else convo.push({ role: 'user', content: [block], _toolResults: true });
+      } else if (m.role === 'assistant' && Array.isArray(m.toolCalls)) {
+        const blocks = [];
+        if (m.content) blocks.push({ type: 'text', text: m.content });
+        for (const c of m.toolCalls) blocks.push({ type: 'tool_use', id: c.id || `tu_${c.name}`, name: c.name, input: c.arguments || {} });
+        convo.push({ role: 'assistant', content: blocks });
+      } else {
+        convo.push({ role: m.role, content: m.content });
+      }
+    }
+    convo.forEach((item) => delete item._toolResults);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: settings.anthropicModel || 'claude-sonnet-5', max_tokens: 1024, system, messages: convo, ...(specs && specs.length ? { tools: anthropicTools(specs) } : {}) }),
+        signal: controller.signal
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || `Claude returned ${response.status}.`);
+      return normalizeAnthropic(payload.content, payload.stop_reason);
+    } finally { clearTimeout(timeout); }
+  }
+
   async reply(text, context = {}) {
     const settings = this.config.getSettings();
     const mode = settings.aiMode || 'local';
+    const cloudAgent = async () => {
+      const provider = this.cloudProvider();
+      if (provider === 'anthropic') return this.#anthropicAgent(text, context);
+      if (provider === 'openai') return this.#openaiAgent(text, context);
+      throw new Error('No Cloud Brain key is saved. Add a Claude or OpenAI key in Settings.');
+    };
     if (mode === 'cloud') {
-      try { return await this.cloudReply(text, context); }
+      try { return await cloudAgent(); }
       catch (error) {
         return { ok: false, source: 'cloud-core', text: `Cloud Brain could not respond. ${error.message}`, detail: error.message };
       }
     }
     if (mode === 'auto' && this.hasCloudKey()) {
-      try { return await this.cloudReply(text, context); }
+      try { return await cloudAgent(); }
       catch (cloudError) {
         try {
-          const local = await this.localReply(text, context);
+          const local = await this.#ollamaAgent(text, context);
           return { ...local, detail: `Cloud unavailable; used Ollama. ${cloudError.message}` };
         } catch (localError) {
           return { ok: false, source: 'local-core', text: 'Neither Cloud Brain nor Ollama could respond.', detail: `${cloudError.message} / ${localError.message}` };
         }
       }
     }
-    try { return await this.localReply(text, context); }
+    try { return await this.#ollamaAgent(text, context); }
     catch (error) {
       if (this.cancelledByUser) return { ok: true, source: 'local-core', text: 'Stopped.', cancelled: true };
       return { ok: false, source: 'local-core', text: `I could not reach the local Ollama model. ${error.name === 'AbortError' ? 'The request timed out.' : error.message}`, detail: error.message };

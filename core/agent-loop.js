@@ -4,7 +4,7 @@ const { toolSpecs, executeToolCall } = require('./tool-registry');
 // returns { text, toolCalls }; all control flow (cap, repeat guard, tool
 // execution, forcing a final answer) lives here so every brain behaves alike.
 async function runAgent({ adapter, registry, messages, maxSteps = 8, onStep }) {
-  const specs = toolSpecs(registry);
+  const specs = toolSpecs(registry || []);
   const seen = new Set();
   const usedTools = [];
   let steps = 0;
@@ -18,10 +18,11 @@ async function runAgent({ adapter, registry, messages, maxSteps = 8, onStep }) {
     const fresh = turn.toolCalls.filter((call) => !seen.has(`${call.name}:${JSON.stringify(call.arguments || {})}`));
     if (!fresh.length) { turn = await adapter.chat(messages, [], { stream: true }); break; }
 
+    // Respond to EVERY call in the turn (OpenAI/Anthropic require a result for
+    // each), but the repeat guard above already decided this round is worth running.
     messages.push({ role: 'assistant', content: turn.text || '', toolCalls: turn.toolCalls });
-    for (const call of fresh) {
-      const signature = `${call.name}:${JSON.stringify(call.arguments || {})}`;
-      seen.add(signature);
+    for (const call of turn.toolCalls) {
+      seen.add(`${call.name}:${JSON.stringify(call.arguments || {})}`);
       const outcome = await executeToolCall(registry, { function: { name: call.name, arguments: call.arguments || {} } });
       usedTools.push(call.name);
       messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: JSON.stringify(outcome) });
