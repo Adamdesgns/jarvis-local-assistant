@@ -602,17 +602,32 @@ function setupIpc() {
       return;
     }
     orbPopping = true;
-    widgetWindow.webContents.send('widget:pop', outcome.type);
-    setTimeout(() => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide(); }, 650);
-    setTimeout(() => {
+    const respawnOrb = () => {
       orbPopping = false;
       if (!widgetWindow || widgetWindow.isDestroyed()) return;
+      widgetWindow.setIgnoreMouseEvents(false);
       const home = defaultOrbBounds(screen.getPrimaryDisplay().workArea);
       widgetWindow.setBounds({ x: home.x, y: home.y, width: home.size, height: home.size });
       widgetWindow.webContents.send('widget:pop-reset');
       widgetWindow.showInactive();
       persistOrbBounds();
-    }, 3650);
+    };
+    if (outcome.type === 'explode') {
+      // Take over the whole monitor: the orb grows until only the glowing core
+      // is visible, whites out, then detonates. Clicks pass through meanwhile.
+      const bounds = currentOrbBounds();
+      const full = screen.getDisplayMatching({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: bounds.size, height: bounds.size }).bounds;
+      const startScale = bounds.size / Math.min(full.width, full.height);
+      widgetWindow.setIgnoreMouseEvents(true);
+      widgetWindow.setBounds(full);
+      widgetWindow.webContents.send('widget:pop', { kind: 'explode', startScale });
+      setTimeout(() => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide(); }, 2450);
+      setTimeout(respawnOrb, 5450);
+    } else {
+      widgetWindow.webContents.send('widget:pop', { kind: 'vanish' });
+      setTimeout(() => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide(); }, 650);
+      setTimeout(respawnOrb, 3650);
+    }
   });
   ipcMain.on('ui:state', (_event, payload) => {
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:state', payload);

@@ -51,13 +51,42 @@ document.body.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 orb.addEventListener('contextmenu', (event) => { event.preventDefault(); window.jarvis.restoreMain(); });
-// Easter egg: past either size limit the orb pops (explode/vanish), then
-// respawns bottom-right — main.js runs the timing, we just play the theatre.
-window.jarvis.onWidgetPop?.((kind) => {
-  orb.classList.add(kind === 'explode' ? 'pop-explode' : 'pop-vanish');
+// Easter egg: past either size limit the orb pops, then respawns bottom-right.
+// Vanish shrinks to nothing in place. Explode is the show: main.js expands the
+// window to the full monitor, we grow the orb until only the glowing core is
+// visible, white out, then detonate — shockwave, flash, and vaporizing debris.
+function spawnDebris() {
+  const box = document.getElementById('debris');
+  box.replaceChildren();
+  for (let index = 0; index < 30; index += 1) {
+    const spark = document.createElement('i');
+    spark.style.setProperty('--a', `${Math.round(Math.random() * 360)}deg`);
+    spark.style.setProperty('--d', `${Math.round(45 + Math.random() * 65)}vmin`);
+    spark.style.setProperty('--s', `${(4 + Math.random() * 10).toFixed(1)}px`);
+    spark.style.setProperty('--t', `${(0.55 + Math.random() * 0.45).toFixed(2)}s`);
+    box.appendChild(spark);
+  }
+}
+
+let popTimers = [];
+window.jarvis.onWidgetPop?.((payload) => {
+  const kind = payload && payload.kind ? payload.kind : payload;
+  if (kind === 'vanish') { orb.classList.add('pop-vanish'); return; }
+  orb.style.setProperty('--ss', String((payload && payload.startScale) || 0.4));
+  document.body.classList.add('pop-fx', 'pop-grow-phase');
+  popTimers.push(setTimeout(() => {
+    spawnDebris();
+    document.body.classList.remove('pop-grow-phase');
+    document.body.classList.add('pop-boom');
+  }, 1500));
 });
 window.jarvis.onWidgetPopReset?.(() => {
-  orb.classList.remove('pop-explode', 'pop-vanish');
+  popTimers.forEach(clearTimeout);
+  popTimers = [];
+  document.body.classList.remove('pop-fx', 'pop-grow-phase', 'pop-boom');
+  orb.classList.remove('pop-vanish');
+  orb.style.removeProperty('--ss');
+  document.getElementById('debris').replaceChildren();
   orb.classList.add('pop-in');
   setTimeout(() => orb.classList.remove('pop-in'), 600);
 });
