@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ORB_MIN, ORB_MAX, ORB_STEP, ORB_DEFAULT, nextOrbSize, resizeAroundCenter, clampToWorkArea, resizeOutcome, defaultOrbBounds } = require('../core/orb-bounds');
+const { ORB_MIN, ORB_MAX, ORB_STEP, ORB_DEFAULT, ZOOM_STEP, ZOOM_MAX, nextOrbSize, resizeAroundCenter, clampToWorkArea, resizeOutcome, defaultOrbBounds, zoomOutcome } = require('../core/orb-bounds');
 
 test('orb size: steps up and down and clamps to its limits', () => {
   assert.equal(nextOrbSize(132, 1), 132 + ORB_STEP);
@@ -23,12 +23,36 @@ test('orb easter egg: growing past max explodes, shrinking past min vanishes', (
   // Normal resizes stay resizes.
   assert.equal(resizeOutcome({ x: 10, y: 10, size: 132 }, 1).type, 'resize');
   assert.equal(resizeOutcome({ x: 10, y: 10, size: 132 }, -1).type, 'resize');
-  // One more click past either limit triggers the pop.
-  assert.deepEqual(resizeOutcome({ x: 10, y: 10, size: ORB_MAX }, 1), { type: 'explode' });
+  // Growing past the (default) max enters fullscreen zoom; shrinking past min vanishes.
+  assert.deepEqual(resizeOutcome({ x: 10, y: 10, size: ORB_MAX }, 1), { type: 'zoom-enter' });
   assert.deepEqual(resizeOutcome({ x: 10, y: 10, size: ORB_MIN }, -1), { type: 'vanish' });
   // Shrinking a maxed orb (or growing a minimal one) is still a plain resize.
   assert.equal(resizeOutcome({ x: 10, y: 10, size: ORB_MAX }, -1).type, 'resize');
   assert.equal(resizeOutcome({ x: 10, y: 10, size: ORB_MIN }, 1).type, 'resize');
+});
+
+test('orb growth: the max is screen-relative, not fixed', () => {
+  // Growing enters fullscreen zoom only at the given (screen-relative) max size.
+  assert.equal(resizeOutcome({ x: 0, y: 0, size: 500 }, 1, 1040).type, 'resize');
+  assert.deepEqual(resizeOutcome({ x: 0, y: 0, size: 1040 }, 1, 1040), { type: 'zoom-enter' });
+  // The step is half what it used to be — 50% slower both ways.
+  assert.equal(ORB_STEP, 7);
+  assert.equal(nextOrbSize(500, 1, 1040), 507);
+  assert.equal(nextOrbSize(1038, 1, 1040), 1040, 'clamps to the screen-relative max');
+});
+
+test('orb zoom: full manual control up to the eye limit, then detonation', () => {
+  // Mid-range scrolls keep zooming in either direction.
+  const up = zoomOutcome(2, 1);
+  assert.equal(up.type, 'zoom');
+  assert.ok(up.zoom > 2);
+  const down = zoomOutcome(2, -1);
+  assert.equal(down.type, 'zoom');
+  assert.ok(down.zoom < 2);
+  // One step past ZOOM_MAX detonates; dropping below 1 exits back to window sizing.
+  assert.equal(zoomOutcome(ZOOM_MAX - ZOOM_STEP / 2, 1).type, 'explode');
+  assert.equal(zoomOutcome(1, -1).type, 'exit');
+  assert.equal(zoomOutcome(1 + ZOOM_STEP, -1).type, 'zoom');
 });
 
 test('orb respawn: default bounds sit at the bottom-right of the work area', () => {

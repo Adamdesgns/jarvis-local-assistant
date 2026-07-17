@@ -18,8 +18,12 @@ let startX = 0;
 let startY = 0;
 let moveQueued = false;
 
+const inZoom = () => document.body.classList.contains('zoom-mode');
+
 document.body.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
+  // Mid-swell a click backs out to the normal orb (escape hatch), never drags.
+  if (inZoom()) { window.jarvis.widgetZoomAbort(); return; }
   pressed = true;
   moved = false;
   startX = event.screenX;
@@ -51,10 +55,10 @@ document.body.addEventListener('wheel', (event) => {
 }, { passive: false });
 
 orb.addEventListener('contextmenu', (event) => { event.preventDefault(); window.jarvis.restoreMain(); });
-// Easter egg: past either size limit the orb pops, then respawns bottom-right.
-// Vanish shrinks to nothing in place. Explode is the show: main.js expands the
-// window to the full monitor, we grow the orb until only the glowing core is
-// visible, white out, then detonate — shockwave, flash, and vaporizing debris.
+// Easter egg. Growth phase 2 is the fullscreen swell: the user scrolls to zoom
+// the orb (main.js drives the factor) until the white core nearly leaves the
+// screen, then it detonates — flash, shockwave, and vaporizing debris. Vanish
+// shrinks to nothing in place. Either way it respawns bottom-right.
 function spawnDebris() {
   const box = document.getElementById('debris');
   box.replaceChildren();
@@ -68,24 +72,25 @@ function spawnDebris() {
   }
 }
 
-let popTimers = [];
+window.jarvis.onWidgetZoom?.((payload) => {
+  if (payload && payload.entering) document.body.classList.add('zoom-mode');
+  orb.style.setProperty('--zoom', String((payload && payload.zoom) || 1));
+});
+window.jarvis.onWidgetZoomExit?.(() => {
+  document.body.classList.remove('zoom-mode');
+  orb.style.removeProperty('--zoom');
+});
 window.jarvis.onWidgetPop?.((payload) => {
   const kind = payload && payload.kind ? payload.kind : payload;
   if (kind === 'vanish') { orb.classList.add('pop-vanish'); return; }
-  orb.style.setProperty('--ss', String((payload && payload.startScale) || 0.4));
-  document.body.classList.add('pop-fx', 'pop-grow-phase');
-  popTimers.push(setTimeout(() => {
-    spawnDebris();
-    document.body.classList.remove('pop-grow-phase');
-    document.body.classList.add('pop-boom');
-  }, 1500));
+  // Explode: the user already swelled it to fullscreen — go straight to the blast.
+  spawnDebris();
+  document.body.classList.add('pop-fx', 'pop-boom');
 });
 window.jarvis.onWidgetPopReset?.(() => {
-  popTimers.forEach(clearTimeout);
-  popTimers = [];
-  document.body.classList.remove('pop-fx', 'pop-grow-phase', 'pop-boom');
+  document.body.classList.remove('pop-fx', 'pop-boom', 'zoom-mode');
   orb.classList.remove('pop-vanish');
-  orb.style.removeProperty('--ss');
+  orb.style.removeProperty('--zoom');
   document.getElementById('debris').replaceChildren();
   orb.classList.add('pop-in');
   setTimeout(() => orb.classList.remove('pop-in'), 600);

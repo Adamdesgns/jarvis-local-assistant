@@ -23,7 +23,7 @@ const { checkForUpdate } = require('./core/update-check');
 const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
-const { ORB_DEFAULT, clampToWorkArea, resizeOutcome, defaultOrbBounds } = require('./core/orb-bounds');
+const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 
 let mainWindow;
 let widgetWindow;
@@ -588,46 +588,86 @@ function setupIpc() {
     widgetWindow.setBounds({ x: Math.round(clamped.x), y: Math.round(clamped.y), width: clamped.size, height: clamped.size });
     persistOrbBounds();
   });
-  // Orb resize: scroll wheel grows/shrinks around the centre, clamped on-screen.
-  // Scrolling past either limit triggers the pop: explode at max / vanish at
-  // min, hide for ~3 seconds, then respawn bottom-right at the default size.
-  let orbPopping = false;
+  // Orb resize: scroll wheel. Two phases —
+  //  1. window-resize (ORB_MIN..screen size), 7px per tick, clamped on-screen;
+  //  2. at screen size, one more scroll enters a fullscreen "zoom" where the orb
+  //     keeps swelling under scroll control until the white core nearly leaves
+  //     the screen, then detonates. Scrolling back down / clicking exits safely.
+  // Shrinking past the minimum still vanishes.
+  let orbPopping = false;   // true during the explode/vanish + respawn window
+  let orbZoom = null;       // null = window mode; a number (1..ZOOM_MAX) = zoom mode
+  let orbPreZoom = null;    // window bounds to restore when leaving zoom mode
+  const orbScreenMax = () => { const wa = orbWorkArea(currentOrbBounds()); return Math.min(wa.width, wa.height); };
+
+  const respawnOrb = () => {
+    orbPopping = false;
+    orbZoom = null;
+    orbPreZoom = null;
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    widgetWindow.setIgnoreMouseEvents(false);
+    const home = defaultOrbBounds(screen.getPrimaryDisplay().workArea);
+    widgetWindow.setBounds({ x: home.x, y: home.y, width: home.size, height: home.size });
+    widgetWindow.webContents.send('widget:pop-reset');
+    widgetWindow.showInactive();
+    persistOrbBounds();
+  };
+
+  const detonateOrb = () => {
+    orbPopping = true;
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    widgetWindow.setIgnoreMouseEvents(true); // let clicks fall through during the blast
+    widgetWindow.webContents.send('widget:pop', { kind: 'explode' });
+    setTimeout(() => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide(); }, 1050);
+    setTimeout(respawnOrb, 4050); // ~3s of silence after it disappears
+  };
+
+  const exitZoom = () => {
+    orbZoom = null;
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    widgetWindow.webContents.send('widget:zoom-exit');
+    const back = clampToWorkArea(orbPreZoom || defaultOrbBounds(screen.getPrimaryDisplay().workArea), orbWorkArea(orbPreZoom || currentOrbBounds()));
+    orbPreZoom = null;
+    widgetWindow.setBounds({ x: Math.round(back.x), y: Math.round(back.y), width: back.size, height: back.size });
+    persistOrbBounds();
+  };
+
   ipcMain.on('widget:resize', (_event, direction) => {
     if (orbPopping || !widgetWindow || widgetWindow.isDestroyed()) return;
-    const outcome = resizeOutcome(currentOrbBounds(), direction > 0 ? 1 : -1);
+    const dir = direction > 0 ? 1 : -1;
+
+    if (orbZoom !== null) {
+      const outcome = zoomOutcome(orbZoom, dir);
+      if (outcome.type === 'zoom') { orbZoom = outcome.zoom; widgetWindow.webContents.send('widget:zoom', { zoom: orbZoom }); }
+      else if (outcome.type === 'exit') exitZoom();
+      else if (outcome.type === 'explode') { orbZoom = ZOOM_MAX; widgetWindow.webContents.send('widget:zoom', { zoom: ZOOM_MAX }); detonateOrb(); }
+      return;
+    }
+
+    const outcome = resizeOutcome(currentOrbBounds(), dir, orbScreenMax());
     if (outcome.type === 'resize') {
       const clamped = clampToWorkArea(outcome.bounds, orbWorkArea(outcome.bounds));
       widgetWindow.setBounds({ x: Math.round(clamped.x), y: Math.round(clamped.y), width: clamped.size, height: clamped.size });
       persistOrbBounds();
-      return;
-    }
-    orbPopping = true;
-    const respawnOrb = () => {
-      orbPopping = false;
-      if (!widgetWindow || widgetWindow.isDestroyed()) return;
-      widgetWindow.setIgnoreMouseEvents(false);
-      const home = defaultOrbBounds(screen.getPrimaryDisplay().workArea);
-      widgetWindow.setBounds({ x: home.x, y: home.y, width: home.size, height: home.size });
-      widgetWindow.webContents.send('widget:pop-reset');
-      widgetWindow.showInactive();
-      persistOrbBounds();
-    };
-    if (outcome.type === 'explode') {
-      // Take over the whole monitor: the orb grows until only the glowing core
-      // is visible, whites out, then detonates. Clicks pass through meanwhile.
-      const bounds = currentOrbBounds();
-      const full = screen.getDisplayMatching({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: bounds.size, height: bounds.size }).bounds;
-      const startScale = bounds.size / Math.min(full.width, full.height);
-      widgetWindow.setIgnoreMouseEvents(true);
-      widgetWindow.setBounds(full);
-      widgetWindow.webContents.send('widget:pop', { kind: 'explode', startScale });
-      setTimeout(() => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide(); }, 2450);
-      setTimeout(respawnOrb, 5450);
-    } else {
+    } else if (outcome.type === 'vanish') {
+      orbPopping = true;
       widgetWindow.webContents.send('widget:pop', { kind: 'vanish' });
       setTimeout(() => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide(); }, 650);
       setTimeout(respawnOrb, 3650);
+    } else if (outcome.type === 'zoom-enter') {
+      // Fill the whole monitor and hand control to the fullscreen swell.
+      orbPreZoom = currentOrbBounds();
+      orbZoom = 1;
+      const full = screen.getDisplayMatching({ x: Math.round(orbPreZoom.x), y: Math.round(orbPreZoom.y), width: orbPreZoom.size, height: orbPreZoom.size }).bounds;
+      widgetWindow.setBounds(full);
+      widgetWindow.webContents.send('widget:zoom', { zoom: 1, entering: true });
     }
+  });
+
+  // Clicking the giant orb mid-swell backs out to the normal window (an escape
+  // hatch so the fullscreen orb can never trap the desktop).
+  ipcMain.on('widget:zoom-abort', () => {
+    if (orbPopping || orbZoom === null) return;
+    exitZoom();
   });
   ipcMain.on('ui:state', (_event, payload) => {
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:state', payload);

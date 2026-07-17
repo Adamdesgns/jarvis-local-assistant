@@ -9,22 +9,19 @@
 .orb.pop-in{animation:pop-in .5s cubic-bezier(.2,.9,.25,1.35)}
 @keyframes pop-in{from{transform:scale(0);opacity:0}60%{transform:scale(1.12)}to{transform:scale(1);opacity:1}}
 
-/* Explosion sequence. Phase 1 (pop-grow-phase, 1.5s): the orb swells from its
-   old size (--ss, set by widget.js) until the glowing core is all you can see,
-   while the whiteout floods the screen. Phase 2 (pop-boom, ~0.9s): flash,
-   shockwave ring, and debris sparks vaporizing outward. */
+/* Fullscreen swell (phase 2): the user scrolls to zoom the orb (--zoom, set by
+   widget.js) until the white core nearly leaves the screen. The label hides. */
+body.zoom-mode .orb{transform:scale(var(--zoom,1));transform-origin:center center;transition:transform .12s ease-out;cursor:zoom-out}
+body.zoom-mode .orb i{opacity:0}
+
+/* Detonation (pop-boom, ~0.9s): flash, shockwave ring, and vaporizing debris. */
 .fx{position:fixed;inset:0;pointer-events:none;display:none;overflow:hidden}
 body.pop-fx .fx{display:block}
-body.pop-grow-phase .orb{animation:mega-grow 1.5s cubic-bezier(.55,0,.85,.4) forwards}
-@keyframes mega-grow{from{transform:scale(var(--ss,.4))}60%{filter:brightness(1.25)}to{transform:scale(1.7);filter:brightness(2.3)}}
-body.pop-grow-phase .orb i{opacity:0}
-body.pop-boom .orb{opacity:0}
-.whiteout{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,#fff 0 9%,#ffe9b8 24%,rgba(255,190,80,.94) 48%,rgba(30,14,0,.97) 100%)}
-body[data-skin="command-center"] .whiteout{background:radial-gradient(circle at 50% 50%,#fff 0 9%,#d9f8ff 24%,rgba(120,225,255,.94) 48%,rgba(3,18,28,.97) 100%)}
-body.pop-grow-phase .whiteout{animation:whiteout 1.5s ease-in forwards}
-@keyframes whiteout{0%{opacity:0}50%{opacity:.12}85%{opacity:.8}100%{opacity:1}}
-body.pop-boom .whiteout{animation:whitefade .55s ease-out forwards}
-@keyframes whitefade{from{opacity:1}to{opacity:0}}
+body.pop-boom .orb{opacity:0;transition:opacity .08s}
+.whiteout{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,#fff 0 14%,#ffe9b8 34%,rgba(255,190,80,.85) 62%,rgba(255,170,60,0) 100%)}
+body[data-skin="command-center"] .whiteout{background:radial-gradient(circle at 50% 50%,#fff 0 14%,#d9f8ff 34%,rgba(120,225,255,.85) 62%,rgba(120,225,255,0) 100%)}
+body.pop-boom .whiteout{animation:boomflash .6s ease-out forwards}
+@keyframes boomflash{0%{opacity:0;transform:scale(.35)}12%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.5)}}
 .shockwave{position:absolute;left:50%;top:50%;width:30vmin;height:30vmin;margin:-15vmin 0 0 -15vmin;border-radius:50%;opacity:0;border:3px solid rgba(255,225,160,.9);box-shadow:0 0 40px rgba(255,190,80,.8),inset 0 0 30px rgba(255,190,80,.5)}
 body[data-skin="command-center"] .shockwave{border-color:rgba(190,240,255,.9);box-shadow:0 0 40px rgba(120,220,255,.8),inset 0 0 30px rgba(120,220,255,.5)}
 body.pop-boom .shockwave{animation:shock .85s cubic-bezier(.1,.7,.3,1) forwards}
