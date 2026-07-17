@@ -1249,6 +1249,11 @@ function bindEvents() {
   window.jarvis.onWakeStatus(renderVoiceStatus);
   window.jarvis.onOllamaStatus(renderOllamaStatus);
   window.jarvis.onTasksChanged(renderTasks);
+  // Live agent steps: show what the brain is doing, in whichever skin is active.
+  window.jarvis.onAgentStep((step) => {
+    pushTimeline(step.summary);
+    window.JarvisCommandCenter?.setResponse?.(step.summary);
+  });
   $('setting-skin').addEventListener('change', (event) => applySkin(event.target.value));
   $('audition-voice').addEventListener('click', auditionVoice);
   speechSynthesis.addEventListener?.('voiceschanged', () => { if ($('settings-modal').open) populateVoiceSelect(); });

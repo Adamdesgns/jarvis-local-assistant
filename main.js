@@ -57,6 +57,22 @@ function sendEverywhere(channel, payload) {
   }
 }
 
+// A short human phrase for one agent step, shown live as JARVIS works.
+function summarizeAgentStep(step) {
+  const args = step.args || {};
+  switch (step.tool) {
+    case 'search_files': return `Searching files${args.query ? `: “${args.query}”` : ''}…`;
+    case 'read_file': return `Reading ${args.path ? path.basename(String(args.path)) : 'a file'}…`;
+    case 'add_task': return `Adding task${args.title ? `: “${args.title}”` : ''}…`;
+    case 'remember_note': return 'Saving a note…';
+    case 'search_memory': return 'Searching your notes…';
+    case 'list_open_tasks': return 'Checking your tasks…';
+    case 'open_application': return `Opening ${args.name || 'an app'}…`;
+    case 'get_current_datetime': return 'Checking the time…';
+    default: return `Working: ${step.tool}…`;
+  }
+}
+
 app.on('second-instance', () => restoreMainWindow());
 
 function editableContextMenu(window, params) {
@@ -354,7 +370,8 @@ function setupIpc() {
     const project = typeof payload === 'object' && payload ? payload.project : 'general';
     return router.handle(text, project, {
       onChunk: (piece) => sendEverywhere('ai:stream', { piece }),
-      onReset: () => sendEverywhere('ai:stream-reset', {})
+      onReset: () => sendEverywhere('ai:stream-reset', {}),
+      onStep: (step) => sendEverywhere('agent:step', { index: step.index, tool: step.tool, summary: summarizeAgentStep(step) })
     });
   });
   ipcMain.on('ai:cancel', () => ai.cancel());
