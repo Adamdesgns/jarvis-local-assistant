@@ -70,3 +70,27 @@ test('agent loop: an unknown tool comes back as an error the model can see', asy
   const toolMsg = seen.find((m) => m.role === 'tool');
   assert.match(JSON.stringify(toolMsg.content), /Unknown tool/);
 });
+
+const { buildToolRegistry, executeToolCall } = require('../core/tool-registry');
+
+test('read_file: returns document text and refuses paths outside approved roots', async () => {
+  const reads = [];
+  const documents = {
+    readDocument: async (p) => {
+      if (p.includes('secret')) throw new Error('That document is outside your approved folders.');
+      reads.push(p);
+      return { name: 'invoice.pdf', text: 'Total due: $412.50', truncated: false };
+    }
+  };
+  const registry = buildToolRegistry({ tools: {}, tasks: {}, memory: {}, config: {}, documents });
+  const tool = registry.find((t) => t.name === 'read_file');
+  assert.ok(tool, 'read_file tool exists');
+
+  const ok = await executeToolCall(registry, { function: { name: 'read_file', arguments: { path: '/approved/invoice.pdf' } } });
+  assert.equal(ok.ok, true);
+  assert.match(ok.text, /412\.50/);
+
+  const denied = await executeToolCall(registry, { function: { name: 'read_file', arguments: { path: '/secret/passwords.txt' } } });
+  assert.equal(denied.ok, false);
+  assert.match(denied.error, /approved folders/);
+});

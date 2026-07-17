@@ -3,7 +3,7 @@
    absent: those run only through the deterministic router with approval
    cards, never on the model's own initiative. */
 
-function buildToolRegistry({ tools, tasks, memory, config }) {
+function buildToolRegistry({ tools, tasks, memory, config, documents }) {
   const registry = [
     {
       name: 'add_task',
@@ -61,6 +61,24 @@ function buildToolRegistry({ tools, tasks, memory, config }) {
       execute: async (args) => {
         const files = await tools.searchFiles(String(args.query || ''));
         return { ok: true, files: files.slice(0, 8).map((file) => ({ name: file.name, path: file.path })) };
+      }
+    },
+    {
+      name: 'read_file',
+      description: 'Read the text contents of a file inside the approved folders (use a path from search_files). Reads PDF, Word, Excel, CSV, text, and code.',
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string', description: 'Full path to the file, from search_files' } },
+        required: ['path']
+      },
+      execute: async (args) => {
+        if (!documents || typeof documents.readDocument !== 'function') return { ok: false, error: 'Reading files is unavailable.' };
+        try {
+          const doc = await documents.readDocument(String(args.path || ''), 8000);
+          return { ok: true, name: doc.name, text: doc.text, truncated: doc.truncated };
+        } catch (error) {
+          return { ok: false, error: error.message };
+        }
       }
     },
     {

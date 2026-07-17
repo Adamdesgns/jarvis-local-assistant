@@ -706,7 +706,7 @@ app.whenReady().then(async () => {
   tasks = new TaskStore(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });
   documents = new DocumentService({ config, shell, emit: sendEverywhere });
-  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config }));
+  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents }));
   ollama = new OllamaService({ config, emit: sendEverywhere });
   go2rtc = new Go2RtcManager({
     binaryPath: app.isPackaged
