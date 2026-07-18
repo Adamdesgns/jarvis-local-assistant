@@ -80,3 +80,35 @@ test('voice endpoint transcribes then chats, and /api/last replays the reply', a
   await server.handleRequest(jsonReq('GET', '/api/last', null, { authorization: `Bearer ${key}` }), last);
   assert.equal(JSON.parse(last.body).reply, 'heard: add a task');
 });
+
+test('stop() severs live SSE connections', async () => {
+  const auth = new MobileAuth({ now: () => 0 });
+  const { code } = auth.startPairing();
+  const server = new MobileServer({
+    auth,
+    router: { handle: async () => ({ response: 'Aye.' }) },
+    transcribe: async () => 'unused', config: { getSettings: () => ({}) }, staticDir: __dirname
+  });
+  const pair = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/pair', { code, name: 'iPhone' }), pair);
+  const { key } = JSON.parse(pair.body);
+
+  const streamRes = fakeRes();
+  streamRes.ended = false;
+  const origEnd = streamRes.end.bind(streamRes);
+  streamRes.end = (b) => { streamRes.ended = true; origEnd(b); };
+  const streamReq = jsonReq('GET', '/api/events', null, { authorization: `Bearer ${key}` });
+  streamReq.on = (event, fn) => {};
+  await server.handleRequest(streamReq, streamRes);
+
+  assert.equal(streamRes.ended, false);
+
+  server.stop();
+
+  assert.equal(streamRes.ended, true);
+
+  const bodyBeforePush = streamRes.body;
+  const device = auth.verify(`Bearer ${key}`, '100.1.1.1');
+  server.pushEvent(device.id, 'reply', { reply: 'should not arrive' });
+  assert.equal(streamRes.body, bodyBeforePush);
+});

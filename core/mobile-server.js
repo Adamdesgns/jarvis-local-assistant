@@ -103,7 +103,8 @@ class MobileServer {
   #static(url, res) {
     const safe = path.normalize(url).replace(/^([.][.][/\\])+/, '');
     const file = path.join(this.staticDir, safe);
-    if (!file.startsWith(this.staticDir) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    const rel = path.relative(this.staticDir, file);
+    if (rel.startsWith('..') || path.isAbsolute(rel) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
       res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found');
     }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
@@ -125,7 +126,14 @@ class MobileServer {
     });
   }
 
-  stop() { try { this.server?.close(); } catch {} this.server = null; this.address = null; }
+  stop() {
+    for (const set of this.streams.values()) {
+      for (const res of set) { try { res.end(); } catch {} }
+    }
+    this.streams.clear();
+    try { this.server?.close(); } catch {}
+    this.server = null; this.address = null;
+  }
   status() { return { running: !!this.server, address: this.address, port: this.port, reason: this.reason }; }
 }
 
