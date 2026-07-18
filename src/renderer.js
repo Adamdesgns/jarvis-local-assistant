@@ -842,6 +842,21 @@ function renderSearchRoots() {
   }
 }
 
+async function refreshMobileSection() {
+  const status = await window.jarvis.mobile.status();
+  const note = $('mobile-status');
+  note.textContent = status.running ? `Serving at http://${status.address}:${status.port}/` : (status.reason || 'Off.');
+  const devices = await window.jarvis.mobile.devices();
+  const list = $('mobile-devices'); list.replaceChildren();
+  for (const device of devices) {
+    const row = document.createElement('div'); row.className = 'search-root';
+    const label = document.createElement('span'); label.textContent = `${device.name} — paired ${new Date(device.createdAt).toLocaleDateString()}`;
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'REVOKE';
+    remove.addEventListener('click', async () => { await window.jarvis.mobile.revoke(device.id); refreshMobileSection(); });
+    row.append(label, remove); list.append(row);
+  }
+}
+
 function updateFolderLabels() {
   for (const name of ['anvil', 'the bench', 'adamscraft']) {
     $(`folder-${name.replace(/\s/g, '-')}`).textContent = state.settings.projects?.[name] || 'Not assigned';
@@ -879,7 +894,9 @@ function openSettings() {
   $('setting-autonomy-night').checked = autonomyRules.nightMotionOnly === true;
   $('setting-autonomy-night-start').value = String(state.settings.autonomyNightStart ?? 21);
   $('setting-autonomy-night-end').value = String(state.settings.autonomyNightEnd ?? 7);
-  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured);
+  $('setting-mobile').checked = Boolean(state.settings.mobileEnabled);
+  $('setting-mobile-port').value = state.settings.mobilePort || 27183;
+  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection();
   if (!state.updateUrl) applyUpdateInfo({ current: state.version });
   $('settings-modal').showModal();
 }
@@ -912,6 +929,8 @@ async function saveSettings(event) {
     },
     autonomyNightStart: Number($('setting-autonomy-night-start').value),
     autonomyNightEnd: Number($('setting-autonomy-night-end').value),
+    mobileEnabled: $('setting-mobile').checked,
+    mobilePort: Number($('setting-mobile-port').value) || 27183,
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots
   };
@@ -1212,6 +1231,17 @@ function bindEvents() {
   });
   $('approval-deny').addEventListener('click', () => resolveApproval(false));
   $('approval-accept').addEventListener('click', () => resolveApproval(true));
+
+  $('mobile-pair-btn').addEventListener('click', async () => {
+    const out = await window.jarvis.mobile.pair();
+    const panel = $('mobile-pair-panel');
+    if (!out.ok) { $('mobile-status').textContent = out.reason; return; }
+    panel.hidden = false;
+    $('mobile-qr').src = out.qr;
+    $('mobile-url').textContent = out.url;
+    $('mobile-code').textContent = out.code;
+  });
+  window.jarvis.mobile.onStatus(() => refreshMobileSection());
 
   window.jarvis.onWakeDetected(() => {
     if (diagnostics.wakeTimer) return finishWakeTest(true);

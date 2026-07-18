@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { classifyCommand } = require('../core/security');
-const { mergeSettings } = require('../core/config-store');
+const { mergeSettings, ConfigStore } = require('../core/config-store');
 const { DEFAULT_SETTINGS } = require('../core/defaults');
 const { CommandRouter, cleanTarget, parseDueDate, extractFileQuery } = require('../core/router');
 const { ToolService } = require('../core/tool-service');
@@ -582,6 +582,22 @@ test('settings merge preserves nested defaults', () => {
   assert.equal(mergeSettings(DEFAULT_SETTINGS, { ollamaUrl: 'http://bad-old-address:9999' }).ollamaUrl, 'http://127.0.0.1:11434');
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobileEnabled, false);
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobilePort, 27183);
+});
+
+test('config store persists mobile settings through updateSettings', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-config-'));
+  try {
+    const store = new ConfigStore(dir);
+    const updated = store.updateSettings({ mobileEnabled: true, mobilePort: 27200 });
+    assert.equal(updated.mobileEnabled, true);
+    assert.equal(updated.mobilePort, 27200);
+    // Reload from disk to confirm the whitelist didn't silently drop the write.
+    const reloaded = new ConfigStore(dir);
+    assert.equal(reloaded.getSettings().mobileEnabled, true);
+    assert.equal(reloaded.getSettings().mobilePort, 27200);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('local AI adopts an installed Ollama model when the configured model is absent', async () => {

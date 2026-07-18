@@ -337,6 +337,18 @@
             <small>Everything here is off until you turn it on. Autonomy only announces — it never sends, spends, deletes, or runs anything without asking.</small>
           </section>
           <section>
+            <h3>MOBILE</h3>
+            <label class="toggle-row"><span><b>PHONE ACCESS</b><small>Serve JARVIS to your paired phones over Tailscale. Off: no server runs.</small></span><input id="setting-mobile" type="checkbox"><i></i></label>
+            <small id="mobile-status"></small>
+            <label>MOBILE PORT<input id="setting-mobile-port" type="number" min="1024" max="65535"></label>
+            <button type="button" id="mobile-pair-btn" class="primary-action">PAIR A PHONE</button>
+            <div id="mobile-pair-panel" hidden>
+              <img id="mobile-qr" alt="Pairing QR">
+              <p>Scan with the iPhone camera, or browse to <code id="mobile-url"></code> and enter code <b id="mobile-code"></b>. Expires in 2 minutes.</p>
+            </div>
+            <div id="mobile-devices" class="search-root-list"></div>
+          </section>
+          <section>
             <h3>PROJECT WORKSPACES</h3>
             <div class="folder-setting"><span><b>ANVIL</b><small id="folder-anvil">Not assigned</small></span><button type="button" data-folder="anvil">CHOOSE</button></div>
             <div class="folder-setting"><span><b>THE BENCH</b><small id="folder-the-bench">Not assigned</small></span><button type="button" data-folder="the bench">CHOOSE</button></div>
