@@ -1,0 +1,24 @@
+:root { --amber: #ffb350; --amber-dim: #b97d2e; --bg: #0a0602; --panel: rgba(255, 179, 80, .07); }
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--amber); font-family: "Segoe UI", system-ui, sans-serif; height: 100dvh; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; letter-spacing: .35em; border-bottom: 1px solid var(--amber-dim); }
+#conn-dot { width: 10px; height: 10px; border-radius: 50%; background: #555; }
+body.online #conn-dot { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+section { flex: 1; display: flex; flex-direction: column; padding: 16px; overflow-y: auto; }
+section[hidden] { display: none; }
+#thread { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; line-height: 1.45; white-space: pre-wrap; }
+.msg.you { align-self: flex-end; background: var(--amber); color: #1a0f00; }
+.msg.jarvis { align-self: flex-start; background: var(--panel); border: 1px solid var(--amber-dim); }
+#agent-status { font-size: .8rem; color: var(--amber-dim); padding: 6px 2px; font-style: italic; }
+footer { display: flex; gap: 8px; padding: 10px 0 4px; align-items: flex-end; }
+#composer { flex: 1; background: var(--panel); border: 1px solid var(--amber-dim); border-radius: 10px; color: var(--amber); padding: 10px; font-size: 1rem; resize: none; }
+button { background: none; border: 1px solid var(--amber); border-radius: 10px; color: var(--amber); font-size: 1.2rem; padding: 10px 14px; }
+#mic-btn { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+#mic-btn.recording { background: var(--amber); color: #1a0f00; box-shadow: 0 0 18px var(--amber); }
+.error { color: #ff7a6b; }
+input#pair-code { font-size: 2rem; letter-spacing: .5em; text-align: center; background: var(--panel); border: 1px solid var(--amber-dim); color: var(--amber); border-radius: 10px; padding: 12px; margin: 16px 0; }
+#screen-pairing { align-items: stretch; justify-content: center; text-align: center; }
+#screen-offline { align-items: center; justify-content: center; text-align: center; gap: 16px; }
+#screen-chat { padding-bottom: 8px; }
+textarea#composer { max-height: 120px; }

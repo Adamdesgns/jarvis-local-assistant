@@ -53,29 +53,34 @@ class MobileServer {
     try {
       const ip = req.socket?.remoteAddress || '';
       const url = String(req.url || '/');
-      if (url === '/api/pair' && req.method === 'POST') {
+      const pathname = url.split('?')[0];
+      if (pathname === '/api/pair' && req.method === 'POST') {
         const body = JSON.parse((await readBody(req)).toString() || '{}');
         const claimed = this.auth.claimPairing(body.code, body.name);
         if (!claimed) return this.json(res, 403, { error: 'Pairing code is wrong or expired. Start pairing again in Settings.' });
         this.onDevicesChanged();
         return this.json(res, 200, { key: claimed.key, name: claimed.device.name });
       }
-      if (url.startsWith('/api/')) {
-        const device = this.auth.verify(req.headers.authorization, ip);
+      if (pathname.startsWith('/api/')) {
+        // EventSource can't set headers, so /api/events alone also accepts ?key=.
+        const authHeader = pathname === '/api/events'
+          ? (req.headers.authorization || (url.includes('key=') ? `Bearer ${decodeURIComponent(url.split('key=')[1])}` : undefined))
+          : req.headers.authorization;
+        const device = this.auth.verify(authHeader, ip);
         if (!device) return this.json(res, 401, { error: 'Not paired.' });
-        if (url === '/api/chat' && req.method === 'POST') {
+        if (pathname === '/api/chat' && req.method === 'POST') {
           const body = JSON.parse((await readBody(req)).toString() || '{}');
           return this.#chat(res, device, String(body.text || ''));
         }
-        if (url === '/api/voice' && req.method === 'POST') {
+        if (pathname === '/api/voice' && req.method === 'POST') {
           const audio = await readBody(req);
           const out = await this.transcribe(audio, req.headers['content-type'] || 'audio/mp4');
           const transcript = (typeof out === 'string' ? out : out?.text || '').trim();
           if (!transcript) return this.json(res, 422, { error: "I couldn't make that out — try again closer to the mic." });
           return this.#chat(res, device, transcript, transcript);
         }
-        if (url === '/api/last') return this.json(res, 200, this.lastReply.get(device.id) || { reply: null });
-        if (url === '/api/events') {
+        if (pathname === '/api/last') return this.json(res, 200, this.lastReply.get(device.id) || { reply: null });
+        if (pathname === '/api/events') {
           res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
           const set = this.streams.get(device.id) || new Set();
           set.add(res); this.streams.set(device.id, set);
@@ -84,7 +89,7 @@ class MobileServer {
         }
         return this.json(res, 404, { error: 'Unknown endpoint.' });
       }
-      return this.#static(url === '/' ? '/index.html' : url, res);
+      return this.#static(pathname === '/' ? '/index.html' : pathname, res);
     } catch (error) {
       return this.json(res, 500, { error: error.message });
     }

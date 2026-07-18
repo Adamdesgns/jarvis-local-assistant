@@ -112,3 +112,30 @@ test('stop() severs live SSE connections', async () => {
   server.pushEvent(device.id, 'reply', { reply: 'should not arrive' });
   assert.equal(streamRes.body, bodyBeforePush);
 });
+
+test('/api/events accepts ?key= since EventSource cannot send headers; every other route still requires the header', async () => {
+  const auth = new MobileAuth({ now: () => 0 });
+  const { code } = auth.startPairing();
+  const server = new MobileServer({
+    auth,
+    router: { handle: async () => ({ response: 'Aye.' }) },
+    transcribe: async () => 'unused', config: { getSettings: () => ({}) }, staticDir: __dirname
+  });
+  const pair = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/pair', { code, name: 'iPhone' }), pair);
+  const { key } = JSON.parse(pair.body);
+
+  const streamRes = fakeRes();
+  const streamReq = jsonReq('GET', `/api/events?key=${encodeURIComponent(key)}`, null, {});
+  await server.handleRequest(streamReq, streamRes);
+  assert.equal(streamRes.code, 200);
+  assert.match(streamRes.headers['Content-Type'], /event-stream/);
+
+  const deniedChat = fakeRes();
+  await server.handleRequest(jsonReq('POST', `/api/chat?key=${encodeURIComponent(key)}`, { text: 'hi' }, {}), deniedChat);
+  assert.equal(deniedChat.code, 401);
+
+  const deniedLast = fakeRes();
+  await server.handleRequest(jsonReq('GET', `/api/last?key=${encodeURIComponent(key)}`, null, {}), deniedLast);
+  assert.equal(deniedLast.code, 401);
+});
