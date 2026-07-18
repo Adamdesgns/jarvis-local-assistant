@@ -1,5 +1,14 @@
 # JARVIS Changelog
 
+## 0.12.0 — July 18, 2026
+
+### Added — JARVIS Mobile: phone chat + voice over Tailscale
+- Send and receive chat messages from your iPhone while away from home.
+- Press-and-hold for voice messages; replies stream as audio and text.
+- Pair by scanning a QR code from Settings, revoke anytime from the device list.
+- Runs over Tailscale (zero-config VPN); never exposed to the internet.
+- Off by default. Turn on in Settings → MOBILE → PHONE ACCESS.
+
 ## Unreleased (agentic-brain branch)
 
 ### Added — Agentic brain (multi-step tools on every model)
