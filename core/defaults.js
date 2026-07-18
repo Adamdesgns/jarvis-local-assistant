@@ -22,6 +22,8 @@ const DEFAULT_SETTINGS = {
   localVoiceModel: 'small.en',
   wakeWordEnabled: true,
   wakeSensitivity: 0.58,
+  mobileEnabled: false,
+  mobilePort: 27183,
   startWithWindows: false,
   minimizeToOrb: true,
   orbAlwaysOnTop: true,

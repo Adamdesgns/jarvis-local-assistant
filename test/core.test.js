@@ -580,6 +580,8 @@ test('settings merge preserves nested defaults', () => {
   assert.ok(merged.applications.chrome);
   assert.ok(merged.moduleLayout['file-explorer']);
   assert.equal(mergeSettings(DEFAULT_SETTINGS, { ollamaUrl: 'http://bad-old-address:9999' }).ollamaUrl, 'http://127.0.0.1:11434');
+  assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobileEnabled, false);
+  assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobilePort, 27183);
 });
 
 test('local AI adopts an installed Ollama model when the configured model is absent', async () => {
