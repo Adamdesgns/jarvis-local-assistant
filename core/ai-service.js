@@ -501,19 +501,29 @@ class AIService {
       if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId || `call_${m.name}`, content: m.content };
       return { role: m.role, content: m.content };
     });
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000);
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: settings.openaiModel || 'gpt-5-mini', messages: wire, ...(specs && specs.length ? { tools: specs, tool_choice: 'auto' } : {}), max_tokens: 900 }),
-        signal: controller.signal
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
-      return normalizeOpenAI(payload.choices?.[0]?.message || {});
-    } finally { clearTimeout(timeout); }
+    // GPT-5 / o-series models reject the legacy `max_tokens` on chat/completions
+    // and require `max_completion_tokens`; some older or OpenAI-compatible
+    // endpoints only accept the legacy field. Send the modern one, then swap
+    // once if the API objects to the token parameter.
+    const send = async (tokenField) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000);
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model: settings.openaiModel || 'gpt-5-mini', messages: wire, ...(specs && specs.length ? { tools: specs, tool_choice: 'auto' } : {}), [tokenField]: 900 }),
+          signal: controller.signal
+        });
+        return { response, payload: await response.json() };
+      } finally { clearTimeout(timeout); }
+    };
+    let { response, payload } = await send('max_completion_tokens');
+    if (!response.ok && /max_completion_tokens|max_tokens/i.test(payload?.error?.message || '')) {
+      ({ response, payload } = await send('max_tokens'));
+    }
+    if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
+    return normalizeOpenAI(payload.choices?.[0]?.message || {});
   }
 
   async #anthropicAgent(text, context) {
