@@ -63,9 +63,12 @@ class MobileServer {
       }
       if (pathname.startsWith('/api/')) {
         // EventSource can't set headers, so /api/events alone also accepts ?key=.
-        const authHeader = pathname === '/api/events'
-          ? (req.headers.authorization || (url.includes('key=') ? `Bearer ${decodeURIComponent(url.split('key=')[1])}` : undefined))
-          : req.headers.authorization;
+        let authHeader = req.headers.authorization;
+        if (pathname === '/api/events' && !authHeader) {
+          const query = new URLSearchParams(url.split('?')[1] || '');
+          const queryKey = query.get('key');
+          if (queryKey) authHeader = `Bearer ${queryKey}`;
+        }
         const device = this.auth.verify(authHeader, ip);
         if (!device) return this.json(res, 401, { error: 'Not paired.' });
         if (pathname === '/api/chat' && req.method === 'POST') {

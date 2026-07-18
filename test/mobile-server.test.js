@@ -138,4 +138,16 @@ test('/api/events accepts ?key= since EventSource cannot send headers; every oth
   const deniedLast = fakeRes();
   await server.handleRequest(jsonReq('GET', `/api/last?key=${encodeURIComponent(key)}`, null, {}), deniedLast);
   assert.equal(deniedLast.code, 401);
+
+  // Extra param after key should still work
+  const streamWithExtra = fakeRes();
+  const streamReqExtra = jsonReq('GET', `/api/events?key=${encodeURIComponent(key)}&v=2`, null, {});
+  await server.handleRequest(streamReqExtra, streamWithExtra);
+  assert.equal(streamWithExtra.code, 200);
+  assert.match(streamWithExtra.headers['Content-Type'], /event-stream/);
+
+  // ?somekey= should NOT match and should 401
+  const deniedSomekey = fakeRes();
+  await server.handleRequest(jsonReq('GET', `/api/events?somekey=${encodeURIComponent(key)}`, null, {}), deniedSomekey);
+  assert.equal(deniedSomekey.code, 401);
 });
