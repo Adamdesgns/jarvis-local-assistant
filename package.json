@@ -13,6 +13,7 @@
     "mammoth": "^1.11.0",
     "onvif": "^0.8.1",
     "pdf-parse": "^1.1.1",
+    "qrcode": "^1.5.4",
     "ring-client-api": "^14.3.0"
   },
   "scripts": {

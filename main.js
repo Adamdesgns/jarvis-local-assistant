@@ -24,6 +24,9 @@ const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
+const { MobileServer } = require('./core/mobile-server');
+const { MobileAuth } = require('./core/mobile-auth');
+const QRCode = require('qrcode');
 
 let mainWindow;
 let widgetWindow;
@@ -43,6 +46,8 @@ let router;
 let go2rtc;
 let cameras;
 let autonomy;
+let mobileAuth;
+let mobileServer;
 let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
@@ -351,6 +356,18 @@ function applyLoginSetting(enabled) {
   app.setLoginItemSettings(options);
 }
 
+function loadMobileDevices() {
+  try { return JSON.parse(config.getSecret('mobileDevices') || '[]'); } catch { return []; }
+}
+function saveMobileDevices() { config.setSecret('mobileDevices', JSON.stringify(mobileAuth.toJSON())); }
+
+async function syncMobileServer() {
+  const settings = config.getSettings();
+  mobileServer.stop();
+  if (settings.mobileEnabled) await mobileServer.start();
+  sendEverywhere('mobile:status', mobileServer.status());
+}
+
 function setupIpc() {
   ipcMain.handle('bootstrap', async () => ({
     settings: config.publicSettings(),
@@ -387,6 +404,17 @@ function setupIpc() {
   });
   ipcMain.handle('voice:setup', () => runLocalVoiceSetup());
   ipcMain.handle('voice:restart', () => { localVoice.stop(); setTimeout(() => localVoice.start(), 1700); return { ok: true }; });
+  ipcMain.handle('mobile:status', () => mobileServer.status());
+  ipcMain.handle('mobile:devices', () => mobileAuth.listDevices());
+  ipcMain.handle('mobile:revoke', (_event, id) => { const ok = mobileAuth.revoke(id); if (ok) saveMobileDevices(); return { ok }; });
+  ipcMain.handle('mobile:pair', async () => {
+    const status = mobileServer.status();
+    if (!status.running) return { ok: false, reason: status.reason || 'Turn the mobile toggle on first.' };
+    const { code, expiresAt } = mobileAuth.startPairing();
+    const url = `http://${status.address}:${status.port}/`;
+    const qr = await QRCode.toDataURL(url, { margin: 1, width: 240 });
+    return { ok: true, code, url, qr, expiresAt };
+  });
   ipcMain.handle('ollama:connect', () => ollama.connect());
   ipcMain.handle('ollama:status', () => ollama.serverStatus());
   ipcMain.handle('openai:save-key', async (_event, key) => {
@@ -456,6 +484,7 @@ function setupIpc() {
     if (JSON.stringify(previous.watchedFolders || []) !== JSON.stringify(updated.watchedFolders || [])) {
       folderWatch.start();
     }
+    if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
     return updated;
   });
   ipcMain.handle('update:check', () => checkForUpdate(app.getVersion(), updateRepo));
@@ -766,6 +795,14 @@ app.whenReady().then(async () => {
     config,
     emit: sendEverywhere
   });
+  mobileAuth = new MobileAuth({ devices: loadMobileDevices() });
+  mobileServer = new MobileServer({
+    config, router, auth: mobileAuth,
+    transcribe: (buffer, mimeType) => localVoice.transcribe(buffer, mimeType),
+    staticDir: path.join(__dirname, 'src', 'mobile'),
+    onDevicesChanged: saveMobileDevices
+  });
+  if (config.getSettings().mobileEnabled) syncMobileServer();
   try {
     const gpu = await app.getGPUInfo('basic');
     const device = gpu?.gpuDevice?.find((item) => item.active) || gpu?.gpuDevice?.[0];
@@ -794,6 +831,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   isQuitting = true;
   localVoice?.stop();
+  mobileServer?.stop();
   cameras?.shutdown();
 });
 app.on('window-all-closed', () => { if (isQuitting) app.quit(); });

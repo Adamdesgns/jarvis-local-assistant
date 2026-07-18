@@ -60,6 +60,13 @@ contextBridge.exposeInMainWorld('jarvis', {
   onCamerasChanged: (callback) => on('cameras:changed', callback),
   onCamerasStatus: (callback) => on('cameras:status', callback),
   onAutonomyEvent: (callback) => on('autonomy:event', callback),
+  mobile: {
+    status: () => ipcRenderer.invoke('mobile:status'),
+    pair: () => ipcRenderer.invoke('mobile:pair'),
+    devices: () => ipcRenderer.invoke('mobile:devices'),
+    revoke: (id) => ipcRenderer.invoke('mobile:revoke', id),
+    onStatus: (callback) => on('mobile:status', callback)
+  },
   files: {
     roots: () => ipcRenderer.invoke('files:roots'),
     home: () => ipcRenderer.invoke('files:home'),
