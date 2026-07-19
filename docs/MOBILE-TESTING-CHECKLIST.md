@@ -93,10 +93,12 @@ scan it with the iPhone camera.
      something like "Open in JARVIS" or showing a link. Tap it.
    - If nothing happens: make sure the QR code is well-lit and in focus. Try
      from different angles.
-4. Safari opens with a URL that includes `?code=` and a six-digit number. You
-   should see a **PAIR** button on screen.
-   - If the QR has a six-digit code printed inside it, you can also type that
-     code into the text box instead of scanning. Either way works.
+4. Safari opens on JARVIS's pairing screen with the six-digit code already
+   filled in — the QR carries the code, so you should not need to type
+   anything.
+   - Fallback: if scanning does not work, type the URL shown next to the QR
+     code (in JARVIS Settings) into Safari by hand, then type the six-digit
+     code from the same Settings panel into the text box.
 5. Tap **PAIR**.
    - Expected: the page now says something like "Device paired" or "You are
      connected to JARVIS," and you should see a **TAP TO OPEN JARVIS** link
@@ -170,8 +172,8 @@ you retry when it is back.
 2. If you are in the middle of a voice message, release and send it. If you are
    typing, hit Send.
    - Expected: instead of a reply, you see a message on your iPhone saying
-     **"JARVIS is unreachable"** or **"Network error — JARVIS offline"**. There
-     should be a **RETRY** button.
+     **"JARVIS is unreachable — is the PC awake?"** There should be a
+     **RETRY** button.
 3. Turn your PC's Wi-Fi back on.
    - On Windows, click the network icon → find your Wi-Fi → click **Connect** →
      enter the password if needed.
@@ -194,9 +196,9 @@ is the security feature that keeps unwanted devices out.
 3. Click the **REVOKE** button next to it.
    - Expected: the device disappears from the list. Your iPhone immediately
      loses connection to JARVIS.
-4. On your **iPhone**, look at JARVIS. You should see a message saying something
-   like **"This pairing has been revoked"** or **"Please pair again"**, and a
-   pairing screen with a code or QR box should appear.
+4. On your **iPhone**, look at JARVIS. There is no special "revoked" message —
+   it simply returns to the pairing screen: **"Scan the QR code on the desktop
+   (Settings → MOBILE → Pair a phone), or enter the 6-digit code."**
 5. Follow **Section 4** again (scan the new QR code or type the new code) to
    re-pair.
    - Expected: everything works as before. Revoking and re-pairing is the normal

@@ -412,7 +412,8 @@ function setupIpc() {
     if (!status.running) return { ok: false, reason: status.reason || 'Turn the mobile toggle on first.' };
     const { code, expiresAt } = mobileAuth.startPairing();
     const url = `http://${status.address}:${status.port}/`;
-    const qr = await QRCode.toDataURL(url, { margin: 1, width: 240 });
+    const qrUrl = `${url}#${code}`;
+    const qr = await QRCode.toDataURL(qrUrl, { margin: 1, width: 240 });
     return { ok: true, code, url, qr, expiresAt };
   });
   ipcMain.handle('ollama:connect', () => ollama.connect());
