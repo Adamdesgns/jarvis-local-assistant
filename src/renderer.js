@@ -880,7 +880,9 @@ function formatScheduleWhen(when) {
 function formatScheduleLastResult(item) {
   if (!item.lastResult) return item.enabled ? 'Not run yet.' : 'Disabled.';
   const clock = formatScheduleClock(new Date(item.lastResult.at));
-  return `${item.lastResult.ok ? 'ran' : 'failed'} ${clock} — ${item.lastResult.text}`;
+  const text = String(item.lastResult.text || '');
+  const truncated = text.length > 120 ? `${text.slice(0, 120)}…` : text;
+  return `${item.lastResult.ok ? 'ran' : 'failed'} ${clock} — ${truncated}`;
 }
 
 function updateScheduleFormVisibility() {
@@ -961,7 +963,7 @@ function renderScheduleList() {
     toggleButton.type = 'button'; toggleButton.className = 'outline-action';
     toggleButton.textContent = item.enabled ? 'DISABLE' : 'ENABLE';
     toggleButton.addEventListener('click', async () => {
-      const result = await window.jarvis.schedule.update(item.id, { when: item.when, action: item.action, enabled: !item.enabled });
+      const result = await window.jarvis.schedule.update(item.id, { enabled: !item.enabled });
       if (!result.ok) { showToast(result.error); return; }
       await refreshScheduleList();
     });
@@ -969,7 +971,8 @@ function renderScheduleList() {
     const removeButton = document.createElement('button');
     removeButton.type = 'button'; removeButton.className = 'task-delete'; removeButton.textContent = '×';
     removeButton.addEventListener('click', async () => {
-      await window.jarvis.schedule.remove(item.id);
+      const result = await window.jarvis.schedule.remove(item.id);
+      if (result && result.ok === false) { showToast(result.error || 'Could not delete that schedule.'); return; }
       await refreshScheduleList();
     });
 

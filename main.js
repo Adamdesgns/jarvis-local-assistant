@@ -442,10 +442,14 @@ function setupIpc() {
     }
   });
   ipcMain.handle('schedule:remove', (_event, id) => {
-    const removed = scheduleStore.remove(id);
-    scheduleService.arm();
-    sendEverywhere('schedule:changed', scheduleStore.list());
-    return { ok: removed };
+    try {
+      const removed = scheduleStore.remove(id);
+      scheduleService.arm();
+      sendEverywhere('schedule:changed', scheduleStore.list());
+      return { ok: removed };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   });
   ipcMain.handle('schedule:runNow', async (_event, id) => {
     const result = await scheduleService.runNow(id);

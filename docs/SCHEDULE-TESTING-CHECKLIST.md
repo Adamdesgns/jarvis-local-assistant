@@ -174,19 +174,21 @@ This tests the quiet hours feature: tasks scheduled to run between 9 PM and 7 AM
 (customizable in Settings) do not speak out loud, but they still show on screen and
 log to the Activity feed.
 
-1. In Settings → SCHEDULE, look for a **QUIET HOURS** or **NIGHT WINDOW** setting.
-   Change it to a test window close to the current time. For example, if it is 3 PM,
-   set quiet hours to start at **3:05 PM** and end at **3:10 PM**. (You want a 5-minute
-   window that includes the next few minutes.)
+1. In Settings → AUTONOMY, find the **NIGHT STARTS** and **NIGHT ENDS** dropdowns.
+   They only offer whole hours (no minutes), so pick the whole hour that contains
+   right now. For example, if it is 3:12 PM, set NIGHT STARTS to **3 PM** and NIGHT
+   ENDS to **4 PM** — that puts the rest of this hour inside the quiet window.
    - Expected: the setting saves.
-2. Create a SPEAK item with the message **"Night test: no audio, but visible."**
-3. Set its time to fire **1 minute from now** (so it fires inside your test quiet hours).
+2. In Settings → SCHEDULE, create a SPEAK item with the message **"Night test: no
+   audio, but visible."**
+3. Set its time to fire **a couple of minutes from now** — just make sure that time
+   still falls inside the hour you set as quiet in step 1.
 4. Click **SAVE**.
-5. Wait 1 minute.
+5. Wait until the scheduled time passes.
    - Expected:
      - JARVIS **does not speak** the message aloud. No sound plays.
-     - A card or notification **appears on screen** showing the message (you see it
-       but do not hear it).
+     - A **card appears on screen** showing the message (you see it but do not
+       hear it) — quiet hours only suppress the speech, the card still shows.
      - The Activity log **shows the task fired** with a timestamp (it is logged even
        though it was silent).
 
