@@ -27,7 +27,8 @@ const state = {
   searchResults: [],
   searchTemporary: false,
   searchActive: false,
-  saveTimer: null
+  saveTimer: null,
+  schedules: []
 };
 
 function showToast(message, duration = 3200) {
@@ -857,6 +858,154 @@ async function refreshMobileSection() {
   }
 }
 
+const SCHEDULE_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const SCHEDULE_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const SCHEDULE_REPEATS = ['once', 'daily', 'weekdays', 'weekly'];
+
+function formatScheduleClock(date) {
+  return new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', hour12: true }).format(date);
+}
+
+function formatScheduleWhen(when) {
+  const [hourStr, minStr] = String(when?.time || '0:0').split(':');
+  const clockDate = new Date();
+  clockDate.setHours(Number(hourStr) || 0, Number(minStr) || 0, 0, 0);
+  const clock = formatScheduleClock(clockDate);
+  if (when?.repeat === 'weekly') return `${clock}, ${SCHEDULE_WEEKDAYS[when.weekday] || 'weekly'}`;
+  if (when?.repeat === 'weekdays') return `${clock}, weekdays`;
+  if (when?.repeat === 'daily') return `${clock}, daily`;
+  return `${clock}, once`;
+}
+
+function formatScheduleLastResult(item) {
+  if (!item.lastResult) return item.enabled ? 'Not run yet.' : 'Disabled.';
+  const clock = formatScheduleClock(new Date(item.lastResult.at));
+  return `${item.lastResult.ok ? 'ran' : 'failed'} ${clock} — ${item.lastResult.text}`;
+}
+
+function updateScheduleFormVisibility() {
+  const repeat = $('schedule-repeat').value;
+  const weekdayRow = $('schedule-weekday-row');
+  const becomingWeekly = repeat === 'weekly' && weekdayRow.hidden;
+  weekdayRow.hidden = repeat !== 'weekly';
+  if (becomingWeekly) $('schedule-weekday').value = String(new Date().getDay());
+  const kind = $('schedule-action').value;
+  $('schedule-text-row').hidden = kind === 'briefing';
+  $('schedule-text-label').textContent = kind === 'ask' ? 'ASK JARVIS THIS' : 'SAY THIS';
+}
+
+function scheduleFormWhen() {
+  const repeat = $('schedule-repeat').value;
+  return {
+    time: $('schedule-time').value,
+    repeat,
+    weekday: repeat === 'weekly' ? Number($('schedule-weekday').value) : null
+  };
+}
+
+function scheduleFormAction() {
+  const kind = $('schedule-action').value;
+  if (kind === 'speak') return { kind, text: $('schedule-text').value.trim() };
+  if (kind === 'ask') return { kind, prompt: $('schedule-text').value.trim() };
+  return { kind: 'briefing' };
+}
+
+function validateScheduleWhen(when) {
+  if (!SCHEDULE_TIME_RE.test(when.time || '')) return 'Pick a valid time.';
+  if (!SCHEDULE_REPEATS.includes(when.repeat)) return 'Pick a repeat option.';
+  if (when.repeat === 'weekly' && !(Number.isInteger(when.weekday) && when.weekday >= 0 && when.weekday <= 6)) {
+    return 'A weekly schedule needs a weekday.';
+  }
+  return '';
+}
+
+function validateScheduleAction(action) {
+  if (action.kind === 'speak' && !action.text) return 'Type what JARVIS should say.';
+  if (action.kind === 'ask' && !action.prompt) return 'Type what to ask JARVIS.';
+  if (!['speak', 'ask', 'briefing'].includes(action.kind)) return 'Pick a valid action.';
+  return '';
+}
+
+function renderScheduleList() {
+  const list = $('schedule-list');
+  list.replaceChildren();
+  if (!state.schedules.length) {
+    list.innerHTML = '<li class="empty-state">NO SCHEDULED TASKS YET.</li>';
+    return;
+  }
+  for (const item of state.schedules) {
+    const row = document.createElement('li');
+    row.className = 'search-root';
+    row.style.cssText = 'height:auto;min-height:40px;padding:7px 0;gap:8px;grid-template-columns:1fr auto';
+
+    const copy = document.createElement('div');
+    const title = document.createElement('div');
+    title.textContent = `${item.name} — ${formatScheduleWhen(item.when)}`;
+    const detail = document.createElement('div');
+    detail.textContent = formatScheduleLastResult(item);
+    detail.style.cssText = 'opacity:.7;margin-top:3px';
+    copy.append(title, detail);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:4px;align-items:center';
+
+    const runButton = document.createElement('button');
+    runButton.type = 'button'; runButton.className = 'outline-action'; runButton.textContent = 'RUN NOW';
+    runButton.addEventListener('click', async () => {
+      const result = await window.jarvis.schedule.runNow(item.id);
+      if (result && result.ok === false) showToast(result.text || 'That schedule did not run.');
+      await refreshScheduleList();
+    });
+
+    const toggleButton = document.createElement('button');
+    toggleButton.type = 'button'; toggleButton.className = 'outline-action';
+    toggleButton.textContent = item.enabled ? 'DISABLE' : 'ENABLE';
+    toggleButton.addEventListener('click', async () => {
+      const result = await window.jarvis.schedule.update(item.id, { when: item.when, action: item.action, enabled: !item.enabled });
+      if (!result.ok) { showToast(result.error); return; }
+      await refreshScheduleList();
+    });
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button'; removeButton.className = 'task-delete'; removeButton.textContent = '×';
+    removeButton.addEventListener('click', async () => {
+      await window.jarvis.schedule.remove(item.id);
+      await refreshScheduleList();
+    });
+
+    actions.append(runButton, toggleButton, removeButton);
+    row.append(copy, actions);
+    list.append(row);
+  }
+}
+
+async function refreshScheduleList() {
+  state.schedules = await window.jarvis.schedule.list();
+  renderScheduleList();
+}
+
+async function addSchedule() {
+  const name = $('schedule-name').value.trim();
+  if (!name) return showToast('Give the schedule a name.');
+  const when = scheduleFormWhen();
+  const whenError = validateScheduleWhen(when);
+  if (whenError) return showToast(whenError);
+  const action = scheduleFormAction();
+  const actionError = validateScheduleAction(action);
+  if (actionError) return showToast(actionError);
+
+  const result = await window.jarvis.schedule.add({ name, when, action });
+  if (!result.ok) { showToast(result.error); return; }
+  $('schedule-name').value = '';
+  $('schedule-text').value = '';
+  $('schedule-time').value = '';
+  $('schedule-repeat').value = 'once';
+  $('schedule-action').value = 'speak';
+  updateScheduleFormVisibility();
+  await refreshScheduleList();
+  showToast('Schedule added.');
+}
+
 function updateFolderLabels() {
   for (const name of ['anvil', 'the bench', 'adamscraft']) {
     $(`folder-${name.replace(/\s/g, '-')}`).textContent = state.settings.projects?.[name] || 'Not assigned';
@@ -896,7 +1045,9 @@ function openSettings() {
   $('setting-autonomy-night-end').value = String(state.settings.autonomyNightEnd ?? 7);
   $('setting-mobile').checked = Boolean(state.settings.mobileEnabled);
   $('setting-mobile-port').value = state.settings.mobilePort || 27183;
-  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection();
+  $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
+  updateScheduleFormVisibility();
+  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
   if (!state.updateUrl) applyUpdateInfo({ current: state.version });
   $('settings-modal').showModal();
 }
@@ -931,6 +1082,7 @@ async function saveSettings(event) {
     autonomyNightEnd: Number($('setting-autonomy-night-end').value),
     mobileEnabled: $('setting-mobile').checked,
     mobilePort: Number($('setting-mobile-port').value) || 27183,
+    schedulesEnabled: $('setting-schedules').checked,
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots
   };
@@ -1242,6 +1394,11 @@ function bindEvents() {
     $('mobile-code').textContent = out.code;
   });
   window.jarvis.mobile.onStatus(() => refreshMobileSection());
+
+  $('schedule-repeat').addEventListener('change', updateScheduleFormVisibility);
+  $('schedule-action').addEventListener('change', updateScheduleFormVisibility);
+  $('schedule-add-btn').addEventListener('click', addSchedule);
+  window.jarvis.schedule.onChanged((items) => { state.schedules = items; renderScheduleList(); });
 
   window.jarvis.onWakeDetected(() => {
     if (diagnostics.wakeTimer) return finishWakeTest(true);

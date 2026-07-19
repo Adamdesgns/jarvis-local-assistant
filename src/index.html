@@ -336,6 +336,36 @@
             <label>NIGHT ENDS<select id="setting-autonomy-night-end"></select></label>
             <small>Everything here is off until you turn it on. Autonomy only announces — it never sends, spends, deletes, or runs anything without asking.</small>
           </section>
+          <section class="wide-setting">
+            <h3>SCHEDULE</h3>
+            <label class="toggle-row"><span><b>SCHEDULED TASKS</b><small>Off: nothing runs on its own, ever.</small></span><input id="setting-schedules" type="checkbox"><i></i></label>
+            <label>NAME<input id="schedule-name" type="text" maxlength="80" placeholder="Morning briefing"></label>
+            <label>TIME<input id="schedule-time" type="time"></label>
+            <label>REPEAT<select id="schedule-repeat">
+              <option value="once">ONCE</option>
+              <option value="daily">DAILY</option>
+              <option value="weekdays">WEEKDAYS</option>
+              <option value="weekly">WEEKLY</option>
+            </select></label>
+            <div id="schedule-weekday-row" hidden><label>WEEKDAY<select id="schedule-weekday">
+              <option value="0">SUNDAY</option>
+              <option value="1">MONDAY</option>
+              <option value="2">TUESDAY</option>
+              <option value="3">WEDNESDAY</option>
+              <option value="4">THURSDAY</option>
+              <option value="5">FRIDAY</option>
+              <option value="6">SATURDAY</option>
+            </select></label></div>
+            <label>ACTION<select id="schedule-action">
+              <option value="speak">SAY SOMETHING</option>
+              <option value="ask">ASK JARVIS</option>
+              <option value="briefing">DAILY BRIEFING</option>
+            </select></label>
+            <div id="schedule-text-row"><label><span id="schedule-text-label">SAY THIS</span><input id="schedule-text" type="text" maxlength="500" placeholder="Good morning, sir."></label></div>
+            <button type="button" id="schedule-add-btn" class="primary-action">ADD</button>
+            <ul id="schedule-list" class="search-root-list" style="list-style:none;margin:12px 0 0;padding:0"></ul>
+            <small>Scheduled items wait for their exact time. Turning the switch off stops everything immediately — nothing sends, spends, deletes, or acts without your say-so.</small>
+          </section>
           <section>
             <h3>MOBILE</h3>
             <label class="toggle-row"><span><b>PHONE ACCESS</b><small>Serve JARVIS to your paired phones over Tailscale. Off: no server runs.</small></span><input id="setting-mobile" type="checkbox"><i></i></label>
