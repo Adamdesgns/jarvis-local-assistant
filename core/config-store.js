@@ -75,7 +75,7 @@ class ConfigStore {
       'motionMode', 'hiddenModules', 'moduleLayout', 'searchRoots', 'projects',
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
-      'autonomyEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
+      'autonomyEnabled', 'schedulesEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
       'skin', 'voiceName', 'orbBounds', 'mobileEnabled', 'mobilePort'
     ];
     for (const key of allowed) {

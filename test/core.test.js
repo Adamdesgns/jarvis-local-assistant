@@ -582,6 +582,7 @@ test('settings merge preserves nested defaults', () => {
   assert.equal(mergeSettings(DEFAULT_SETTINGS, { ollamaUrl: 'http://bad-old-address:9999' }).ollamaUrl, 'http://127.0.0.1:11434');
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobileEnabled, false);
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobilePort, 27183);
+  assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).schedulesEnabled, false);
 });
 
 test('config store persists mobile settings through updateSettings', () => {
@@ -595,6 +596,8 @@ test('config store persists mobile settings through updateSettings', () => {
     const reloaded = new ConfigStore(dir);
     assert.equal(reloaded.getSettings().mobileEnabled, true);
     assert.equal(reloaded.getSettings().mobilePort, 27200);
+    store.updateSettings({ schedulesEnabled: true });
+    assert.equal(new ConfigStore(dir).getSettings().schedulesEnabled, true);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

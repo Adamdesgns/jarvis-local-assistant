@@ -34,6 +34,7 @@ const DEFAULT_SETTINGS = {
   cameraCloudVision: false,
   cameraVisionModel: 'gemma3:4b',
   autonomyEnabled: false,
+  schedulesEnabled: false,
   autonomyRules: {
     speakDoorbell: false,
     nightMotionOnly: false,
