@@ -1,5 +1,17 @@
 # JARVIS Changelog
 
+## 0.13.0 — July 19, 2026
+
+### Added — Scheduled tasks: reminders, agent requests, camera checks and daily briefings on a timer (off by default)
+- Four task types: SPEAK (announce reminders aloud), ASK (run agent questions with file/tool access),
+  BRIEFING (daily summary of tasks and PC status), and CAMERA (look at a camera and describe what you see).
+- Master switch in Settings to enable/disable all tasks at once.
+- Quiet hours (default 9 PM–7 AM) suppress audio but keep tasks visible on screen and in Activity log.
+- Catch-up on restart: if JARVIS closes and a task's due time passes, it fires once on reopen with a late marker.
+- Single timer with no polling: the schedule module creates exactly one OS timer at a time, pointed at the next due task.
+- All task types are read-only and unattended: no approvals, no side effects beyond logging and display.
+- Fully IPC-aware: task fires broadcast to all UI windows so Activity feeds and screens update in real time.
+
 ## 0.12.0 — July 18, 2026
 
 ### Added — JARVIS Mobile: phone chat + voice over Tailscale
