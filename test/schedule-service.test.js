@@ -647,3 +647,103 @@ test('a timer that fires ~1ms early does not re-arm for the same occurrence (no 
   await secondTimer.fn();
   assert.equal(store._runs.length, 2);
 });
+
+test('#catchUp: a store.list() that throws does not reject start(), and start() still arms afterward', async () => {
+  const it = item();
+  const store = fakeStore([it]);
+  const originalList = store.list;
+  let listCalls = 0;
+  store.list = () => {
+    listCalls += 1;
+    // First call is catch-up's read; simulate a transient disk error there.
+    // The second call (arm()'s own store.list()) must still work.
+    if (listCalls === 1) throw new Error('disk read error');
+    return originalList();
+  };
+  const timer = fakeTimer();
+  const log = fakeLog();
+  const now = at(2026, 7, 19, 6, 0);
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router: fakeRouter(),
+    emit: fakeEmit(),
+    log,
+    now: () => now,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await assert.doesNotReject(async () => { await svc.start(); });
+
+  // Catch-up's failure must not prevent the eventual arm().
+  assert.equal(timer.created.length, 1);
+  // And the failure must be logged, not silently swallowed.
+  assert.ok(log.writes.some((w) => w.type === 'schedule-error'));
+});
+
+test('two schedules set to the same time both fire, and only one re-arm happens', async () => {
+  const briefing = item({ id: 'briefing', name: 'Morning briefing', when: { time: '07:00', repeat: 'daily', weekday: null }, action: { kind: 'speak', text: 'Good morning, sir.' } });
+  const meds = item({ id: 'meds', name: 'Take meds', when: { time: '07:00', repeat: 'daily', weekday: null }, action: { kind: 'speak', text: 'Time for your meds, sir.' } });
+  const store = fakeStore([briefing, meds]);
+  const timer = fakeTimer();
+  let current = at(2026, 7, 19, 6, 0);
+  const emit = fakeEmit();
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router: fakeRouter(),
+    emit,
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+  assert.equal(timer.created.length, 1);
+
+  current = at(2026, 7, 19, 7, 0);
+  await timer.created[0].fn();
+
+  // Both items due at the same instant must have run.
+  assert.equal(store._runs.length, 2);
+  assert.deepEqual(store._runs.map((r) => r.id).sort(), ['briefing', 'meds']);
+  const speakEvents = emit.calls.filter((c) => c.channel === 'autonomy:event');
+  assert.equal(speakEvents.length, 2);
+
+  // Exactly one re-arm for the tied fire, not one per item.
+  assert.equal(timer.created.length, 2);
+});
+
+test('a failure in the first same-time item does not stop the second from running', async () => {
+  const failing = item({ id: 'failing', name: 'Broken ask', when: { time: '07:00', repeat: 'daily', weekday: null }, action: { kind: 'ask', prompt: 'Summarize my inbox.' } });
+  const ok = item({ id: 'ok', name: 'Take meds', when: { time: '07:00', repeat: 'daily', weekday: null }, action: { kind: 'speak', text: 'Time for your meds, sir.' } });
+  const store = fakeStore([failing, ok]);
+  const timer = fakeTimer();
+  let current = at(2026, 7, 19, 6, 0);
+  const router = fakeRouter(async () => { throw new Error('Network unavailable'); });
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router,
+    emit: fakeEmit(),
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+  current = at(2026, 7, 19, 7, 0);
+  await assert.doesNotReject(async () => { await timer.created[0].fn(); });
+
+  assert.equal(store._runs.length, 2);
+  const byId = Object.fromEntries(store._runs.map((r) => [r.id, r]));
+  assert.equal(byId.failing.ok, false);
+  assert.match(byId.failing.text, /Network unavailable/);
+  assert.equal(byId.ok.ok, true);
+
+  // Still exactly one re-arm despite the first item's failure.
+  assert.equal(timer.created.length, 2);
+});

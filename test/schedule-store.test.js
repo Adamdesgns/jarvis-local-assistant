@@ -79,6 +79,37 @@ test('loading a schedules.json written before createdAt existed backfills it ins
   }
 });
 
+test('backfilled createdAt is persisted so it stays the same across reloads', () => {
+  const dir = tmpDir();
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const legacyItem = {
+      id: 'legacy-1',
+      name: 'Old item',
+      when: { time: '08:00', repeat: 'daily', weekday: null },
+      action: { kind: 'speak', text: 'Hi' },
+      enabled: true,
+      lastRunAt: null,
+      lastResult: null
+      // no createdAt — simulates data written before this field existed
+    };
+    fs.writeFileSync(path.join(dir, 'schedules.json'), JSON.stringify([legacyItem]), 'utf8');
+
+    const first = new ScheduleStore(dir);
+    const firstCreatedAt = first.list()[0].createdAt;
+    assert.equal(typeof firstCreatedAt, 'string');
+
+    // A fresh load (e.g. next app launch) must see the SAME createdAt that
+    // was backfilled the first time, not a newly re-stamped value — a
+    // pre-upgrade item's catch-up floor must not keep advancing forever.
+    const second = new ScheduleStore(dir);
+    const secondCreatedAt = second.list()[0].createdAt;
+    assert.equal(secondCreatedAt, firstCreatedAt);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('add throws on empty name', () => {
   const dir = tmpDir();
   try {
@@ -235,6 +266,23 @@ test('markRun stamps lastRunAt and lastResult', () => {
     assert.deepEqual(updated.lastResult, { at, ok: true, text: 'Delivered the briefing' });
     // Confirm persisted state, not just the return value.
     assert.equal(store.list()[0].lastRunAt, at);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('markRun truncates a long result text to 500 characters before persisting', () => {
+  const dir = tmpDir();
+  try {
+    const store = new ScheduleStore(dir);
+    const item = store.add(validInput());
+    const at = new Date().toISOString();
+    const longText = 'x'.repeat(2000);
+    const updated = store.markRun(item.id, { at, ok: true, text: longText });
+    assert.equal(updated.lastResult.text.length, 500);
+    assert.equal(updated.lastResult.text, longText.slice(0, 500));
+    // Confirm persisted state, not just the return value.
+    assert.equal(store.list()[0].lastResult.text.length, 500);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

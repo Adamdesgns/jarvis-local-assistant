@@ -48,10 +48,21 @@ class ScheduleStore {
       const items = Array.isArray(parsed) ? parsed : [];
       // Backfill createdAt for data written before this field existed, so
       // catch-up logic (which floors on lastRunAt || createdAt) has
-      // something sane to work with instead of an invalid date.
+      // something sane to work with instead of an invalid date. This must be
+      // persisted immediately — otherwise every launch re-stamps a fresh
+      // "now", and a pre-upgrade item's catch-up floor keeps advancing
+      // forever, so it can never actually catch up.
       const loadedAt = new Date().toISOString();
+      let backfilled = false;
       for (const item of items) {
-        if (item && !item.createdAt) item.createdAt = loadedAt;
+        if (item && !item.createdAt) {
+          item.createdAt = loadedAt;
+          backfilled = true;
+        }
+      }
+      if (backfilled) {
+        this.items = items;
+        this.#persist();
       }
       return items;
     } catch {
@@ -128,8 +139,12 @@ class ScheduleStore {
   markRun(id, { at, ok, text } = {}) {
     const item = this.items.find((entry) => entry.id === id);
     if (!item) return null;
+    // Cap the stored text — the full agent response has no natural bound,
+    // and truncation elsewhere (in the UI) is display-only and doesn't stop
+    // an unbounded value from being written to disk on every run.
+    const boundedText = String(text || '').slice(0, 500);
     item.lastRunAt = at;
-    item.lastResult = { at, ok, text };
+    item.lastResult = { at, ok, text: boundedText };
     this.#persist();
     return clone(item);
   }

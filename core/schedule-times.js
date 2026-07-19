@@ -53,17 +53,26 @@ function dueSince(item, from, now) {
   return !!n && n <= now;
 }
 
+// Returns { at, items } for the earliest occurrence among enabled items —
+// `items` holds every item whose next occurrence lands at exactly that same
+// instant (a tie, e.g. two items both set for 7:00 AM), in input order. Null
+// when nothing is due.
 function pickNext(items, from) {
-  let best = null;
+  let bestAt = null;
+  let bestItems = [];
   for (const item of items) {
     if (!item || !item.enabled) continue;
     const at = nextRunAt(item, from);
     if (!at) continue;
-    if (!best || at.getTime() < best.at.getTime()) {
-      best = { item, at };
+    if (!bestAt || at.getTime() < bestAt.getTime()) {
+      bestAt = at;
+      bestItems = [item];
+    } else if (at.getTime() === bestAt.getTime()) {
+      bestItems.push(item);
     }
   }
-  return best;
+  if (!bestAt) return null;
+  return { at: bestAt, items: bestItems };
 }
 
 module.exports = { nextRunAt, dueSince, pickNext };

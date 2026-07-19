@@ -452,10 +452,14 @@ function setupIpc() {
     }
   });
   ipcMain.handle('schedule:runNow', async (_event, id) => {
-    const result = await scheduleService.runNow(id);
-    scheduleService.arm();
-    sendEverywhere('schedule:changed', scheduleStore.list());
-    return result;
+    try {
+      const result = await scheduleService.runNow(id);
+      scheduleService.arm();
+      sendEverywhere('schedule:changed', scheduleStore.list());
+      return result;
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   });
   ipcMain.handle('ollama:connect', () => ollama.connect());
   ipcMain.handle('ollama:status', () => ollama.serverStatus());
@@ -527,7 +531,11 @@ function setupIpc() {
       folderWatch.start();
     }
     if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
-    if (previous.schedulesEnabled !== updated.schedulesEnabled) scheduleService.start();
+    if (previous.schedulesEnabled !== updated.schedulesEnabled) {
+      scheduleService.start().catch((error) => {
+        log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
+      });
+    }
     return updated;
   });
   ipcMain.handle('update:check', () => checkForUpdate(app.getVersion(), updateRepo));
@@ -831,8 +839,16 @@ app.whenReady().then(async () => {
   router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
   scheduleService = new ScheduleService({ store: scheduleStore, config, router, emit: sendEverywhere, log });
-  scheduleService.start();
-  powerMonitor.on('resume', () => scheduleService.arm());
+  scheduleService.start().catch((error) => {
+    log.write({ type: 'schedule-error', command: 'boot-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
+  });
+  powerMonitor.on('resume', () => {
+    try {
+      scheduleService.arm();
+    } catch (error) {
+      log.write({ type: 'schedule-error', command: 'resume-arm', response: error && error.message ? error.message : String(error), source: 'schedule' });
+    }
+  });
   folderWatch = new FolderWatchService({
     config,
     emit: sendEverywhere,

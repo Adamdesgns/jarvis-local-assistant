@@ -32,7 +32,7 @@ class ScheduleService {
     this.setTimer = setTimer;
     this.clearTimer = clearTimer;
     this.timer = null;
-    this.armedFor = null; // { id, at } — what the pending timer is waiting on
+    this.armedFor = null; // { ids, at } — what the pending timer is waiting on
   }
 
   #enabled() {
@@ -79,11 +79,12 @@ class ScheduleService {
     const rawDelay = picked.at.getTime() - now.getTime();
     const delay = Math.max(0, rawDelay);
 
-    this.armedFor = { id: picked.item.id, at: picked.at };
-    this.timer = this.setTimer(() => this.#onFire(picked.item.id, picked.at), delay);
+    const ids = picked.items.map((entry) => entry.id);
+    this.armedFor = { ids, at: picked.at };
+    this.timer = this.setTimer(() => this.#onFire(ids, picked.at), delay);
   }
 
-  async #onFire(id, at) {
+  async #onFire(ids, at) {
     if (!this.#enabled()) {
       // Master switch flipped off between arming and firing. This timer has
       // already fired, so clear the stale handle/armedFor instead of leaving
@@ -92,42 +93,61 @@ class ScheduleService {
       return;
     }
 
-    // No matter what happens inside runNow — action failure, a throwing
+    // Every item that was due at this exact instant must run — two schedules
+    // sharing an HH:MM (e.g. "7:00 briefing" and "7:00 take meds") must both
+    // fire, not just the first one picked. Each item gets its own try/catch
+    // so one failure can't stop the others, and no matter what happens
+    // inside runNow for any of them — action failure, a throwing
     // emit/log/store, even a throw from store.list() before runNow's own
-    // try/catch starts — the scheduler must re-arm. A dead scheduler is
-    // worse than one late or duplicated run. An uncaught rejection here
-    // would escape this setTimeout callback with no handler and, under
-    // current Node defaults, kill the process.
-    try {
-      await this.runNow(id, { late: false });
-    } catch (error) {
-      this.log.write({
-        type: 'schedule-error',
-        command: 'scheduler-fire',
-        response: error && error.message ? error.message : String(error),
-        source: 'schedule'
-      });
-    } finally {
-      this.arm(at);
+    // try/catch starts — the scheduler must re-arm exactly once at the end.
+    // A dead scheduler is worse than one late or duplicated run. An
+    // uncaught rejection here would escape this setTimeout callback with no
+    // handler and, under current Node defaults, kill the process.
+    for (const id of ids) {
+      try {
+        await this.runNow(id, { late: false });
+      } catch (error) {
+        this.log.write({
+          type: 'schedule-error',
+          command: 'scheduler-fire',
+          response: error && error.message ? error.message : String(error),
+          source: 'schedule'
+        });
+      }
     }
+    this.arm(at);
   }
 
   async #catchUp() {
-    const now = this.now();
-    const items = this.store.list();
-    for (const item of items) {
-      if (!item || !item.enabled) continue;
-      const from = new Date(item.lastRunAt || item.createdAt);
-      const due = nextRunAt(item, from);
-      if (due && dueSince(item, from, now)) {
-        try {
-          await this.runNow(item.id, { late: true, dueAt: due });
-        } catch {
-          // One failing catch-up item must not abort the loop, and must not
-          // abort start() — the rest of the items (and the eventual arm())
-          // still need to run.
+    // The whole body is wrapped: a disk/JSON failure from store.list() (or
+    // anything else unexpected here) must not reject start() — there's
+    // nothing useful to catch up on in that case, but start() still needs to
+    // reach arm() afterward. A dead scheduler on launch is worse than a
+    // skipped catch-up pass.
+    try {
+      const now = this.now();
+      const items = this.store.list();
+      for (const item of items) {
+        if (!item || !item.enabled) continue;
+        const from = new Date(item.lastRunAt || item.createdAt);
+        const due = nextRunAt(item, from);
+        if (due && dueSince(item, from, now)) {
+          try {
+            await this.runNow(item.id, { late: true, dueAt: due });
+          } catch {
+            // One failing catch-up item must not abort the loop, and must not
+            // abort start() — the rest of the items (and the eventual arm())
+            // still need to run.
+          }
         }
       }
+    } catch (error) {
+      this.log.write({
+        type: 'schedule-error',
+        command: 'catch-up',
+        response: error && error.message ? error.message : String(error),
+        source: 'schedule'
+      });
     }
   }
 

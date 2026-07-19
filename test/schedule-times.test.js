@@ -60,13 +60,24 @@ test('nextRunAt: malformed input returns null instead of throwing', () => {
   assert.equal(nextRunAt(42, from), null);
 });
 
-test('pickNext: soonest enabled item, null when none', () => {
+test('pickNext: soonest enabled item(s), null when none', () => {
   const early = item({ id: 'early', when: { time: '07:00', repeat: 'daily', weekday: null } });
   const late = item({ id: 'late', when: { time: '09:00', repeat: 'daily', weekday: null } });
   const off = item({ id: 'off', enabled: false, when: { time: '06:00', repeat: 'daily', weekday: null } });
   const out = pickNext([late, early, off], at(2026, 7, 19, 5, 0));
-  assert.equal(out.item.id, 'early');
+  assert.equal(out.items.length, 1);
+  assert.equal(out.items[0].id, 'early');
   assert.deepEqual(out.at, at(2026, 7, 19, 7, 0));
   assert.equal(pickNext([], at(2026, 7, 19, 5, 0)), null);
   assert.equal(pickNext([off], at(2026, 7, 19, 5, 0)), null);
+});
+
+test('pickNext: two items sharing the same earliest time both come back tied, in input order', () => {
+  const briefing = item({ id: 'briefing', when: { time: '07:00', repeat: 'daily', weekday: null } });
+  const meds = item({ id: 'meds', when: { time: '07:00', repeat: 'daily', weekday: null } });
+  const later = item({ id: 'later', when: { time: '09:00', repeat: 'daily', weekday: null } });
+  const out = pickNext([briefing, later, meds], at(2026, 7, 19, 5, 0));
+  assert.equal(out.items.length, 2);
+  assert.deepEqual(out.items.map((i) => i.id), ['briefing', 'meds']);
+  assert.deepEqual(out.at, at(2026, 7, 19, 7, 0));
 });
