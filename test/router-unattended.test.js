@@ -1,0 +1,157 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { CommandRouter } = require('../core/router');
+
+// Minimal fake collaborators, mirroring the style used in test/core.test.js.
+// Only the methods each scenario needs are provided; anything unused stays
+// absent so an accidental call surfaces as a loud TypeError instead of
+// silently succeeding.
+
+function fakeTools(overrides = {}) {
+  const calls = { openApplication: [], openPath: [], openFocusMode: [] };
+  return {
+    calls,
+    resolveApplication: (name) => ({ canonical: name, command: name }),
+    openApplication: async (name) => { calls.openApplication.push(name); return { ok: true, message: `Opening ${name}.` }; },
+    openPath: async (target) => { calls.openPath.push(target); return { ok: true, message: `Opening ${target}.`, path: target }; },
+    openFocusMode: async () => { calls.openFocusMode.push(true); return { ok: true, message: 'Focus mode is active. I opened 2 approved applications.' }; },
+    searchFiles: async () => [],
+    ...overrides
+  };
+}
+
+function baseRouter(tools, settings = {}) {
+  return new CommandRouter({
+    config: { getSettings: () => ({ projects: {}, routines: {}, applications: {}, ...settings }) },
+    tools,
+    documents: null,
+    ai: {},
+    memory: { list: () => [], search: () => [] },
+    tasks: { list: () => [] },
+    log: { write: () => {} },
+    cameras: null
+  });
+}
+
+// ---- (a)/(b) open|launch|start branch: launching an application ----------
+
+test('unattended: "open chrome" does not call tools.openApplication and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('open chrome', 'general', { unattended: true });
+  assert.equal(tools.calls.openApplication.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "open chrome" calls tools.openApplication (proves attended behavior unchanged)', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('open chrome', 'general');
+  assert.deepEqual(tools.calls.openApplication, ['chrome']);
+  assert.equal(result.response, 'Opening chrome.');
+});
+
+// ---- (c) #matchRoutine branch: launching a saved routine's apps/folders ---
+
+function routineSettings() {
+  return { routines: { morning: { apps: ['chrome'], folders: ['reports'] } }, projects: { reports: 'C:\\Projects\\reports' } };
+}
+
+test('unattended: "run morning routine" does not open any app or folder and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools, routineSettings());
+  const result = await router.handle('run morning routine', 'general', { unattended: true });
+  assert.equal(tools.calls.openApplication.length, 0);
+  assert.equal(tools.calls.openPath.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "run morning routine" opens the routine\'s apps and folders (proves attended behavior unchanged)', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools, routineSettings());
+  const result = await router.handle('run morning routine', 'general');
+  assert.deepEqual(tools.calls.openApplication, ['chrome']);
+  assert.deepEqual(tools.calls.openPath, ['C:\\Projects\\reports']);
+  assert.match(result.response, /opened/i);
+});
+
+// ---- (d) other actuating branches found in the audit ----------------------
+
+// D1: focus-mode branch (core/router.js ~328-330) — this.tools.openFocusMode()
+// opens every app configured for focus mode.
+test('unattended: "turn on focus mode" does not call tools.openFocusMode and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('turn on focus mode', 'general', { unattended: true });
+  assert.equal(tools.calls.openFocusMode.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "turn on focus mode" calls tools.openFocusMode (proves attended behavior unchanged)', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('turn on focus mode', 'general');
+  assert.equal(tools.calls.openFocusMode.length, 1);
+  assert.match(result.response, /Focus mode is active/);
+});
+
+// D2: the "find X and open it" branch (core/router.js ~331-346) —
+// this.tools.openPath(top.path) when a single confident match is found.
+test('unattended: "find and open report" does not call tools.openPath and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools({ searchFiles: async () => [{ name: 'report.pdf', path: 'C:\\Docs\\report.pdf', score: 10, type: 'file' }] });
+  const router = baseRouter(tools);
+  const result = await router.handle('find and open report', 'general', { unattended: true });
+  assert.equal(tools.calls.openPath.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "find and open report" calls tools.openPath (proves attended behavior unchanged)', async () => {
+  const tools = fakeTools({ searchFiles: async () => [{ name: 'report.pdf', path: 'C:\\Docs\\report.pdf', score: 10, type: 'file' }] });
+  const router = baseRouter(tools);
+  const result = await router.handle('find and open report', 'general');
+  assert.deepEqual(tools.calls.openPath, ['C:\\Docs\\report.pdf']);
+  assert.match(result.response, /Found it/i);
+});
+
+// D3: the "open <project> folder" sub-case of open|launch|start
+// (core/router.js ~349-357) — this.tools.openPath(settings.projects[name]).
+test('unattended: "open reports project folder" does not call tools.openPath and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools, { projects: { reports: 'C:\\Projects\\reports' } });
+  const result = await router.handle('open reports project folder', 'general', { unattended: true });
+  assert.equal(tools.calls.openPath.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "open reports project folder" calls tools.openPath (proves attended behavior unchanged)', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools, { projects: { reports: 'C:\\Projects\\reports' } });
+  const result = await router.handle('open reports project folder', 'general');
+  assert.deepEqual(tools.calls.openPath, ['C:\\Projects\\reports']);
+  assert.match(result.response, /Opening the reports workspace/i);
+});
+
+// D4: the file-search sub-case of open|launch|start (core/router.js
+// ~358-373) — this.tools.openPath(top.path) when the target isn't a known
+// application or project.
+test('unattended: "open quarterly numbers" (unresolved app, file search) does not call tools.openPath', async () => {
+  const tools = fakeTools({
+    resolveApplication: () => null,
+    searchFiles: async () => [{ name: 'quarterly numbers.xlsx', path: 'C:\\Docs\\quarterly numbers.xlsx', score: 10, type: 'file' }]
+  });
+  const router = baseRouter(tools);
+  const result = await router.handle('open quarterly numbers', 'general', { unattended: true });
+  assert.equal(tools.calls.openPath.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "open quarterly numbers" (unresolved app, file search) calls tools.openPath', async () => {
+  const tools = fakeTools({
+    resolveApplication: () => null,
+    searchFiles: async () => [{ name: 'quarterly numbers.xlsx', path: 'C:\\Docs\\quarterly numbers.xlsx', score: 10, type: 'file' }]
+  });
+  const router = baseRouter(tools);
+  const result = await router.handle('open quarterly numbers', 'general');
+  assert.deepEqual(tools.calls.openPath, ['C:\\Docs\\quarterly numbers.xlsx']);
+  assert.match(result.response, /Found it/i);
+});

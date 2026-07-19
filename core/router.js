@@ -307,27 +307,35 @@ class CommandRouter {
       }
     } else if (this.#matchRoutine(text, settings)) {
       const { name, routine } = this.#matchRoutine(text, settings);
-      const opened = [];
-      const failed = [];
-      for (const appName of routine.apps || []) {
-        const action = await this.tools.openApplication(appName);
-        (action.ok ? opened : failed).push(appName);
+      if (stream.unattended) {
+        result = this.#result(`The ${name} routine needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
+      } else {
+        const opened = [];
+        const failed = [];
+        for (const appName of routine.apps || []) {
+          const action = await this.tools.openApplication(appName);
+          (action.ok ? opened : failed).push(appName);
+        }
+        for (const folder of routine.folders || []) {
+          const target = (settings.projects || {})[folder] || folder;
+          const action = await this.tools.openPath(target);
+          (action.ok ? opened : failed).push(folder);
+        }
+        result = this.#result(
+          opened.length
+            ? `${name} routine: opened ${opened.join(', ')}${failed.length ? `. Could not open ${failed.join(', ')} — check Settings.` : '.'}`
+            : `The ${name} routine is saved but nothing could be opened. Assign its folders and apps in Settings.`,
+          'windows',
+          { success: opened.length > 0 }
+        );
       }
-      for (const folder of routine.folders || []) {
-        const target = (settings.projects || {})[folder] || folder;
-        const action = await this.tools.openPath(target);
-        (action.ok ? opened : failed).push(folder);
-      }
-      result = this.#result(
-        opened.length
-          ? `${name} routine: opened ${opened.join(', ')}${failed.length ? `. Could not open ${failed.join(', ')} — check Settings.` : '.'}`
-          : `The ${name} routine is saved but nothing could be opened. Assign its folders and apps in Settings.`,
-        'windows',
-        { success: opened.length > 0 }
-      );
     } else if (/\b(?:activate|start|enter|turn on)\s+focus mode\b/i.test(text)) {
-      const action = await this.tools.openFocusMode();
-      result = this.#result(action.message, 'windows', { success: action.ok });
+      if (stream.unattended) {
+        result = this.#result(`Focus mode needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
+      } else {
+        const action = await this.tools.openFocusMode();
+        result = this.#result(action.message, 'windows', { success: action.ok });
+      }
     } else if (/^(?:jarvis[, ]*)?(?:can you\s+)?(?:find|locate|look for|search(?: my (?:computer|files))? for|find\s+and\s+open)\s+/i.test(text)) {
       const query = extractFileQuery(text);
       const files = await this.tools.searchFiles(query);
@@ -338,8 +346,12 @@ class CommandRouter {
         const second = files[1];
         const confident = files.length === 1 || top.score >= (second?.score || 0) + 3 || /\b(latest|newest|most recent)\b/i.test(query);
         if (confident) {
-          const opened = await this.tools.openPath(top.path);
-          result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query, openedFile: top, success: opened.ok });
+          if (stream.unattended) {
+            result = this.#result(`Opening files needs you at the desk, sir — I've left it for you.`, 'files', { files, query, success: false });
+          } else {
+            const opened = await this.tools.openPath(top.path);
+            result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query, openedFile: top, success: opened.ok });
+          }
         } else {
           result = this.#result(`I found ${files.length} possible matches. Choose the one you want.`, 'files', { files, query, needsChoice: true });
         }
@@ -347,27 +359,31 @@ class CommandRouter {
     } else if (/^(?:open|show)\s+(?:jarvis\s+)?settings$/i.test(text)) {
       result = this.#result('Opening local settings.', 'local-core', { openSettings: true });
     } else if (/^(?:open|launch|start)\s+(.+)/i.test(text)) {
-      const target = cleanTarget(text.match(/^(?:open|launch|start)\s+(.+)/i)[1]);
-      const projectName = Object.keys(settings.projects || {}).find((name) => lower.includes(name));
-      if (projectName && /\b(project|workspace|folder)\b/i.test(text)) {
-        const action = await this.tools.openPath(settings.projects[projectName]);
-        result = this.#result(action.ok ? `Opening the ${projectName} workspace.` : `${action.message} Assign that folder in Settings.`, 'files', { success: action.ok });
-      } else if (this.tools.resolveApplication(target)) {
-        const action = await this.tools.openApplication(target);
-        result = this.#result(action.message, 'windows', { success: action.ok });
+      if (stream.unattended) {
+        result = this.#result(`Opening applications needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
       } else {
-        const files = await this.tools.searchFiles(target);
-        if (!files.length) {
-          result = this.#result(`I couldn’t find a file matching “${target}.”`, 'files', { files: [], query: target });
+        const target = cleanTarget(text.match(/^(?:open|launch|start)\s+(.+)/i)[1]);
+        const projectName = Object.keys(settings.projects || {}).find((name) => lower.includes(name));
+        if (projectName && /\b(project|workspace|folder)\b/i.test(text)) {
+          const action = await this.tools.openPath(settings.projects[projectName]);
+          result = this.#result(action.ok ? `Opening the ${projectName} workspace.` : `${action.message} Assign that folder in Settings.`, 'files', { success: action.ok });
+        } else if (this.tools.resolveApplication(target)) {
+          const action = await this.tools.openApplication(target);
+          result = this.#result(action.message, 'windows', { success: action.ok });
         } else {
-          const top = files[0];
-          const second = files[1];
-          const confident = files.length === 1 || top.score >= (second?.score || 0) + 3 || /\b(latest|newest|most recent)\b/i.test(target);
-          if (confident) {
-            const opened = await this.tools.openPath(top.path);
-            result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query: target, openedFile: top, success: opened.ok });
+          const files = await this.tools.searchFiles(target);
+          if (!files.length) {
+            result = this.#result(`I couldn’t find a file matching “${target}.”`, 'files', { files: [], query: target });
           } else {
-            result = this.#result(`I found ${files.length} possible matches. Choose the one you want.`, 'files', { files, query: target, needsChoice: true });
+            const top = files[0];
+            const second = files[1];
+            const confident = files.length === 1 || top.score >= (second?.score || 0) + 3 || /\b(latest|newest|most recent)\b/i.test(target);
+            if (confident) {
+              const opened = await this.tools.openPath(top.path);
+              result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query: target, openedFile: top, success: opened.ok });
+            } else {
+              result = this.#result(`I found ${files.length} possible matches. Choose the one you want.`, 'files', { files, query: target, needsChoice: true });
+            }
           }
         }
       }
