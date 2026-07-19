@@ -45,7 +45,15 @@ class ScheduleStore {
   #load() {
     try {
       const parsed = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
-      return Array.isArray(parsed) ? parsed : [];
+      const items = Array.isArray(parsed) ? parsed : [];
+      // Backfill createdAt for data written before this field existed, so
+      // catch-up logic (which floors on lastRunAt || createdAt) has
+      // something sane to work with instead of an invalid date.
+      const loadedAt = new Date().toISOString();
+      for (const item of items) {
+        if (item && !item.createdAt) item.createdAt = loadedAt;
+      }
+      return items;
     } catch {
       return [];
     }
@@ -75,7 +83,8 @@ class ScheduleStore {
       action: clone(input.action),
       enabled: true,
       lastRunAt: null,
-      lastResult: null
+      lastResult: null,
+      createdAt: new Date().toISOString()
     };
     this.items.push(item);
     this.#persist();

@@ -35,6 +35,50 @@ test('add returns an item with an id, enabled: true, and lastRunAt: null', () =>
   }
 });
 
+test('add stamps createdAt with a parseable ISO timestamp near now', () => {
+  const dir = tmpDir();
+  try {
+    const store = new ScheduleStore(dir);
+    const before = Date.now();
+    const item = store.add(validInput());
+    const after = Date.now();
+    assert.equal(typeof item.createdAt, 'string');
+    const stamped = new Date(item.createdAt).getTime();
+    assert.ok(!Number.isNaN(stamped));
+    assert.ok(stamped >= before && stamped <= after);
+    // Persisted, not just returned on the in-memory item.
+    assert.equal(store.list()[0].createdAt, item.createdAt);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('loading a schedules.json written before createdAt existed backfills it instead of leaving it undefined', () => {
+  const dir = tmpDir();
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const legacyItem = {
+      id: 'legacy-1',
+      name: 'Old item',
+      when: { time: '08:00', repeat: 'daily', weekday: null },
+      action: { kind: 'speak', text: 'Hi' },
+      enabled: true,
+      lastRunAt: null,
+      lastResult: null
+      // no createdAt — simulates data written before this field existed
+    };
+    fs.writeFileSync(path.join(dir, 'schedules.json'), JSON.stringify([legacyItem]), 'utf8');
+
+    const store = new ScheduleStore(dir);
+    const items = store.list();
+    assert.equal(items.length, 1);
+    assert.equal(typeof items[0].createdAt, 'string');
+    assert.ok(!Number.isNaN(new Date(items[0].createdAt).getTime()));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('add throws on empty name', () => {
   const dir = tmpDir();
   try {

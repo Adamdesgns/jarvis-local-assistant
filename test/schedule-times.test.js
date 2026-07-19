@@ -39,6 +39,27 @@ test('dueSince: true only when an occurrence fell in the window', () => {
   assert.equal(dueSince(item({ enabled: false }), from, at(2026, 7, 19, 9, 0)), false);
 });
 
+test('nextRunAt: malformed input returns null instead of throwing', () => {
+  const from = at(2026, 7, 19, 6, 0);
+
+  // Missing "when"
+  assert.equal(nextRunAt(item({ when: undefined }), from), null);
+  assert.equal(nextRunAt(item({ when: null }), from), null);
+
+  // Bad time string
+  assert.equal(nextRunAt(item({ when: { time: 'not-a-time', repeat: 'daily', weekday: null } }), from), null);
+  assert.equal(nextRunAt(item({ when: { time: '', repeat: 'daily', weekday: null } }), from), null);
+
+  // Weekly with a null weekday never matches any day
+  assert.equal(nextRunAt(item({ when: { time: '07:00', repeat: 'weekly', weekday: null } }), from), null);
+
+  // Non-object item
+  assert.equal(nextRunAt(null, from), null);
+  assert.equal(nextRunAt(undefined, from), null);
+  assert.equal(nextRunAt('not-an-item', from), null);
+  assert.equal(nextRunAt(42, from), null);
+});
+
 test('pickNext: soonest enabled item, null when none', () => {
   const early = item({ id: 'early', when: { time: '07:00', repeat: 'daily', weekday: null } });
   const late = item({ id: 'late', when: { time: '09:00', repeat: 'daily', weekday: null } });

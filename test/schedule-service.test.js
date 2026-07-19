@@ -164,7 +164,7 @@ test('invoking the captured timer callback runs the action, calls markRun, and a
   assert.ok(timer.cleared.includes(fired));
 });
 
-test('speak action emits autonomy:event with the text', async () => {
+test('speak action emits autonomy:event with both speak and a card (non-quiet run)', async () => {
   const it = item({ action: { kind: 'speak', text: 'Time to stretch, sir.' } });
   const store = fakeStore([it]);
   const timer = fakeTimer();
@@ -187,7 +187,10 @@ test('speak action emits autonomy:event with the text', async () => {
 
   const speakEvents = emit.calls.filter((c) => c.channel === 'autonomy:event');
   assert.equal(speakEvents.length, 1);
-  assert.deepEqual(speakEvents[0].payload, { speak: 'Time to stretch, sir.' });
+  assert.equal(speakEvents[0].payload.speak, 'Time to stretch, sir.');
+  assert.ok(speakEvents[0].payload.card, 'expected a card even on a non-quiet run');
+  assert.equal(speakEvents[0].payload.card.body, 'Time to stretch, sir.');
+  assert.equal(speakEvents[0].payload.card.title, `SCHEDULE — ${it.name}`);
 });
 
 test('ask action calls router.handle(prompt, "general", { unattended: true }) and speaks the response', async () => {
@@ -219,10 +222,12 @@ test('ask action calls router.handle(prompt, "general", { unattended: true }) an
 
   const speakEvents = emit.calls.filter((c) => c.channel === 'autonomy:event');
   assert.equal(speakEvents.length, 1);
-  assert.deepEqual(speakEvents[0].payload, { speak: 'You have three open tasks.' });
+  assert.equal(speakEvents[0].payload.speak, 'You have three open tasks.');
+  assert.ok(speakEvents[0].payload.card, 'expected a card even on a non-quiet run');
+  assert.equal(speakEvents[0].payload.card.body, 'You have three open tasks.');
 });
 
-test('quiet hours: no speak emitted, but the log is still written', async () => {
+test('quiet hours: no speak emitted, but a card still reaches the screen and the log is written', async () => {
   const it = item({ action: { kind: 'speak', text: 'Overnight reminder.' }, when: { time: '02:00', repeat: 'daily', weekday: null } });
   const store = fakeStore([it]);
   const timer = fakeTimer();
@@ -244,11 +249,46 @@ test('quiet hours: no speak emitted, but the log is still written', async () => 
   current = at(2026, 7, 19, 2, 0);
   await timer.created[0].fn();
 
-  const speakEvents = emit.calls.filter((c) => c.channel === 'autonomy:event');
-  assert.equal(speakEvents.length, 0);
+  // CRITICAL: quiet hours must suppress audio only — a card still has to reach
+  // the screen, or overnight results are invisible until the user asks.
+  const events = emit.calls.filter((c) => c.channel === 'autonomy:event');
+  assert.equal(events.length, 1);
+  assert.equal(Object.prototype.hasOwnProperty.call(events[0].payload, 'speak'), false);
+  assert.ok(events[0].payload.card, 'expected a card during quiet hours');
+  assert.equal(events[0].payload.card.body, 'Overnight reminder.');
   assert.equal(log.writes.length, 1);
   assert.equal(log.writes[0].type, 'schedule');
   assert.equal(log.writes[0].command, it.name);
+});
+
+test('autonomyNightStart === autonomyNightEnd does not mean quiet — the run still speaks', async () => {
+  // autonomy-rules.isWithinWindow treats start === end as "always" (a
+  // deliberate choice for camera alerts). The scheduler must not borrow that
+  // meaning verbatim, or every schedule item goes silent forever whenever a
+  // user picks equal start/end hours in Settings.
+  const it = item({ action: { kind: 'speak', text: 'Equal window test.' }, when: { time: '02:00', repeat: 'daily', weekday: null } });
+  const store = fakeStore([it]);
+  const timer = fakeTimer();
+  let current = at(2026, 7, 19, 1, 0);
+  const emit = fakeEmit();
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings({ autonomyNightStart: 5, autonomyNightEnd: 5 })),
+    router: fakeRouter(),
+    emit,
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+  current = at(2026, 7, 19, 2, 0);
+  await timer.created[0].fn();
+
+  const events = emit.calls.filter((c) => c.channel === 'autonomy:event');
+  assert.equal(events.length, 1);
+  assert.equal(events[0].payload.speak, 'Equal window test.');
 });
 
 test('catch-up: an item whose time passed since lastRunAt runs on start() with text beginning "This was due at"', async () => {
@@ -367,6 +407,33 @@ test('#onFire clears stale timer/armedFor state when schedulesEnabled flips off 
   assert.equal(timer.created.length, 1);
 });
 
+test('an emit that throws still leaves the run persisted via markRun', async () => {
+  const it = item();
+  const store = fakeStore([it]);
+  const timer = fakeTimer();
+  let current = at(2026, 7, 19, 6, 0);
+  const throwingEmit = () => { throw new Error('renderer window destroyed'); };
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router: fakeRouter(),
+    emit: throwingEmit,
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+  current = at(2026, 7, 19, 7, 0);
+  await assert.doesNotReject(async () => { await timer.created[0].fn(); });
+
+  // markRun must still have been called even though emit blew up first.
+  assert.equal(store._runs.length, 1);
+  assert.equal(store._runs[0].id, 'a');
+  assert.equal(store._runs[0].ok, false);
+});
+
 test('formatClock renders a 12-hour AM/PM time regardless of host locale defaults', async () => {
   const it = item({
     when: { time: '07:00', repeat: 'daily', weekday: null },
@@ -447,4 +514,136 @@ test('a router that rejects records ok: false, does not throw, and the timer is 
   assert.match(store._runs[0].text, /Network unavailable/);
   // Exactly one new timer armed after the fire, despite the failure.
   assert.equal(timer.created.length, 2);
+});
+
+test('catch-up: a never-run item created before a passed due time catches up exactly once on start()', async () => {
+  const it = item({
+    when: { time: '07:00', repeat: 'daily', weekday: null },
+    lastRunAt: null,
+    createdAt: at(2026, 7, 18, 20, 0).toISOString() // created last night, well before today's 07:00
+  });
+  const store = fakeStore([it]);
+  const timer = fakeTimer();
+  const current = at(2026, 7, 19, 8, 0); // opened this morning, after the 07:00 due time
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router: fakeRouter(),
+    emit: fakeEmit(),
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+
+  assert.equal(store._runs.length, 1);
+  assert.ok(store._runs[0].text.startsWith('This was due at'));
+  // A timer for the *next* occurrence should still be armed after catch-up.
+  assert.equal(timer.created.length, 1);
+});
+
+test('catch-up: an item created AFTER its due time today does not catch up', async () => {
+  const it = item({
+    when: { time: '07:00', repeat: 'daily', weekday: null },
+    lastRunAt: null,
+    createdAt: at(2026, 7, 19, 7, 30).toISOString() // created after 07:00 already passed
+  });
+  const store = fakeStore([it]);
+  const timer = fakeTimer();
+  const current = at(2026, 7, 19, 8, 0);
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router: fakeRouter(),
+    emit: fakeEmit(),
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+
+  assert.equal(store._runs.length, 0);
+});
+
+test('a store whose list() throws while running the scheduled action does not produce an unhandled rejection and the scheduler stays armed', async () => {
+  const it = item();
+  const store = fakeStore([it]);
+  const originalList = store.list;
+  let listCalls = 0;
+  store.list = () => {
+    listCalls += 1;
+    // Call #3 is the one runNow() makes when the timer fires — simulate a
+    // transient disk error there. The calls before/after (start()'s
+    // catch-up, and the re-arm afterward) must keep working.
+    if (listCalls === 3) throw new Error('disk read error');
+    return originalList();
+  };
+  const timer = fakeTimer();
+  let current = at(2026, 7, 19, 6, 0);
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router: fakeRouter(),
+    emit: fakeEmit(),
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+  assert.equal(timer.created.length, 1);
+
+  current = at(2026, 7, 19, 7, 0);
+  await assert.doesNotReject(async () => { await timer.created[0].fn(); });
+
+  // A dead scheduler is worse than one late run: it must still be armed even
+  // though runNow blew up before its own try/catch could even start.
+  assert.equal(timer.created.length, 2);
+  assert.notEqual(svc.timer, null);
+});
+
+test('a timer that fires ~1ms early does not re-arm for the same occurrence (no double-run)', async () => {
+  const it = item();
+  const store = fakeStore([it]);
+  const timer = fakeTimer();
+  let current = at(2026, 7, 19, 6, 0);
+  const svc = new ScheduleService({
+    store,
+    config: fakeConfig(baseSettings()),
+    router: fakeRouter(),
+    emit: fakeEmit(),
+    log: fakeLog(),
+    now: () => current,
+    setTimer: timer.setTimer,
+    clearTimer: timer.clearTimer
+  });
+
+  await svc.start();
+  assert.equal(timer.created.length, 1);
+
+  const targetAt = at(2026, 7, 19, 7, 0);
+  // Simulate libuv firing the timer ~1ms early: when the callback runs, the
+  // injected clock still reads 1ms short of the armed occurrence.
+  current = new Date(targetAt.getTime() - 1);
+  await timer.created[0].fn();
+
+  assert.equal(store._runs.length, 1); // the occurrence ran exactly once so far
+
+  const secondTimer = timer.created[1];
+  assert.ok(secondTimer, 'expected a re-arm after the early fire');
+  // A buggy re-arm recomputes from the still-1ms-early clock, which is still
+  // "before" today's 07:00 occurrence, so it gets re-selected — producing a
+  // near-zero delay that fires again immediately (a duplicate run).
+  assert.ok(secondTimer.delay > 1000, `expected the next arm to skip today's occurrence, got a ${secondTimer.delay}ms delay`);
+
+  // Firing the re-armed timer must run a *new* occurrence (tomorrow), not
+  // repeat today's.
+  current = new Date(current.getTime() + secondTimer.delay);
+  await secondTimer.fn();
+  assert.equal(store._runs.length, 2);
 });
