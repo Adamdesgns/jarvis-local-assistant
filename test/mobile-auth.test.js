@@ -35,6 +35,18 @@ test('verify: accepts the real key, rejects wrong/absent, and locks out after 10
   assert.equal(auth.isLockedOut('100.9.9.9'), false);
 });
 
+test('claimPairing: brute-forcing wrong codes from one ip locks that ip out, even with the right code; other ips are unaffected', () => {
+  const auth = new MobileAuth({ now: () => 0 });
+  const { code } = auth.startPairing();
+  for (let i = 0; i < 10; i++) assert.equal(auth.claimPairing('000000', 'x', '100.9.9.9'), null);
+  assert.equal(auth.isLockedOut('100.9.9.9'), true);
+  assert.equal(auth.claimPairing(code, 'phone', '100.9.9.9'), null);     // right code, locked ip
+  const claimed = auth.claimPairing(code, 'phone', '100.1.1.1');         // different ip, unaffected
+  assert.ok(claimed.key.length >= 40);
+  auth.startPairing();                                                   // reopening pairing clears lockouts
+  assert.equal(auth.isLockedOut('100.9.9.9'), false);
+});
+
 test('revoke + persistence round-trip', () => {
   const auth = new MobileAuth({ now: () => 0 });
   const { code } = auth.startPairing();

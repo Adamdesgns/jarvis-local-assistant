@@ -56,7 +56,7 @@ class MobileServer {
       const pathname = url.split('?')[0];
       if (pathname === '/api/pair' && req.method === 'POST') {
         const body = JSON.parse((await readBody(req)).toString() || '{}');
-        const claimed = this.auth.claimPairing(body.code, body.name);
+        const claimed = this.auth.claimPairing(body.code, body.name, ip);
         if (!claimed) return this.json(res, 403, { error: 'Pairing code is wrong or expired. Start pairing again in Settings.' });
         this.onDevicesChanged();
         return this.json(res, 200, { key: claimed.key, name: claimed.device.name });
@@ -102,7 +102,18 @@ class MobileServer {
     const result = await this.router.handle(text, 'general', {
       onStep: (step) => this.pushEvent(device.id, 'agent-step', step)
     });
-    const reply = result?.response || result?.text || 'No response.';
+    let reply;
+    if (result?.approval) {
+      // Confirming/declining risky actions only makes sense at the desktop —
+      // the phone has no UI for it. Decline the pending entry so it doesn't
+      // sit around waiting to expire, and tell the phone where to look.
+      reply = 'That needs a confirmation at the desktop, sir.';
+      if (typeof this.router.resolveApproval === 'function') {
+        try { await this.router.resolveApproval(result.approval.id, false); } catch {}
+      }
+    } else {
+      reply = result?.response || result?.text || 'No response.';
+    }
     this.lastReply.set(device.id, { reply, at: Date.now() });
     this.pushEvent(device.id, 'reply', { reply });
     return this.json(res, 200, transcript ? { transcript, reply } : { reply });

@@ -113,6 +113,68 @@ test('stop() severs live SSE connections', async () => {
   assert.equal(streamRes.body, bodyBeforePush);
 });
 
+test('#chat: an approval-shaped router result becomes a desktop-confirmation reply and cancels the pending approval', async () => {
+  const auth = new MobileAuth({ now: () => 0 });
+  const { code } = auth.startPairing();
+  const cancelled = [];
+  const server = new MobileServer({
+    auth,
+    router: {
+      handle: async () => ({
+        id: 'r1', response: 'Confirm shutdown.', source: 'safety',
+        approval: { id: 'approval-1', title: 'SHUTDOWN COMPUTER', detail: 'This will power off the PC.', risk: 'HIGH' }
+      }),
+      resolveApproval: async (id, approved) => { cancelled.push({ id, approved }); return { response: 'Command cancelled.' }; }
+    },
+    transcribe: async () => 'unused', config: { getSettings: () => ({}) }, staticDir: __dirname
+  });
+  const pair = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/pair', { code, name: 'iPhone' }), pair);
+  const { key } = JSON.parse(pair.body);
+
+  const res = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/chat', { text: 'shut down the computer' }, { authorization: `Bearer ${key}` }), res);
+  assert.equal(JSON.parse(res.body).reply, 'That needs a confirmation at the desktop, sir.');
+  assert.deepEqual(cancelled, [{ id: 'approval-1', approved: false }]);
+});
+
+test('static file serving never leaks content outside staticDir on traversal attempts', async () => {
+  const auth = new MobileAuth({ now: () => 0 });
+  const server = new MobileServer({
+    auth, router: { handle: async () => ({ response: 'x' }) }, transcribe: async () => 'unused',
+    config: { getSettings: () => ({}) }, staticDir: __dirname
+  });
+  for (const url of ['/..%2f..%2fpackage.json', '/../secrets']) {
+    const res = fakeRes();
+    await server.handleRequest(jsonReq('GET', url, null, {}), res);
+    assert.equal(res.code, 404);
+  }
+});
+
+test('body cap: an oversized POST /api/chat body returns the JSON {error} 500 response, not a crash', async () => {
+  const auth = new MobileAuth({ now: () => 0 });
+  const { code } = auth.startPairing();
+  const server = new MobileServer({
+    auth, router: { handle: async () => ({ response: 'x' }) }, transcribe: async () => 'unused',
+    config: { getSettings: () => ({}) }, staticDir: __dirname
+  });
+  const pair = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/pair', { code, name: 'iPhone' }), pair);
+  const { key } = JSON.parse(pair.body);
+
+  const { Readable } = require('node:stream');
+  function* oversizedChunks() {
+    const chunk = Buffer.alloc(1024 * 1024, 'a');   // 1MB per chunk
+    for (let i = 0; i < 11; i++) yield chunk;        // 11MB > 10MB readBody limit
+  }
+  const req = Readable.from(oversizedChunks());
+  Object.assign(req, { method: 'POST', url: '/api/chat', headers: { authorization: `Bearer ${key}` }, socket: { remoteAddress: '100.1.1.1' } });
+  const res = fakeRes();
+  await server.handleRequest(req, res);
+  assert.equal(res.code, 500);
+  assert.ok(JSON.parse(res.body).error);
+});
+
 test('/api/events accepts ?key= since EventSource cannot send headers; every other route still requires the header', async () => {
   const auth = new MobileAuth({ now: () => 0 });
   const { code } = auth.startPairing();

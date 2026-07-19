@@ -38,21 +38,33 @@ function speak(text) {
 let lastRendered = '';
 async function send(text, { spoken = false } = {}) {
   bubble('you', text);
-  document.getElementById('agent-status').hidden = false;
-  document.getElementById('agent-status').textContent = 'Working…';
+  const status = document.getElementById('agent-status');
+  status.hidden = false;
+  status.textContent = 'Working…';
   try {
     const res = await fetch('/api/chat', { method: 'POST', headers: headers(), body: JSON.stringify({ text }) });
-    if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); return show('pairing'); }
+    if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); status.hidden = true; return show('pairing'); }
     const out = await res.json();
+    if (!res.ok || !out.reply) {
+      status.hidden = true;
+      bubble('jarvis', out.error || 'Something went wrong on the PC side — check the desktop.');
+      return;
+    }
     renderReply(out.reply, spoken);
-  } catch { show('offline'); }
+  } catch { document.getElementById('agent-status').hidden = true; show('offline'); }
 }
 
 function renderReply(reply, spoken) {
   document.getElementById('agent-status').hidden = true;
-  if (!reply || reply === lastRendered) return;
-  lastRendered = reply;
-  bubble('jarvis', reply);
+  if (!reply) return;
+  // A duplicate reply (e.g. the SSE copy arriving before the POST response)
+  // should only suppress the redundant chat bubble — never the speech, or a
+  // spoken:true reply that lands after its SSE twin would go silent.
+  const isDup = reply === lastRendered;
+  if (!isDup) {
+    lastRendered = reply;
+    bubble('jarvis', reply);
+  }
   if (spoken) speak(reply);
 }
 
@@ -86,16 +98,19 @@ micBtn.addEventListener('pointerdown', async (e) => {
       stream.getTracks().forEach((t) => t.stop());
       const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
       if (blob.size < 1000) return;   // accidental tap
-      document.getElementById('agent-status').hidden = false;
-      document.getElementById('agent-status').textContent = 'Listening back…';
+      const status = document.getElementById('agent-status');
+      status.hidden = false;
+      status.textContent = 'Listening back…';
       try {
         const res = await fetch('/api/voice', { method: 'POST', headers: { 'Content-Type': blob.type, Authorization: `Bearer ${key()}` }, body: blob });
-        if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); return show('pairing'); }
+        if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); status.hidden = true; return show('pairing'); }
         const out = await res.json();
-        if (out.error) return renderReply(out.error, true);
+        if (!res.ok || out.error || !out.reply) {
+          return renderReply(out.error || 'Something went wrong on the PC side — check the desktop.', true);
+        }
         bubble('you', out.transcript);
         renderReply(out.reply, true);
-      } catch { show('offline'); }
+      } catch { document.getElementById('agent-status').hidden = true; show('offline'); }
     };
     recorder.start();
     micBtn.classList.add('recording');

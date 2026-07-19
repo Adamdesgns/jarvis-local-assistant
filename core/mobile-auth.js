@@ -21,13 +21,18 @@ class MobileAuth {
     return { ...this.pairing };
   }
 
-  claimPairing(code, deviceName) {
+  claimPairing(code, deviceName, ip) {
+    if (this.isLockedOut(ip)) return null;
     const p = this.pairing;
-    if (!p || this.now() > p.expiresAt || String(code) !== p.code) return null;
+    if (!p || this.now() > p.expiresAt || String(code) !== p.code) {
+      this.failures.set(ip, (this.failures.get(ip) || 0) + 1);
+      return null;
+    }
     this.pairing = null;               // single use
     const key = this.random(32).toString('base64url');
     const device = { id: crypto.randomUUID(), name: String(deviceName || 'Phone').slice(0, 60), createdAt: this.now() };
     this.devices.push({ ...device, key });
+    this.failures.delete(ip);
     return { key, device };
   }
 
