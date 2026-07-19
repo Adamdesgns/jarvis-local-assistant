@@ -2,11 +2,14 @@ const { toolSpecs, executeToolCall } = require('./tool-registry');
 const { runAgent } = require('./agent-loop');
 const { normalizeOllama, normalizeAnthropic, anthropicTools, OpenAIResponsesSession } = require('./brain-adapters');
 
-// Tools withheld from unattended runs (scheduled tasks running with nobody
-// watching). Only genuinely actuating tools belong here — everything else in
-// the registry is read/append-only (add_task, list_open_tasks, remember_note,
-// search_memory, search_files, read_file, get_current_datetime, look_at_camera).
-const UNATTENDED_DENIED = ['open_application'];
+// Unattended runs (scheduled tasks firing with nobody watching) get an
+// allowlisted tool registry, not a denylisted one: a tool is only offered
+// when it explicitly carries unattendedSafe: true (set in tool-registry.js
+// on the genuinely read/append-only tools — add_task, list_open_tasks,
+// remember_note, search_memory, search_files, read_file,
+// get_current_datetime, look_at_camera). A new actuating tool added to the
+// registry later (like open_application) is denied unattended by default
+// until someone explicitly marks it unattendedSafe: true.
 
 // Folds one parsed NDJSON chunk from Ollama's streaming chat API into an
 // accumulator of { content, toolCalls }. Exported for tests.
@@ -45,7 +48,7 @@ class AIService {
   // unattended (e.g. a scheduled task firing with nobody watching).
   #registryFor(context) {
     const registry = this.registry || [];
-    if (context.unattended === true) return registry.filter((tool) => !UNATTENDED_DENIED.includes(tool.name));
+    if (context.unattended === true) return registry.filter((tool) => tool.unattendedSafe === true);
     return registry;
   }
 
@@ -203,7 +206,7 @@ class AIService {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model, stream: true, messages,
-            ...(withTools && this.registry ? { tools: toolSpecs(this.registry) } : {}),
+            ...(withTools && this.registry ? { tools: toolSpecs(this.#registryFor(context)) } : {}),
             options: { temperature: 0.35, num_ctx: 4096 }
           }),
           signal: controller.signal
@@ -249,7 +252,7 @@ class AIService {
       for (let round = 0; !grounded && round < 2 && Array.isArray(message.tool_calls) && message.tool_calls.length; round += 1) {
         messages.push({ role: 'assistant', content: message.content || '', tool_calls: message.tool_calls });
         for (const call of message.tool_calls.slice(0, 3)) {
-          const outcome = await executeToolCall(this.registry, call);
+          const outcome = await executeToolCall(this.#registryFor(context), call);
           usedTools.push(call.function?.name);
           messages.push({ role: 'tool', content: JSON.stringify(outcome) });
         }

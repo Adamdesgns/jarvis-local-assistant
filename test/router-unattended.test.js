@@ -245,3 +245,111 @@ test('attended: "forget the meeting notes" calls memory.forget with the original
   assert.deepEqual(calls.forget, ['the meeting notes']);
   assert.match(result.response, /Forgotten/i);
 });
+
+// FINDING 3: the "ask my documents" branch (core/router.js ~220) is the one
+// ai.answerFromDocuments call site that did not thread `unattended` into the
+// context — a sibling gap to findings 1a/1b above, discovered in the same
+// audit as the ai-service.js #registryFor/localReply issue.
+test('unattended: "ask my documents: what is the deadline" threads unattended:true into the ai.answerFromDocuments context', async () => {
+  const passages = [{ name: 'spec.pdf', path: 'C:\\Docs\\spec.pdf', page: 1, text: 'The deadline is Friday.' }];
+  const calls = { answerFromDocuments: [] };
+  const documents = { gatherPassages: async () => passages };
+  const ai = {
+    answerFromDocuments: async (question, given, context) => {
+      calls.answerFromDocuments.push({ question, given, context });
+      return { ok: true, source: 'documents', text: 'Friday [1].', sources: given.map((p, i) => ({ n: i + 1, name: p.name, path: p.path })) };
+    }
+  };
+  const router = routerWithDocuments({ documents, ai });
+  await router.handle('ask my documents: what is the deadline', 'general', { unattended: true });
+  assert.equal(calls.answerFromDocuments.length, 1);
+  assert.equal(calls.answerFromDocuments[0].context?.unattended, true);
+});
+
+test('attended: "ask my documents: what is the deadline" does not mark the context unattended (proves no regression)', async () => {
+  const passages = [{ name: 'spec.pdf', path: 'C:\\Docs\\spec.pdf', page: 1, text: 'The deadline is Friday.' }];
+  const calls = { answerFromDocuments: [] };
+  const documents = { gatherPassages: async () => passages };
+  const ai = {
+    answerFromDocuments: async (question, given, context) => {
+      calls.answerFromDocuments.push({ question, given, context });
+      return { ok: true, source: 'documents', text: 'Friday [1].', sources: given.map((p, i) => ({ n: i + 1, name: p.name, path: p.path })) };
+    }
+  };
+  const router = routerWithDocuments({ documents, ai });
+  await router.handle('ask my documents: what is the deadline', 'general');
+  assert.equal(calls.answerFromDocuments.length, 1);
+  assert.notEqual(calls.answerFromDocuments[0].context?.unattended, true);
+});
+
+// ---- FINDING 11: orphan approval entries — unattended runs must not queue
+// an approval that nothing will ever resolve (router.pending is a leak, and
+// "Review the file action before I continue" is nonsense spoken to an empty
+// room). Covers both the power-confirm path (~line 105) and #fileApproval
+// (~line 456), which are used by delete/copy/move/rename/organize. ----------
+
+function routerForApprovals({ tools, documents } = {}) {
+  return new CommandRouter({
+    config: { getSettings: () => ({ projects: {}, routines: {}, applications: {} }) },
+    tools: tools || fakeTools(),
+    documents: documents || null,
+    ai: {},
+    memory: { list: () => [], search: () => [] },
+    tasks: { list: () => [] },
+    log: { write: () => {} },
+    cameras: null
+  });
+}
+
+test('unattended: "restart my computer" does not queue a pending approval and returns an at-the-desk message', async () => {
+  const router = routerForApprovals();
+  const result = await router.handle('restart my computer', 'general', { unattended: true });
+  assert.equal(router.pending.size, 0);
+  assert.equal(result.approval, undefined);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "restart my computer" still queues a pending power approval (proves no regression)', async () => {
+  const router = routerForApprovals();
+  const result = await router.handle('restart my computer', 'general');
+  assert.equal(router.pending.size, 1);
+  assert.ok(result.approval?.id);
+  assert.equal(result.approval.title, 'RESTART COMPUTER');
+});
+
+test('unattended: "delete old files" does not queue a pending approval and returns an at-the-desk message', async () => {
+  const documents = { trashItem: async () => ({ ok: true, message: 'Moved to Recycle Bin.' }) };
+  const tools = fakeTools({ searchFiles: async () => [{ name: 'old-notes.txt', path: 'C:\\Docs\\old-notes.txt', score: 10 }] });
+  const router = routerForApprovals({ tools, documents });
+  const result = await router.handle('delete old files', 'general', { unattended: true });
+  assert.equal(router.pending.size, 0);
+  assert.equal(result.approval, undefined);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "delete old files" still queues a pending file approval (proves no regression)', async () => {
+  const documents = { trashItem: async () => ({ ok: true, message: 'Moved to Recycle Bin.' }) };
+  const tools = fakeTools({ searchFiles: async () => [{ name: 'old-notes.txt', path: 'C:\\Docs\\old-notes.txt', score: 10 }] });
+  const router = routerForApprovals({ tools, documents });
+  const result = await router.handle('delete old files', 'general');
+  assert.equal(router.pending.size, 1);
+  assert.ok(result.approval?.id);
+  assert.equal(result.approval.risk, 'HIGH');
+});
+
+test('unattended: "organize my documents" does not queue a pending approval and returns an at-the-desk message', async () => {
+  const documents = { planOrganization: async () => ({ directory: 'C:\\Docs', moves: [{ category: 'PDFs' }] }) };
+  const router = routerForApprovals({ documents });
+  const result = await router.handle('organize my documents', 'general', { unattended: true });
+  assert.equal(router.pending.size, 0);
+  assert.equal(result.approval, undefined);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "organize my documents" still queues a pending file approval (proves no regression)', async () => {
+  const documents = { planOrganization: async () => ({ directory: 'C:\\Docs', moves: [{ category: 'PDFs' }] }) };
+  const router = routerForApprovals({ documents });
+  const result = await router.handle('organize my documents', 'general');
+  assert.equal(router.pending.size, 1);
+  assert.ok(result.approval?.id);
+});

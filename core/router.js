@@ -101,6 +101,9 @@ class CommandRouter {
     }
     if (security.level === 'confirm') {
       const action = /\b(restart|reboot)\b/i.test(text) ? 'restart' : 'shutdown';
+      if (stream.unattended) {
+        return this.#result(`${action === 'restart' ? 'Restarting' : 'Shutting down'} the computer needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+      }
       const id = crypto.randomUUID();
       this.pending.set(id, { type: 'power', action });
       return this.#result(`Confirm ${action}.`, 'safety', {
@@ -217,7 +220,7 @@ class CommandRouter {
       if (!passages.length) {
         result = this.#result(`I couldn’t find anything about “${question}” in your approved documents.`, 'documents', { files: [] });
       } else {
-        const aiResult = await this.ai.answerFromDocuments(question, passages, { project, onChunk: stream.onChunk, onReset: stream.onReset });
+        const aiResult = await this.ai.answerFromDocuments(question, passages, { project, onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
         // Turn the cited passages into clickable file rows the user can open.
         const seen = new Set();
         const files = (aiResult.sources || []).filter((s) => { if (seen.has(s.path)) return false; seen.add(s.path); return true; })
@@ -284,18 +287,18 @@ class CommandRouter {
       const destination = this.documents.resolveLocation(location);
       if (!source) result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
       else if (!destination) result = this.#result(`Approve or assign the ${location} folder in Settings first.`, 'documents', { success: false });
-      else result = this.#fileApproval(operation.toLowerCase(), source.path, { destination }, `${operation.toUpperCase()} ${source.name}`, `${operation} ${source.path} to ${destination}`);
+      else result = this.#fileApproval(operation.toLowerCase(), source.path, { destination }, `${operation.toUpperCase()} ${source.name}`, `${operation} ${source.path} to ${destination}`, stream);
     } else if (this.documents && /^rename\s+(.+?)\s+to\s+(.+)$/i.test(text)) {
       const [, query, newName] = text.match(/^rename\s+(.+?)\s+to\s+(.+)$/i);
       const source = (await this.tools.searchFiles(query))[0];
       result = source
-        ? this.#fileApproval('rename', source.path, { newName }, `RENAME ${source.name}`, `Rename ${source.path} to ${newName}`)
+        ? this.#fileApproval('rename', source.path, { newName }, `RENAME ${source.name}`, `Rename ${source.path} to ${newName}`, stream)
         : this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
     } else if (this.documents && /^(?:delete|trash|remove)\s+(.+)$/i.test(text)) {
       const query = text.match(/^(?:delete|trash|remove)\s+(.+)$/i)[1];
       const source = (await this.tools.searchFiles(query))[0];
       result = source
-        ? this.#fileApproval('trash', source.path, {}, `MOVE ${source.name} TO RECYCLE BIN`, `This can be restored later from the Windows Recycle Bin.\n${source.path}`)
+        ? this.#fileApproval('trash', source.path, {}, `MOVE ${source.name} TO RECYCLE BIN`, `This can be restored later from the Windows Recycle Bin.\n${source.path}`, stream)
         : this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
     } else if (this.documents && /^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i.test(text)) {
       const location = text.match(/^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i)[1];
@@ -304,7 +307,7 @@ class CommandRouter {
         if (!plan.moves.length) result = this.#result(`The ${location} folder is already organized or contains no loose files.`, 'documents');
         else {
           const groups = [...new Set(plan.moves.map((item) => item.category))].join(', ');
-          result = this.#fileApproval('organize', plan.directory, { plan }, `ORGANIZE ${pathLabel(plan.directory)}`, `Move ${plan.moves.length} loose files into: ${groups}. Nothing will be deleted.`);
+          result = this.#fileApproval('organize', plan.directory, { plan }, `ORGANIZE ${pathLabel(plan.directory)}`, `Move ${plan.moves.length} loose files into: ${groups}. Nothing will be deleted.`, stream);
         }
       } catch (error) {
         result = this.#result(error.message, 'documents', { success: false });
@@ -453,7 +456,10 @@ class CommandRouter {
     return { id: crypto.randomUUID(), response, source, timestamp: new Date().toISOString(), ...extra };
   }
 
-  #fileApproval(operation, source, extra, title, detail) {
+  #fileApproval(operation, source, extra, title, detail, stream = {}) {
+    if (stream.unattended) {
+      return this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+    }
     const id = crypto.randomUUID();
     this.pending.set(id, { type: 'file', operation, source, ...extra });
     return this.#result('Review the file action before I continue.', 'safety', {

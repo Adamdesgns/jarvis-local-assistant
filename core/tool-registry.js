@@ -8,6 +8,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'add_task',
       description: 'Add a task or reminder to the local task list.',
+      unattendedSafe: true,
       parameters: {
         type: 'object',
         properties: {
@@ -24,6 +25,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'list_open_tasks',
       description: 'List the currently open tasks.',
+      unattendedSafe: true,
       parameters: { type: 'object', properties: {} },
       execute: async () => ({
         ok: true,
@@ -33,6 +35,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'remember_note',
       description: 'Save a short note to local memory.',
+      unattendedSafe: true,
       parameters: {
         type: 'object',
         properties: { text: { type: 'string', description: 'The note to remember' } },
@@ -43,6 +46,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'search_memory',
       description: 'Search saved local notes and memories.',
+      unattendedSafe: true,
       parameters: {
         type: 'object',
         properties: { query: { type: 'string' } },
@@ -53,6 +57,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'search_files',
       description: 'Search the approved folders for files by name or content keywords. Returns names and paths only.',
+      unattendedSafe: true,
       parameters: {
         type: 'object',
         properties: { query: { type: 'string' } },
@@ -66,6 +71,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'read_file',
       description: 'Read the text contents of a file inside the approved folders (use a path from search_files). Reads PDF, Word, Excel, CSV, text, and code.',
+      unattendedSafe: true,
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Full path to the file, from search_files' } },
@@ -94,12 +100,14 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'get_current_datetime',
       description: 'Get the current local date and time.',
+      unattendedSafe: true,
       parameters: { type: 'object', properties: {} },
       execute: async () => ({ ok: true, now: new Date().toString() })
     },
     {
       name: 'look_at_camera',
       description: 'Take a fresh snapshot from a named security camera and describe what is visible in it.',
+      unattendedSafe: true,
       parameters: {
         type: 'object',
         properties: { camera: { type: 'string', description: 'Camera name, e.g. "front door"' } },
