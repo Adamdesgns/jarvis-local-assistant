@@ -67,6 +67,14 @@ contextBridge.exposeInMainWorld('jarvis', {
     revoke: (id) => ipcRenderer.invoke('mobile:revoke', id),
     onStatus: (callback) => on('mobile:status', callback)
   },
+  schedule: {
+    list: () => ipcRenderer.invoke('schedule:list'),
+    add: (input) => ipcRenderer.invoke('schedule:add', input),
+    update: (id, patch) => ipcRenderer.invoke('schedule:update', { id, patch }),
+    remove: (id) => ipcRenderer.invoke('schedule:remove', id),
+    runNow: (id) => ipcRenderer.invoke('schedule:runNow', id),
+    onChanged: (callback) => on('schedule:changed', callback)
+  },
   files: {
     roots: () => ipcRenderer.invoke('files:roots'),
     home: () => ipcRenderer.invoke('files:home'),

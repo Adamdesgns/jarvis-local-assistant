@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const {
   app, BrowserWindow, ipcMain, dialog, shell, safeStorage, session,
-  Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer
+  Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
 const { ActivityLog } = require('./core/activity-log');
@@ -26,6 +26,8 @@ const { CommandRouter } = require('./core/router');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
+const { ScheduleStore } = require('./core/schedule-store');
+const { ScheduleService } = require('./core/schedule-service');
 const QRCode = require('qrcode');
 
 let mainWindow;
@@ -48,6 +50,8 @@ let cameras;
 let autonomy;
 let mobileAuth;
 let mobileServer;
+let scheduleStore;
+let scheduleService;
 let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
@@ -416,6 +420,39 @@ function setupIpc() {
     const qr = await QRCode.toDataURL(qrUrl, { margin: 1, width: 240 });
     return { ok: true, code, url, qr, expiresAt };
   });
+  ipcMain.handle('schedule:list', () => scheduleStore.list());
+  ipcMain.handle('schedule:add', (_event, input) => {
+    try {
+      const item = scheduleStore.add(input);
+      scheduleService.arm();
+      sendEverywhere('schedule:changed', scheduleStore.list());
+      return { ok: true, item };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+  ipcMain.handle('schedule:update', (_event, { id, patch }) => {
+    try {
+      const item = scheduleStore.update(id, patch);
+      scheduleService.arm();
+      sendEverywhere('schedule:changed', scheduleStore.list());
+      return { ok: true, item };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+  ipcMain.handle('schedule:remove', (_event, id) => {
+    const removed = scheduleStore.remove(id);
+    scheduleService.arm();
+    sendEverywhere('schedule:changed', scheduleStore.list());
+    return { ok: removed };
+  });
+  ipcMain.handle('schedule:runNow', async (_event, id) => {
+    const result = await scheduleService.runNow(id);
+    scheduleService.arm();
+    sendEverywhere('schedule:changed', scheduleStore.list());
+    return result;
+  });
   ipcMain.handle('ollama:connect', () => ollama.connect());
   ipcMain.handle('ollama:status', () => ollama.serverStatus());
   ipcMain.handle('openai:save-key', async (_event, key) => {
@@ -486,6 +523,7 @@ function setupIpc() {
       folderWatch.start();
     }
     if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
+    if (previous.schedulesEnabled !== updated.schedulesEnabled) scheduleService.start();
     return updated;
   });
   ipcMain.handle('update:check', () => checkForUpdate(app.getVersion(), updateRepo));
@@ -787,6 +825,10 @@ app.whenReady().then(async () => {
   };
   cameras.init();
   router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras });
+  scheduleStore = new ScheduleStore(app.getPath('userData'));
+  scheduleService = new ScheduleService({ store: scheduleStore, config, router, emit: sendEverywhere, log });
+  scheduleService.start();
+  powerMonitor.on('resume', () => scheduleService.arm());
   folderWatch = new FolderWatchService({
     config,
     emit: sendEverywhere,
@@ -837,6 +879,7 @@ app.on('before-quit', () => {
   isQuitting = true;
   localVoice?.stop();
   mobileServer?.stop();
+  scheduleService?.stop();
   cameras?.shutdown();
 });
 app.on('window-all-closed', () => { if (isQuitting) app.quit(); });
