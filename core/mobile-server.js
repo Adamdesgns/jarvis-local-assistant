@@ -107,7 +107,7 @@ class MobileServer {
       // Confirming/declining risky actions only makes sense at the desktop —
       // the phone has no UI for it. Decline the pending entry so it doesn't
       // sit around waiting to expire, and tell the phone where to look.
-      reply = 'That needs a confirmation at the desktop, sir.';
+      reply = 'Run that one at the desktop, sir.';
       if (typeof this.router.resolveApproval === 'function') {
         try { await this.router.resolveApproval(result.approval.id, false); } catch {}
       }

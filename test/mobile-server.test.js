@@ -134,7 +134,7 @@ test('#chat: an approval-shaped router result becomes a desktop-confirmation rep
 
   const res = fakeRes();
   await server.handleRequest(jsonReq('POST', '/api/chat', { text: 'shut down the computer' }, { authorization: `Bearer ${key}` }), res);
-  assert.equal(JSON.parse(res.body).reply, 'That needs a confirmation at the desktop, sir.');
+  assert.equal(JSON.parse(res.body).reply, 'Run that one at the desktop, sir.');
   assert.deepEqual(cancelled, [{ id: 'approval-1', approved: false }]);
 });
 
@@ -144,10 +144,11 @@ test('static file serving never leaks content outside staticDir on traversal att
     auth, router: { handle: async () => ({ response: 'x' }) }, transcribe: async () => 'unused',
     config: { getSettings: () => ({}) }, staticDir: __dirname
   });
-  for (const url of ['/..%2f..%2fpackage.json', '/../secrets']) {
+  for (const url of ['/..%2f..%2fpackage.json', '/../secrets', '//../package.json']) {
     const res = fakeRes();
     await server.handleRequest(jsonReq('GET', url, null, {}), res);
     assert.equal(res.code, 404);
+    assert.ok(!res.body.includes('"name"'), `path ${url} leaked package.json content`);
   }
 });
 

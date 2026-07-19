@@ -5,7 +5,7 @@ const CACHE = 'jarvis-shell-v2';
 const SHELL = ['/', '/mobile.css', '/mobile.js', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -22,7 +22,7 @@ self.addEventListener('fetch', (e) => {
     fetch(e.request)
       .then((response) => {
         const copy = response.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        if (response.ok) caches.open(CACHE).then((c) => c.put(e.request, copy));
         return response;
       })
       .catch(() => caches.match(e.request))
