@@ -135,10 +135,20 @@ class MobileServer {
     const address = pickBindAddress();
     if (!address) { this.reason = 'Tailscale is not running on this PC. Install/start Tailscale, then flip the toggle again.'; return { ok: false, reason: this.reason }; }
     const port = Number(settings.mobilePort) || 27183;
+    const handler = (req, res) => this.handleRequest(req, res);
     return new Promise((resolve) => {
-      this.server = http.createServer((req, res) => this.handleRequest(req, res));
+      this.server = http.createServer(handler);
       this.server.on('error', (error) => { this.reason = `Could not start on port ${port}: ${error.message}`; this.server = null; resolve({ ok: false, reason: this.reason }); });
       this.server.listen(port, address, () => {
+        // Also answer on loopback so `tailscale serve` can put a real HTTPS
+        // certificate in front of us: iPhone Safari refuses microphone access
+        // on any page that is not HTTPS, so plain tailnet HTTP can chat but
+        // never listen. Loopback reaches this machine only, so this does not
+        // widen network exposure — the tailnet bind above is still the only
+        // way in from another device.
+        this.loopback = http.createServer(handler);
+        this.loopback.on('error', () => { this.loopback = null; });
+        this.loopback.listen(port, '127.0.0.1', () => {});
         this.address = address; this.port = port; this.reason = '';
         resolve({ ok: true, address, port });
       });
@@ -151,7 +161,8 @@ class MobileServer {
     }
     this.streams.clear();
     try { this.server?.close(); } catch {}
-    this.server = null; this.address = null;
+    try { this.loopback?.close(); } catch {}
+    this.server = null; this.loopback = null; this.address = null;
   }
   status() { return { running: !!this.server, address: this.address, port: this.port, reason: this.reason }; }
 }
