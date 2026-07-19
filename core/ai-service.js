@@ -1,6 +1,6 @@
 const { toolSpecs, executeToolCall } = require('./tool-registry');
 const { runAgent } = require('./agent-loop');
-const { normalizeOllama, normalizeOpenAI, normalizeAnthropic, anthropicTools } = require('./brain-adapters');
+const { normalizeOllama, normalizeAnthropic, anthropicTools, OpenAIResponsesSession } = require('./brain-adapters');
 
 // Folds one parsed NDJSON chunk from Ollama's streaming chat API into an
 // accumulator of { content, toolCalls }. Exported for tests.
@@ -485,7 +485,11 @@ class AIService {
     const settings = this.config.getSettings();
     const apiKey = this.config.getSecret('openaiKey');
     if (!apiKey) throw new Error('OpenAI Cloud Brain needs an API key in Settings.');
-    const adapter = { chat: (messages, specs) => this.#openaiChat(settings, apiKey, messages, specs) };
+    // One stateless-but-replayable session per request: gpt-5.6 models reason
+    // by default and chat/completions refuses tools+reasoning, so the agent
+    // speaks /v1/responses and replays reasoning items between tool rounds.
+    const session = new OpenAIResponsesSession();
+    const adapter = { chat: (messages, specs) => this.#openaiChat(settings, apiKey, session, messages, specs) };
     const messages = this.#initialMessages(text, context);
     const { text: answer, usedTools } = await runAgent({ adapter, registry: this.registry || [], messages, onStep: context.onStep });
     if (!answer) throw new Error('OpenAI returned no text.');
@@ -493,37 +497,21 @@ class AIService {
     return { ok: true, source: 'openai', text: answer, usedTools };
   }
 
-  async #openaiChat(settings, apiKey, messages, specs) {
-    const wire = messages.map((m) => {
-      if (m.role === 'assistant' && Array.isArray(m.toolCalls)) {
-        return { role: 'assistant', content: m.content || null, tool_calls: m.toolCalls.map((c) => ({ id: c.id || `call_${c.name}`, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) } })) };
-      }
-      if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId || `call_${m.name}`, content: m.content };
-      return { role: m.role, content: m.content };
-    });
-    // GPT-5 / o-series models reject the legacy `max_tokens` on chat/completions
-    // and require `max_completion_tokens`; some older or OpenAI-compatible
-    // endpoints only accept the legacy field. Send the modern one, then swap
-    // once if the API objects to the token parameter.
-    const send = async (tokenField) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 60000);
-      try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model: settings.openaiModel || 'gpt-5-mini', messages: wire, ...(specs && specs.length ? { tools: specs, tool_choice: 'auto' } : {}), [tokenField]: 900 }),
-          signal: controller.signal
-        });
-        return { response, payload: await response.json() };
-      } finally { clearTimeout(timeout); }
-    };
-    let { response, payload } = await send('max_completion_tokens');
-    if (!response.ok && /max_completion_tokens|max_tokens/i.test(payload?.error?.message || '')) {
-      ({ response, payload } = await send('max_tokens'));
-    }
-    if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
-    return normalizeOpenAI(payload.choices?.[0]?.message || {});
+  async #openaiChat(settings, apiKey, session, messages, specs) {
+    const controller = new AbortController();
+    // Reasoning models think before they answer; give them more room than chat did.
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(session.buildRequest(messages, specs, { model: settings.openaiModel || 'gpt-5-mini' })),
+        signal: controller.signal
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
+      return session.absorb(payload);
+    } finally { clearTimeout(timeout); }
   }
 
   async #anthropicAgent(text, context) {
