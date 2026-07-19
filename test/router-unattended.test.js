@@ -155,3 +155,93 @@ test('attended: "open quarterly numbers" (unresolved app, file search) calls too
   assert.deepEqual(tools.calls.openPath, ['C:\\Docs\\quarterly numbers.xlsx']);
   assert.match(result.response, /Found it/i);
 });
+
+// ---- Re-review findings: ai.reply() calls that didn't thread `unattended`,
+// and the ungated `forget` deletion branch. ----------------------------------
+
+function fakeAi(overrides = {}) {
+  const calls = { reply: [] };
+  return {
+    calls,
+    reply: async (text, context) => { calls.reply.push({ text, context }); return { text: 'AI reply text', ok: true, source: 'ollama' }; },
+    ...overrides
+  };
+}
+
+function routerWithDocuments({ tools, documents, ai, memory } = {}) {
+  return new CommandRouter({
+    config: { getSettings: () => ({ projects: {}, routines: {}, applications: {} }) },
+    tools: tools || fakeTools(),
+    documents,
+    ai: ai || fakeAi(),
+    memory: memory || { list: () => [], search: () => [] },
+    tasks: { list: () => [] },
+    log: { write: () => {} },
+    cameras: null
+  });
+}
+
+// FINDING 1a: read/summarize-document branch (core/router.js ~243) must
+// thread unattended into the context handed to ai.reply, since the model
+// could otherwise call open_application while nobody is watching — worse,
+// the document content itself is attacker-controllable (prompt injection).
+test('unattended: "summarize report" threads unattended:true into the ai.reply context', async () => {
+  const tools = fakeTools({ searchFiles: async () => [{ name: 'report.pdf', path: 'C:\\Docs\\report.pdf', type: 'file' }] });
+  const documents = { supports: () => true, readDocument: async () => ({ name: 'report.pdf', text: 'doc text', truncated: false }) };
+  const ai = fakeAi();
+  const router = routerWithDocuments({ tools, documents, ai });
+  await router.handle('summarize report', 'general', { unattended: true });
+  assert.equal(ai.calls.reply.length, 1);
+  assert.equal(ai.calls.reply[0].context?.unattended, true);
+});
+
+test('attended: "summarize report" does not mark the ai.reply context unattended (proves no regression)', async () => {
+  const tools = fakeTools({ searchFiles: async () => [{ name: 'report.pdf', path: 'C:\\Docs\\report.pdf', type: 'file' }] });
+  const documents = { supports: () => true, readDocument: async () => ({ name: 'report.pdf', text: 'doc text', truncated: false }) };
+  const ai = fakeAi();
+  const router = routerWithDocuments({ tools, documents, ai });
+  await router.handle('summarize report', 'general');
+  assert.equal(ai.calls.reply.length, 1);
+  assert.notEqual(ai.calls.reply[0].context?.unattended, true);
+});
+
+// FINDING 1b: create-report branch (core/router.js ~267) must also thread
+// unattended into the ai.reply context.
+test('unattended: "create a report called notes about widgets" threads unattended:true into the ai.reply context', async () => {
+  const documents = { createTextFile: async (folder, name, content, ext) => ({ message: 'Created.', path: 'C:\\Docs\\notes.md', ok: true }) };
+  const ai = fakeAi();
+  const router = routerWithDocuments({ documents, ai });
+  await router.handle('create a report called notes about widgets', 'general', { unattended: true });
+  assert.equal(ai.calls.reply.length, 1);
+  assert.equal(ai.calls.reply[0].context?.unattended, true);
+});
+
+test('attended: "create a report called notes about widgets" does not mark the ai.reply context unattended (proves no regression)', async () => {
+  const documents = { createTextFile: async (folder, name, content, ext) => ({ message: 'Created.', path: 'C:\\Docs\\notes.md', ok: true }) };
+  const ai = fakeAi();
+  const router = routerWithDocuments({ documents, ai });
+  await router.handle('create a report called notes about widgets', 'general');
+  assert.equal(ai.calls.reply.length, 1);
+  assert.notEqual(ai.calls.reply[0].context?.unattended, true);
+});
+
+// FINDING 2: the `forget` branch is an outright deletion (memory.forget) and
+// must be gated for unattended runs, per the policy documented at
+// core/ai-service.js:5-9 (deleting is not allowed unattended).
+test('unattended: "forget the meeting notes" does not call memory.forget and explains it needs Adam at the desk', async () => {
+  const calls = { forget: [] };
+  const memory = { list: () => [], search: () => [], forget: (query) => { calls.forget.push(query); return { text: query }; } };
+  const router = routerWithDocuments({ memory });
+  const result = await router.handle('forget the meeting notes', 'general', { unattended: true });
+  assert.equal(calls.forget.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "forget the meeting notes" calls memory.forget with the original query (proves attended behavior unchanged)', async () => {
+  const calls = { forget: [] };
+  const memory = { list: () => [], search: () => [], forget: (query) => { calls.forget.push(query); return { text: query }; } };
+  const router = routerWithDocuments({ memory });
+  const result = await router.handle('forget the meeting notes', 'general');
+  assert.deepEqual(calls.forget, ['the meeting notes']);
+  assert.match(result.response, /Forgotten/i);
+});

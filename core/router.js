@@ -196,10 +196,14 @@ class CommandRouter {
       result = this.#result('Fresh conversation started. Earlier chat context is cleared.', 'local-core');
     } else if (/^forget\s+(?:that\s+|about\s+)?(.+)/i.test(text)) {
       const query = text.match(/^forget\s+(?:that\s+|about\s+)?(.+)/i)[1];
-      const forgotten = this.memory.forget(query);
-      result = forgotten
-        ? this.#result(`Forgotten: ${forgotten.text}`, 'memory', { memories: this.memory.list(30) })
-        : this.#result(`I don’t have a saved memory matching “${query}.”`, 'memory');
+      if (stream.unattended) {
+        result = this.#result(`Forgetting things needs you at the desk, sir — I've left it for you.`, 'memory', { success: false });
+      } else {
+        const forgotten = this.memory.forget(query);
+        result = forgotten
+          ? this.#result(`Forgotten: ${forgotten.text}`, 'memory', { memories: this.memory.list(30) })
+          : this.#result(`I don’t have a saved memory matching “${query}.”`, 'memory');
+      }
     } else if (/what do you remember about\s+(.+)/i.test(text)) {
       const query = text.match(/what do you remember about\s+(.+)/i)[1];
       const memories = this.memory.search(query);
@@ -240,7 +244,7 @@ class CommandRouter {
       } else {
         try {
           const document = await this.documents.readDocument(matches[0].path, 14000);
-          const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`);
+          const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`, { unattended: stream.unattended === true });
           result = this.#result(summary.text, summary.source, { document: matches[0], success: summary.ok, detail: document.truncated ? 'The document was long, so JARVIS summarized the first section.' : '' });
         } catch (error) {
           result = this.#result(`I found the document but couldn't read it. ${error.message}`, 'documents', { success: false });
@@ -264,7 +268,7 @@ class CommandRouter {
       }
     } else if (this.documents && /^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i.test(text)) {
       const [, name, topic] = text.match(/^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i);
-      const draft = await this.ai.reply(`Write a concise, useful Markdown report about: ${topic}. Use a title, short summary, key points, and next actions.`);
+      const draft = await this.ai.reply(`Write a concise, useful Markdown report about: ${topic}. Use a title, short summary, key points, and next actions.`, { unattended: stream.unattended === true });
       if (!draft.ok) result = this.#result(draft.text, draft.source, { success: false });
       else {
         try {
