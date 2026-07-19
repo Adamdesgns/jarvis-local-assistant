@@ -753,7 +753,11 @@ app.whenReady().then(async () => {
   tasks = new TaskStore(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });
   documents = new DocumentService({ config, shell, emit: sendEverywhere });
-  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents }));
+  // getCameras/getAi are lazy getters: `cameras` isn't constructed until
+  // below, and `ai` cannot be passed to its own registry before `new
+  // AIService(...)` returns. Both closures resolve once the module-level
+  // `let` bindings are assigned, without reordering construction.
+  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai }));
   ollama = new OllamaService({ config, emit: sendEverywhere });
   go2rtc = new Go2RtcManager({
     binaryPath: app.isPackaged

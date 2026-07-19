@@ -3,7 +3,7 @@
    absent: those run only through the deterministic router with approval
    cards, never on the model's own initiative. */
 
-function buildToolRegistry({ tools, tasks, memory, config, documents }) {
+function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras, getAi }) {
   const registry = [
     {
       name: 'add_task',
@@ -96,6 +96,39 @@ function buildToolRegistry({ tools, tasks, memory, config, documents }) {
       description: 'Get the current local date and time.',
       parameters: { type: 'object', properties: {} },
       execute: async () => ({ ok: true, now: new Date().toString() })
+    },
+    {
+      name: 'look_at_camera',
+      description: 'Take a fresh snapshot from a named security camera and describe what is visible in it.',
+      parameters: {
+        type: 'object',
+        properties: { camera: { type: 'string', description: 'Camera name, e.g. "front door"' } },
+        required: ['camera']
+      },
+      // Composes exactly what CommandRouter#cameraLook does: match by name
+      // (case-insensitive), grab a fresh manual snapshot, then let the vision
+      // model describe it. Every step degrades to a friendly { ok: false }.
+      execute: async (args) => {
+        const camerasService = typeof getCameras === 'function' ? getCameras() : null;
+        if (!camerasService) return { ok: false, message: 'No cameras are configured.' };
+        const wanted = String(args.camera || '').trim().toLowerCase();
+        let list = [];
+        try { list = (await camerasService.listCameras()) || []; } catch { list = []; }
+        const camera = list.find((item) => item.name.toLowerCase() === wanted)
+          || list.find((item) => item.name.toLowerCase().includes(wanted) || wanted.includes(item.name.toLowerCase()));
+        if (!camera) return { ok: false, message: `No camera matching "${args.camera}" was found.` };
+        const shot = await camerasService.getSnapshot(camera.key, { manual: true });
+        if (!shot.ok) return { ok: false, message: `Could not get a picture from ${camera.name}.${shot.message ? ` ${shot.message}` : ''}` };
+        const aiService = typeof getAi === 'function' ? getAi() : null;
+        if (!aiService || typeof aiService.describeCameraFrame !== 'function') {
+          return { ok: false, message: `Took a picture from ${camera.name}, but no vision model is set up to describe it.` };
+        }
+        const described = await aiService.describeCameraFrame(shot.jpegBase64, camera.name);
+        if (!described.ok) {
+          return { ok: false, message: `Took a picture from ${camera.name}, but could not describe it.` };
+        }
+        return { ok: true, camera: camera.name, description: described.text };
+      }
     }
   ];
   void config;

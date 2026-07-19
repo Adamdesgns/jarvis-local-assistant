@@ -375,7 +375,7 @@ class CommandRouter {
       result = this.#result('Local core, task manager, memory, file tools, and safety controls are responding.', 'local-core');
     } else {
       const memories = this.memory.search(text, 4);
-      const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10) });
+      const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true });
       const extra = { detail: aiResult.detail, success: aiResult.ok };
       // When the brain used a tool that changed local state, hand the fresh
       // list back so the modules redraw instead of showing stale data.

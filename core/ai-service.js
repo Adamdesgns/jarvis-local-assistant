@@ -2,6 +2,12 @@ const { toolSpecs, executeToolCall } = require('./tool-registry');
 const { runAgent } = require('./agent-loop');
 const { normalizeOllama, normalizeAnthropic, anthropicTools, OpenAIResponsesSession } = require('./brain-adapters');
 
+// Tools withheld from unattended runs (scheduled tasks running with nobody
+// watching). Only genuinely actuating tools belong here — everything else in
+// the registry is read/append-only (add_task, list_open_tasks, remember_note,
+// search_memory, search_files, read_file, get_current_datetime, look_at_camera).
+const UNATTENDED_DENIED = ['open_application'];
+
 // Folds one parsed NDJSON chunk from Ollama's streaming chat API into an
 // accumulator of { content, toolCalls }. Exported for tests.
 function accumulateStreamChunk(state, chunk) {
@@ -33,6 +39,14 @@ class AIService {
 
   resetSession(project) {
     this.sessions.delete(String(project || 'general').toLowerCase());
+  }
+
+  // The agentic loop's registry, filtered when the caller marked this run
+  // unattended (e.g. a scheduled task firing with nobody watching).
+  #registryFor(context) {
+    const registry = this.registry || [];
+    if (context.unattended === true) return registry.filter((tool) => !UNATTENDED_DENIED.includes(tool.name));
+    return registry;
   }
 
   cancel() {
@@ -428,7 +442,7 @@ class AIService {
       const model = String(selected.name || selected.model);
       const adapter = { chat: (messages, specs, opts) => this.#ollamaChat(model, messages, specs, opts, controller, context) };
       const messages = this.#initialMessages(text, context);
-      const { text: answer, usedTools } = await runAgent({ adapter, registry: this.registry || [], messages, onStep: context.onStep });
+      const { text: answer, usedTools } = await runAgent({ adapter, registry: this.#registryFor(context), messages, onStep: context.onStep });
       if (!answer) throw new Error('The local model returned no text.');
       if (!context.systemOverride) this.#remember(context.project, text, answer);
       return { ok: true, source: 'ollama', text: answer, usedTools };
@@ -491,7 +505,7 @@ class AIService {
     const session = new OpenAIResponsesSession();
     const adapter = { chat: (messages, specs) => this.#openaiChat(settings, apiKey, session, messages, specs) };
     const messages = this.#initialMessages(text, context);
-    const { text: answer, usedTools } = await runAgent({ adapter, registry: this.registry || [], messages, onStep: context.onStep });
+    const { text: answer, usedTools } = await runAgent({ adapter, registry: this.#registryFor(context), messages, onStep: context.onStep });
     if (!answer) throw new Error('OpenAI returned no text.');
     if (!context.systemOverride) this.#remember(context.project, text, answer);
     return { ok: true, source: 'openai', text: answer, usedTools };
@@ -520,7 +534,7 @@ class AIService {
     if (!apiKey) throw new Error('Claude Cloud Brain needs an API key in Settings.');
     const adapter = { chat: (messages, specs) => this.#anthropicChat(settings, apiKey, messages, specs) };
     const messages = this.#initialMessages(text, context);
-    const { text: answer, usedTools } = await runAgent({ adapter, registry: this.registry || [], messages, onStep: context.onStep });
+    const { text: answer, usedTools } = await runAgent({ adapter, registry: this.#registryFor(context), messages, onStep: context.onStep });
     if (!answer) throw new Error('Claude returned no text.');
     if (!context.systemOverride) this.#remember(context.project, text, answer);
     return { ok: true, source: 'anthropic', text: answer, usedTools };
