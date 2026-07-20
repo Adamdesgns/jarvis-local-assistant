@@ -48,6 +48,25 @@ function friendlyError(error) {
   return 'That command did not finish. Try it again or check Settings.';
 }
 
+// --- Voice interrupt --------------------------------------------------
+// A deliberately small, strict set of phrases that mean "stop talking right
+// now." Matched against the WHOLE utterance (after stripping a leading
+// "Jarvis"/"Hey Jarvis" address) so a real command that merely contains the
+// word "stop" — "stop the timer" — still reaches the brain normally.
+const INTERRUPT_PHRASES = ['stop', 'shut up', 'quiet', 'nevermind', 'never mind', 'cancel that'];
+
+function isInterrupt(transcript) {
+  const normalized = String(transcript || '')
+    .toLowerCase()
+    .replace(/[.,!?]+/g, '')
+    .trim();
+  if (!normalized) return false;
+  // The wake word is normally consumed before recording starts, but if the
+  // user still addresses him by name ("Jarvis, stop") strip it before matching.
+  const withoutAddress = normalized.replace(/^(?:hey\s+)?jarvis[, ]*/, '').trim();
+  return INTERRUPT_PHRASES.includes(withoutAddress || normalized);
+}
+
 function setCoreState(coreState, kicker) {
   const labels = { ready: 'READY', listening: 'LISTENING', processing: 'PROCESSING', speaking: 'RESPONDING', error: 'ATTENTION', exploding: 'SEARCHING' };
   $('core-state').textContent = labels[coreState] || coreState.toUpperCase();
@@ -246,6 +265,16 @@ function speak(message, retry = false) {
     if (!state.searchActive) setCoreState('ready');
   };
   speechSynthesis.speak(utterance);
+}
+
+// Full stop: abort whatever the brain is doing AND kill the voice — either
+// one alone leaves him still talking (or still "thinking" after you've cut
+// him off), which is the whole complaint this exists to fix.
+function interruptJarvis() {
+  window.jarvis.cancelAI();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  document.body.classList.remove('busy');
+  if (!state.searchActive) setCoreState('ready');
 }
 
 function moduleElement(name) {
@@ -592,7 +621,10 @@ async function startRecording(trigger = 'manual') {
       setCoreState('processing', 'LOCAL SPEECH RECOGNITION');
       try {
         const transcript = await window.jarvis.transcribe(new Uint8Array(await blob.arrayBuffer()), blob.type);
-        if (transcript) executeCommand(transcript);
+        // Checked BEFORE the transcript ever reaches the brain — otherwise "stop"
+        // just becomes another command queued behind the one being interrupted.
+        if (transcript && isInterrupt(transcript)) { interruptJarvis(); setResponse('Standing by.'); }
+        else if (transcript) executeCommand(transcript);
         else { setResponse('I didn’t catch that. Try once more.'); setCoreState('ready'); }
       } catch (error) {
         const message = friendlyError(error); setResponse(message); showToast(message); setCoreState('error', 'LOCAL VOICE NEEDS ATTENTION');
@@ -1412,9 +1444,14 @@ function bindEvents() {
   window.jarvis.onScreenViewing(({ active }) => {
     $('screen-privacy').classList.toggle('visible', Boolean(active));
   });
-  $('ai-stop').addEventListener('click', () => window.jarvis.cancelAI());
+  $('ai-stop').addEventListener('click', () => interruptJarvis());
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && document.body.classList.contains('busy')) window.jarvis.cancelAI();
+    if (event.key !== 'Escape') return;
+    // A dialog handles its own Escape (approval modal, settings, diagnostics)
+    // — let it close normally instead of also cutting off speech underneath it.
+    if (document.querySelector('dialog[open]')) return;
+    const speaking = 'speechSynthesis' in window && speechSynthesis.speaking;
+    if (speaking || document.body.classList.contains('busy')) interruptJarvis();
   });
   window.jarvis.onAIStream(({ piece }) => {
     state.streamBuffer = (state.streamBuffer || '') + piece;
@@ -1486,4 +1523,8 @@ async function initialize() {
   setInterval(async () => { try { renderTelemetry(await window.jarvis.telemetry()); } catch {} }, 4000);
 }
 
-window.addEventListener('DOMContentLoaded', initialize);
+// Dual export, same pattern as src/skins.js: node:test can require this file
+// to unit-test isInterrupt() directly; the browser loads it as a classic
+// <script> where `module` is never defined, so this line is a no-op there.
+if (typeof module !== 'undefined' && module.exports) module.exports = { isInterrupt, INTERRUPT_PHRASES };
+if (typeof window !== 'undefined') window.addEventListener('DOMContentLoaded', initialize);
