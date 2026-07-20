@@ -1,5 +1,15 @@
 # JARVIS Changelog
 
+## 0.14.0 — July 19, 2026
+
+### Added — JARVIS Mobile v2: bottom tabs, cameras on the phone (stills + alerts), phone-to-PC file sending, macOS-style look, HTTPS pairing QR
+- Three-tab navigation: Chat, Cameras, Send. All tabs update with your system's light/dark theme.
+- **Cameras**: view fresh snapshots from your Ring doorbell and other cameras, tap to refresh, receive badges and alerts for motion/doorbell events.
+- **Send**: pick photos and files from your iPhone library, choose a destination folder on your PC, upload with file size validation (max 25 MB). Uploaded files appear immediately in that folder.
+- **Pairing redesign**: Settings → MOBILE now shows a MOBILE PUBLIC URL (your private HTTPS Tailscale address). The QR code opens that address and pre-fills the six-digit code — no typing needed.
+- **macOS-style design**: cleaner layout, real JARVIS app icon (re-add to home screen if upgrading), polished Typography and spacing.
+- Voice messages still work in Chat over HTTPS (requires the secure pairing address, not HTTP).
+
 ## 0.13.0 — July 19, 2026
 
 ### Added — Scheduled tasks: reminders, agent requests, camera checks and daily briefings on a timer (off by default)

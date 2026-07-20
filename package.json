@@ -1,6 +1,6 @@
 {
   "name": "jarvis-local-assistant",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "A free, private, local Windows assistant for tasks, memory, and file finding.",
   "main": "main.js",
   "author": "Adam",

@@ -78,27 +78,33 @@ Now JARVIS knows to listen for your phone.
 4. Find the toggle that says **PHONE ACCESS** and turn it **ON**.
    - Expected: when you do, you will see a button labeled **PAIR A PHONE** and
      a blue QR code appear on screen. Keep JARVIS Settings open.
+5. Look for a field labeled **MOBILE PUBLIC URL**. It should contain an HTTPS
+   address (something like `https://alienadam.taile7c34c.ts.net`). This is your
+   Tailscale address. The QR code will open this address when scanned, with the
+   six-digit pairing code pre-filled — you won't need to type it.
 
 ---
 
 ## Section 4 — Pair your iPhone to JARVIS
 
 The QR code is how your iPhone proves it is allowed to talk to JARVIS. You
-scan it with the iPhone camera.
+scan it with the iPhone camera. The QR code now opens your private HTTPS
+Tailscale address with the six-digit code already filled in.
 
 1. Make sure you can see both JARVIS Settings (on your PC) and your iPhone.
 2. On your **iPhone**, open the **Camera** app.
 3. Point it at the **QR code** shown in JARVIS Settings.
    - Expected: within a second or two, a notification pops up at the top saying
-     something like "Open in JARVIS" or showing a link. Tap it.
+     "Open in JARVIS" or showing a link. Tap it.
    - If nothing happens: make sure the QR code is well-lit and in focus. Try
      from different angles.
-4. Safari opens on JARVIS's pairing screen with the six-digit code already
-   filled in — the QR carries the code, so you should not need to type
-   anything.
-   - Fallback: if scanning does not work, type the URL shown next to the QR
-     code (in JARVIS Settings) into Safari by hand, then type the six-digit
-     code from the same Settings panel into the text box.
+4. Safari opens and navigates to your JARVIS private address (the HTTPS URL
+   from the MOBILE PUBLIC URL field). The six-digit pairing code should already
+   be filled in — the QR carries it, so you should not need to type anything.
+   - Fallback: if scanning does not work, open Safari and manually type the
+     HTTPS address shown in the MOBILE PUBLIC URL field (in JARVIS Settings),
+     then type the six-digit code from the same Settings panel into the text
+     box.
 5. Tap **PAIR**.
    - Expected: the page now says something like "Device paired" or "You are
      connected to JARVIS," and you should see a **TAP TO OPEN JARVIS** link
@@ -109,20 +115,26 @@ scan it with the iPhone camera.
 ## Section 5 — Add JARVIS to your Home Screen
 
 This makes JARVIS appear as an icon on your iPhone home screen, just like any
-other app.
+other app. JARVIS now has a real app icon (matching the desktop look).
 
 1. From the pairing success page, tap **TAP TO OPEN JARVIS** (or just navigate
    to the JARVIS URL in Safari manually if you closed it).
-   - Expected: you see a JARVIS chat screen with a message box at the bottom.
+   - Expected: you see the JARVIS app with three tabs at the bottom: **Chat**,
+     **Cameras**, and **Send**. The Chat tab should have a message box at the
+     bottom.
 2. At the bottom of Safari, tap the **Share** button (the square with an arrow
    pointing out).
 3. Scroll down and tap **Add to Home Screen**.
    - Expected: a popup asks you to name it. It should say "JARVIS" by default.
+   - You should see the real JARVIS icon (not a generic Safari icon).
 4. Tap **ADD** in the top right.
    - Expected: you return to Safari and see a brief confirmation. The JARVIS
      icon should now appear on your home screen.
 5. Go to your iPhone home screen and look for the JARVIS icon. Tap it.
    - Expected: JARVIS opens (it may take a few seconds the first time).
+   - Note: If you already had JARVIS added to your home screen in a previous
+     version, you may want to delete the old icon (long-press and tap Remove)
+     and re-add it so the new icon appears.
 
 ---
 
@@ -131,12 +143,14 @@ other app.
 This is the most basic test: can the phone send a message to JARVIS and get a
 reply?
 
-1. In JARVIS on your iPhone, tap the message box at the bottom.
-2. Type a simple message like **"Hello, can you hear me?"**
-3. Tap **SEND** (or press return).
+1. In JARVIS on your iPhone, tap the **Chat** tab at the bottom (if you are not
+   already there).
+2. Tap the message box at the bottom.
+3. Type a simple message like **"Hello, can you hear me?"**
+4. Tap **SEND** (or press return).
    - Expected: the message appears in the chat, and within a few seconds JARVIS
      sends back a reply (something like "Hi! I'm here" or similar).
-4. If no reply appears: go back to your PC, check that JARVIS is still open and
+5. If no reply appears: go back to your PC, check that JARVIS is still open and
    listening, and check the Tailscale app is still showing Connected.
 
 ---
@@ -144,23 +158,97 @@ reply?
 ## Section 7 — Voice message test
 
 This tests that voice works from the phone. It is a press-and-hold action.
+Voice only works when you are on the **Chat** tab and connected over HTTPS
+(Tailscale + the secure pairing address).
 
-1. In JARVIS on your iPhone, find the microphone button (or the area below the
-   message box where voice input should be).
-2. **Press and hold** on it (do not tap once — you must hold it down).
+1. In JARVIS on your iPhone, make sure you are on the **Chat** tab.
+2. Find the microphone button (or the area below the message box where voice
+   input should be).
+3. **Press and hold** on it (do not tap once — you must hold it down).
    - Expected: a circle or waveform appears, and you hear a beep. You can now
      speak.
-3. While holding, say something like **"What time is it?"** in a normal voice.
-4. Release your finger.
+4. While holding, say something like **"What time is it?"** in a normal voice.
+5. Release your finger.
    - Expected: the recording stops, JARVIS sends it to your PC, and within a
      few seconds you get back a voice reply (you will hear audio playing). The
      message also appears as text in the chat.
-5. If you hear nothing: check that your iPhone volume is on (use the side
-   buttons) and that you are not in silent mode.
+6. If you hear nothing: check that your iPhone volume is on (use the side
+   buttons), that you are not in silent mode, and that you are on the HTTPS
+   address (not an HTTP connection).
 
 ---
 
-## Section 8 — Network interruption test (Wi-Fi off)
+## Section 8 — Cameras
+
+This tests that you can view camera snapshots from your iPhone and receive
+alerts when motion or doorbell events happen.
+
+1. In JARVIS on your iPhone, tap the **Cameras** tab at the bottom.
+   - Expected: you see a list of your cameras (if you have Ring, Wyze, or other
+     cameras set up in JARVIS on your PC).
+2. Tap on a camera — try the **Ring doorbell** if you have one.
+   - Expected: the app shows a fresh still image from the camera and a timestamp
+     showing when it was taken.
+3. Tap the **REFRESH** button to get a new snapshot.
+   - Expected: a new image appears with an updated timestamp.
+4. If your Ring has motion or doorbell events enabled (on your PC in JARVIS
+   Settings), trigger one by pressing the doorbell or waving in front of it.
+   - Expected: within a few seconds, the **Cameras** tab at the bottom shows a
+     red badge with a number, and you see a banner or alert at the top of the
+     screen saying something like "Motion detected on Ring doorbell" or "Doorbell
+     pressed."
+5. Tap the alert or go back to the camera.
+   - Expected: you see the updated image from the event.
+
+---
+
+## Section 9 — Send photos and files to your PC
+
+This tests that you can pick a photo or file from your iPhone and upload it to
+a folder on your PC.
+
+1. In JARVIS on your iPhone, tap the **Send** tab at the bottom.
+   - Expected: you see a button or area to pick a file or photo.
+2. Tap **Pick a file** (or the equivalent button).
+   - Expected: the photo library or file picker opens.
+3. Select a photo or small file from your library.
+   - Expected: the app shows a preview of what you selected.
+4. The app should now show a list of folders where you can save the file. Pick
+   a folder (for example, Downloads or Documents).
+   - Expected: you see the folder name displayed.
+5. Tap **UPLOAD**.
+   - Expected: a progress indicator appears, and after a few seconds you see a
+     confirmation saying "Upload successful" or similar. The file should now
+     exist in that folder on your PC (check File Explorer or open JARVIS and
+     browse to that folder).
+6. **Test the file size limit:** now try a file larger than 25 MB.
+   - Expected: the app shows a clear error message: something like "File is too
+     large — maximum 25 MB" or similar. The upload does not happen.
+
+---
+
+## Section 10 — Look and feel check
+
+This tests the visual design and branding of the app on your phone.
+
+1. Look at the **overall design** of JARVIS on your iPhone.
+   - Expected: the app has a macOS-style look — clean, minimal, with proper
+     spacing and a modern feel. It should feel polished and professional.
+2. Check the **JARVIS icon** on your home screen.
+   - Expected: it should be a real app icon (not a generic Safari bookmark).
+     The icon should match the JARVIS logo you see on your PC.
+3. Open **Settings** on your iPhone and go to **Display**.
+4. Toggle between **Light** and **Dark** mode.
+   - Expected: JARVIS updates its colors and text contrast to match. In dark
+     mode, the background should be dark with light text. In light mode, the
+     background should be light. Both modes should be readable and look
+     intentional (not just inverted colors).
+5. Return to JARVIS to confirm the mode changed correctly.
+   - Expected: all three tabs (Chat, Cameras, Send) respect the system theme.
+
+---
+
+## Section 11 — Network interruption test (Wi-Fi off)
 
 This test makes sure JARVIS tells you when it cannot reach your PC, and lets
 you retry when it is back.
@@ -185,7 +273,7 @@ you retry when it is back.
 
 ---
 
-## Section 9 — Revoke and re-pair
+## Section 12 — Revoke and re-pair
 
 This tests that you can disconnect the phone and require it to pair again. It
 is the security feature that keeps unwanted devices out.
@@ -206,7 +294,7 @@ is the security feature that keeps unwanted devices out.
 
 ---
 
-## Section 10 — Cellular test (advanced)
+## Section 13 — Cellular test (advanced)
 
 This test confirms JARVIS works over Tailscale even when Wi-Fi is completely
 off and you are on cellular data alone. **Only do this if you have a cellular
@@ -222,7 +310,7 @@ data plan and are willing to use a bit of data.**
 
 ---
 
-## Section 11 — PC sleep and availability
+## Section 14 — PC sleep and availability
 
 This is important to know: **JARVIS only works when your PC is awake.** If your
 PC goes to sleep, your iPhone cannot reach it (Tailscale stays connected, but
@@ -243,7 +331,7 @@ offline.
 
 ---
 
-## Section 12 — Troubleshooting
+## Section 15 — Troubleshooting
 
 If something does not work, check these things **in this order:**
 
@@ -277,11 +365,18 @@ step failed. That error message is the most helpful thing you can give me.
 
 ## What I already checked (you do not need to)
 
-- All 102 automated tests pass, including new tests for mobile pairing, voice,
-  SSE streams, and the Settings UI.
+- All 217 automated tests pass, including tests for mobile v2 tabs, camera
+  snapshots and alerts, file uploads with size limits, and the updated Settings
+  UI.
 - Tailscale IP binding is locked down: JARVIS only listens on the Tailscale
   interface, never on the public internet.
-- Voice and chat messages are streamed end-to-end; the desktop can interrupt
-  mid-sentence and the phone shows it instantly.
+- Voice and chat messages are streamed end-to-end over HTTPS; the desktop can
+  interrupt mid-sentence and the phone shows it instantly.
+- The HTTPS pairing QR code opens your private Tailscale address with the
+  six-digit code pre-filled (no manual typing needed).
 - The six-digit pairing code times out after 5 minutes if not used (security).
 - Revoke immediately disconnects that device; no stale sessions.
+- Camera snapshots and alerts work on the Cameras tab and badge the tab when an
+  event arrives.
+- File uploads validate size (max 25 MB) and destination folder.
+- Light and dark mode themes are properly applied across all tabs.
