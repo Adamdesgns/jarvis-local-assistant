@@ -321,6 +321,16 @@ textarea.field { resize: none; }
   border: 1px solid var(--border);
   border-bottom-left-radius: var(--r-sm);
 }
+/* A non-401 send/voice failure — same shape as a jarvis bubble so it still
+   reads as part of the thread, but the danger border/text make it obviously
+   distinct from a real reply. */
+.msg.error {
+  align-self: flex-start;
+  background: var(--surface-solid);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-bottom-left-radius: var(--r-sm);
+}
 
 .status {
   font-size: 13px;

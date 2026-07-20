@@ -54,6 +54,17 @@ function speak(text) {
 }
 
 let lastRendered = '';
+
+// A non-401 failure (500, malformed body, whatever) must still end with a
+// visible bubble — never a thread that just goes silent after the "Working…"
+// strip clears. `spoken` lets a failed voice turn announce the failure too,
+// same as a successful one would speak its reply.
+function renderError(text, { spoken = false } = {}) {
+  document.getElementById('agent-status').hidden = true;
+  bubble('error', text);
+  if (spoken) speak(text);
+}
+
 async function send(text, { spoken = false } = {}) {
   bubble('you', text);
   const status = document.getElementById('agent-status');
@@ -62,11 +73,12 @@ async function send(text, { spoken = false } = {}) {
   try {
     const res = await fetch('/api/chat', { method: 'POST', headers: headers(), body: JSON.stringify({ text }) });
     if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); status.hidden = true; return show('pairing'); }
-    const out = await res.json();
+    // .catch() here matters: a 500 with a non-JSON (or empty) body must still
+    // fall into the !res.ok branch below and render an error bubble, not throw
+    // and get mistaken for a network failure that drops to the offline screen.
+    const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.reply) {
-      status.hidden = true;
-      bubble('jarvis', out.error || 'Something went wrong on the PC side — check the desktop.');
-      return;
+      return renderError(out.error || 'JARVIS hit a snag — try that again.');
     }
     renderReply(out.reply, spoken);
   } catch { document.getElementById('agent-status').hidden = true; show('offline'); }
@@ -88,6 +100,14 @@ function renderReply(reply, spoken) {
 
 function connectEvents() {
   const es = new EventSource(`/api/events?key=${encodeURIComponent(key())}`);
+  // EventSource can't expose the HTTP status of a failed connection, so a
+  // revoked device key 401ing the stream looks identical to a transient wifi
+  // blip — both just fire onerror and auto-retry forever. A single onerror is
+  // normal (routers hiccup); only once a SECOND consecutive onerror lands with
+  // no onopen in between do we spend one authed probe request to tell the two
+  // apart, so a real reconnect never gets mistaken for a revoked key.
+  let consecutiveErrors = 0;
+  let probing = false;
   es.addEventListener('agent-step', (e) => {
     const step = JSON.parse(e.data);
     const el = document.getElementById('agent-status');
@@ -99,7 +119,22 @@ function connectEvents() {
     if (document.body.classList.contains('cameras')) renderCameraAlertBanner();
     else tabCamerasBadge.hidden = false;
   });
-  es.onerror = () => {};   // EventSource auto-reconnects
+  es.onopen = () => { consecutiveErrors = 0; };
+  es.onerror = () => {
+    consecutiveErrors++;
+    if (consecutiveErrors < 2 || probing) return;
+    consecutiveErrors = 0;   // next probe needs its own fresh pair of errors
+    probing = true;
+    fetch('/api/last', { headers: headers() })
+      .then((res) => {
+        if (res.status !== 401) return;   // still authed — a real transient blip
+        localStorage.removeItem('jarvis-mobile-key');
+        es.close();
+        show('pairing');
+      })
+      .catch(() => {})   // network error is inconclusive — let EventSource keep retrying
+      .finally(() => { probing = false; });
+  };
 }
 
 // --- mic: press and hold ---
@@ -127,9 +162,9 @@ micBtn.addEventListener('pointerdown', async (e) => {
       try {
         const res = await fetch('/api/voice', { method: 'POST', headers: { 'Content-Type': blob.type, Authorization: `Bearer ${key()}` }, body: blob });
         if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); status.hidden = true; return show('pairing'); }
-        const out = await res.json();
+        const out = await res.json().catch(() => ({}));
         if (!res.ok || out.error || !out.reply) {
-          return renderReply(out.error || 'Something went wrong on the PC side — check the desktop.', true);
+          return renderError(out.error || 'JARVIS hit a snag — try that again.', { spoken: true });
         }
         bubble('you', out.transcript);
         renderReply(out.reply, true);
