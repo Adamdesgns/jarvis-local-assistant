@@ -166,8 +166,155 @@ document.getElementById('retry-btn').addEventListener('click', boot);
 
 // --- tab bar ---
 for (const btn of document.querySelectorAll('.tab-item')) {
-  btn.addEventListener('click', () => show(btn.dataset.screen));
+  btn.addEventListener('click', () => {
+    const screen = btn.dataset.screen;
+    show(screen);
+    if (screen === 'send') loadFolders();
+  });
 }
+
+// --- send ---
+let sendFolders = null;   // cached after first successful /api/folders fetch
+let sendFiles = [];       // File[] currently picked, cleared after each batch
+let sendUploading = false;
+
+const sendFileInput = document.getElementById('send-file-input');
+const sendFileSummary = document.getElementById('send-file-summary');
+const sendDestination = document.getElementById('send-destination');
+const sendDestError = document.getElementById('send-dest-error');
+const sendUploadBtn = document.getElementById('send-upload-btn');
+const sendQueue = document.getElementById('send-queue');
+const sendSummary = document.getElementById('send-summary');
+
+function updateSendUploadEnabled() {
+  sendUploadBtn.disabled = sendUploading || sendFiles.length === 0 || sendDestination.options.length === 0;
+}
+
+function updateSendFileSummary() {
+  if (!sendFiles.length) sendFileSummary.textContent = 'No files selected.';
+  else if (sendFiles.length === 1) sendFileSummary.textContent = sendFiles[0].name;
+  else sendFileSummary.textContent = `${sendFiles.length} files selected.`;
+  updateSendUploadEnabled();
+}
+
+function renderDestinations(folders) {
+  const remembered = localStorage.getItem('jarvis-mobile-dest');
+  sendDestination.innerHTML = '';
+  for (const folder of folders) {
+    const opt = document.createElement('option');
+    opt.value = folder;
+    opt.textContent = folder;
+    sendDestination.appendChild(opt);
+  }
+  if (remembered && folders.includes(remembered)) sendDestination.value = remembered;
+  updateSendUploadEnabled();
+}
+
+async function loadFolders() {
+  if (sendFolders) return;   // "loaded when the Send tab is first opened" — fetch once
+  sendDestError.hidden = true;
+  try {
+    const res = await fetch('/api/folders', { headers: headers() });
+    if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); return show('pairing'); }
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      sendDestError.hidden = false;
+      sendDestError.textContent = out.error || 'Could not load destination folders.';
+      return;
+    }
+    sendFolders = out.folders || [];
+    renderDestinations(sendFolders);
+  } catch { show('offline'); }
+}
+
+sendFileInput.addEventListener('change', () => {
+  sendFiles = Array.from(sendFileInput.files || []);
+  sendQueue.innerHTML = '';
+  sendSummary.hidden = true;
+  updateSendFileSummary();
+});
+
+sendUploadBtn.addEventListener('click', async () => {
+  if (sendUploading || !sendFiles.length) return;
+  sendUploading = true;
+  sendUploadBtn.disabled = true;
+  sendSummary.hidden = true;
+  const destination = sendDestination.value;
+  localStorage.setItem('jarvis-mobile-dest', destination);
+
+  sendQueue.innerHTML = '';
+  const rows = sendFiles.map((file) => {
+    const row = document.createElement('div');
+    row.className = 'send-row';
+    row.dataset.state = 'queued';
+    const name = document.createElement('span');
+    name.className = 'send-row-name';
+    name.textContent = file.name;
+    const state = document.createElement('span');
+    state.className = 'send-row-state';
+    state.textContent = 'Queued';
+    row.append(name, state);
+    sendQueue.appendChild(row);
+    return { row, state, file };
+  });
+
+  let succeeded = 0;
+  let attempted = 0;
+  for (const { row, state, file } of rows) {
+    attempted++;
+    row.dataset.state = 'uploading';
+    state.textContent = 'Uploading…';
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-Filename': file.name,
+          'X-Destination': destination,
+          Authorization: `Bearer ${key()}`
+        },
+        body: file
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('jarvis-mobile-key');
+        row.dataset.state = 'failed';
+        state.textContent = 'Session expired.';
+        sendUploading = false;
+        return show('pairing');
+      }
+      if (res.status === 413) {
+        row.dataset.state = 'failed';
+        state.textContent = 'Too large — 25 MB upload limit.';
+        continue;
+      }
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || !out.ok) {
+        row.dataset.state = 'failed';
+        state.textContent = out.error || 'Upload failed.';
+        continue;
+      }
+      row.dataset.state = 'done';
+      const savedName = out.path ? out.path.split(/[\\/]/).pop() : file.name;
+      state.textContent = `Saved as ${savedName}`;
+      succeeded++;
+    } catch {
+      // A network failure means the next request will fail too — stop the
+      // batch and drop to the offline screen, same as chat/voice/pairing do.
+      row.dataset.state = 'failed';
+      state.textContent = 'Network error.';
+      sendUploading = false;
+      show('offline');
+      return;
+    }
+  }
+
+  sendUploading = false;
+  sendSummary.hidden = false;
+  sendSummary.textContent = `${succeeded} of ${attempted} sent`;
+  sendFiles = [];
+  sendFileInput.value = '';
+  updateSendFileSummary();
+});
 
 async function boot() {
   if (location.hash.length > 1) { document.getElementById('pair-code').value = location.hash.slice(1); history.replaceState(null, '', '/'); }

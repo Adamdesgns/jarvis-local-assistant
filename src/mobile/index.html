@@ -38,9 +38,27 @@
     </div>
   </section>
 
-  <section id="screen-send" class="screen-empty" hidden>
-    <div class="stack">
-      <p class="text-dim">Send is coming soon.</p>
+  <section id="screen-send" hidden>
+    <div class="stack send-stack">
+      <div class="card stack">
+        <div class="stack send-picker">
+          <input id="send-file-input" type="file" multiple hidden>
+          <label for="send-file-input" class="btn btn-secondary btn-block">Choose Files</label>
+          <p id="send-file-summary" class="text-dim">No files selected.</p>
+        </div>
+
+        <div class="stack send-picker">
+          <label for="send-destination" class="text-dim">Destination</label>
+          <select id="send-destination" class="field"></select>
+          <p id="send-dest-error" class="error" hidden></p>
+        </div>
+
+        <button id="send-upload-btn" class="btn btn-primary btn-block" disabled>Send</button>
+      </div>
+
+      <div id="send-queue" class="stack send-queue" aria-live="polite"></div>
+
+      <p id="send-summary" class="text-dim" hidden></p>
     </div>
   </section>
 

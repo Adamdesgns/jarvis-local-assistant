@@ -331,6 +331,48 @@ textarea.field { resize: none; }
 
 .error { color: var(--danger); font-size: 15px; }
 
+/* ==========================================================================
+   Send — file picker, destination select, sequential-upload queue. The
+   pairing/offline `.card` caps at 360px for a centred takeover; Send is a
+   full-width tabbed form, so it gets its own width + gap overrides here
+   (source order after `.card`/`.stack` so the cascade favours these).
+   ========================================================================== */
+
+.send-stack { width: 100%; }
+.send-stack .card { max-width: none; width: 100%; }
+.send-picker { gap: var(--s2); }
+
+.send-queue { gap: var(--s2); }
+
+.send-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3);
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.send-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.send-row-state {
+  font-size: 13px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.send-row[data-state="uploading"] .send-row-state,
+.send-row[data-state="done"] .send-row-state { color: var(--accent); }
+.send-row[data-state="failed"] .send-row-state { color: var(--danger); }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
