@@ -11,28 +11,30 @@
   <link rel="stylesheet" href="/mobile.css">
 </head>
 <body class="pairing">
-  <header><h1>J.A.R.V.I.S.</h1><span id="conn-dot"></span></header>
+  <header class="bar bar-top"><h1 class="title">J.A.R.V.I.S.</h1><span id="conn-dot" class="dot"></span></header>
 
-  <section id="screen-pairing">
-    <p>Scan the QR code on the desktop (Settings → MOBILE → Pair a phone), or enter the 6-digit code:</p>
-    <input id="pair-code" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
-    <button id="pair-btn">PAIR</button>
-    <p id="pair-error" class="error" hidden></p>
+  <section id="screen-pairing" class="screen-pairing">
+    <div class="card stack">
+      <p class="text-dim">Scan the QR code on the desktop (Settings → MOBILE → Pair a phone), or enter the 6-digit code:</p>
+      <input id="pair-code" class="field field-code" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+      <button id="pair-btn" class="btn btn-primary btn-block">PAIR</button>
+      <p id="pair-error" class="error" hidden></p>
+    </div>
   </section>
 
   <section id="screen-chat" hidden>
-    <div id="thread"></div>
-    <div id="agent-status" hidden></div>
-    <footer>
-      <textarea id="composer" rows="1" placeholder="Message JARVIS…"></textarea>
-      <button id="send-btn" aria-label="Send">➤</button>
-      <button id="mic-btn" aria-label="Hold to talk">🎙</button>
+    <div id="thread" class="thread"></div>
+    <div id="agent-status" class="status" hidden></div>
+    <footer class="bar bar-bottom composer-bar">
+      <textarea id="composer" class="field composer-field" rows="1" placeholder="Message JARVIS…"></textarea>
+      <button id="send-btn" class="btn btn-secondary btn-icon" aria-label="Send">➤</button>
+      <button id="mic-btn" class="btn btn-primary btn-icon btn-mic" aria-label="Hold to talk">🎙</button>
     </footer>
   </section>
 
-  <section id="screen-offline" hidden>
+  <section id="screen-offline" class="screen-offline" hidden>
     <p>JARVIS is unreachable — is the PC awake?</p>
-    <button id="retry-btn">RETRY</button>
+    <button id="retry-btn" class="btn btn-primary">RETRY</button>
   </section>
 
   <script src="/mobile.js"></script>
