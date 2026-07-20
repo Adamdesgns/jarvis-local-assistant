@@ -34,10 +34,12 @@ async function readBody(req, limit = 10 * 1024 * 1024) {
   return Buffer.concat(chunks);
 }
 
+const UPLOAD_BODY_LIMIT = 25 * 1024 * 1024;
+
 class MobileServer {
-  constructor({ config, router, transcribe, auth, staticDir, onDevicesChanged = () => {} }) {
+  constructor({ config, router, transcribe, auth, staticDir, documents, onDevicesChanged = () => {} }) {
     this.config = config; this.router = router; this.transcribe = transcribe;
-    this.auth = auth; this.staticDir = staticDir; this.onDevicesChanged = onDevicesChanged;
+    this.auth = auth; this.staticDir = staticDir; this.documents = documents; this.onDevicesChanged = onDevicesChanged;
     this.server = null; this.reason = ''; this.address = null; this.port = null;
     this.streams = new Map();   // deviceId → Set<res>
     this.lastReply = new Map(); // deviceId → { reply, at }
@@ -83,6 +85,12 @@ class MobileServer {
           return this.#chat(res, device, transcript, transcript);
         }
         if (pathname === '/api/last') return this.json(res, 200, this.lastReply.get(device.id) || { reply: null });
+        if (pathname === '/api/folders' && req.method === 'GET') {
+          return this.json(res, 200, { folders: this.documents.approvedRoots() });
+        }
+        if (pathname === '/api/upload' && req.method === 'POST') {
+          return this.#upload(req, res);
+        }
         if (pathname === '/api/events') {
           res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
           const set = this.streams.get(device.id) || new Set();
@@ -117,6 +125,33 @@ class MobileServer {
     this.lastReply.set(device.id, { reply, at: Date.now() });
     this.pushEvent(device.id, 'reply', { reply });
     return this.json(res, 200, transcript ? { transcript, reply } : { reply });
+  }
+
+  // Same one-file-per-POST, raw-binary-body pattern as /api/voice — there is
+  // no multipart parser in this repo. Metadata rides in headers because a raw
+  // body can't carry a filename. This writes bytes to the owner's disk from a
+  // network client, so every check below is load-bearing: don't trim any of
+  // them for convenience.
+  async #upload(req, res) {
+    const filename = String(req.headers['x-filename'] || '').trim();
+    const destination = String(req.headers['x-destination'] || '').trim();
+    if (!filename) return this.json(res, 400, { ok: false, error: 'Missing filename.' });
+    if (!destination) return this.json(res, 400, { ok: false, error: 'Missing destination.' });
+    if (!this.documents.isAllowed(destination)) {
+      return this.json(res, 400, { ok: false, error: 'That destination is outside your approved folders.' });
+    }
+    let buffer;
+    try {
+      buffer = await readBody(req, UPLOAD_BODY_LIMIT);
+    } catch {
+      return this.json(res, 413, { ok: false, error: 'That file is larger than the 25 MB upload limit.' });
+    }
+    try {
+      const result = await this.documents.createBinaryFile(destination, filename, buffer);
+      return this.json(res, 200, { ok: true, path: result.path });
+    } catch (error) {
+      return this.json(res, 400, { ok: false, error: error.message });
+    }
   }
 
   #static(url, res) {

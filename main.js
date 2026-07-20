@@ -865,7 +865,7 @@ app.whenReady().then(async () => {
   });
   mobileAuth = new MobileAuth({ devices: loadMobileDevices() });
   mobileServer = new MobileServer({
-    config, router, auth: mobileAuth,
+    config, router, auth: mobileAuth, documents,
     transcribe: (buffer, mimeType) => localVoice.transcribe(buffer, mimeType),
     staticDir: path.join(__dirname, 'src', 'mobile'),
     onDevicesChanged: saveMobileDevices

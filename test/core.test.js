@@ -195,6 +195,40 @@ test('document Q&A gathers relevant passages and answers with citations', async 
   }
 });
 
+test('createBinaryFile writes a Buffer verbatim, sanitises the name, dedupes collisions, and refuses unapproved locations', async () => {
+  const { DocumentService } = require('../core/document-service');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-binfile-'));
+  try {
+    const docs = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x01]); // binary bytes, not valid utf8 text
+
+    const result = await docs.createBinaryFile(dir, 'photo.png', buffer);
+    assert.equal(result.ok, true);
+    assert.equal(result.path, path.join(dir, 'photo.png'));
+    const written = fs.readFileSync(result.path);
+    assert.ok(written.equals(buffer), 'buffer must be written byte-for-byte, not stringified');
+
+    // Collisions dedupe the same way createTextFile does.
+    const again = await docs.createBinaryFile(dir, 'photo.png', buffer);
+    assert.equal(again.path, path.join(dir, 'photo 2.png'));
+
+    // A destination outside approved roots must be refused, matching createTextFile's guard.
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-binfile-outside-'));
+    try {
+      await assert.rejects(() => docs.createBinaryFile(outsideDir, 'x.png', buffer), /approve/i);
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+
+    // Path separators and traversal sequences in the filename must not escape the destination.
+    const traversal = await docs.createBinaryFile(dir, '../../evil.png', buffer);
+    assert.ok(traversal.path.startsWith(dir + path.sep) || traversal.path === dir);
+    assert.equal(path.dirname(traversal.path), dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('project dashboard summarizes that project only', async () => {
   const router = new CommandRouter({
     config: { getSettings: () => ({ projects: { anvil: 'C:\\Anvil', 'the bench': '' } }) },

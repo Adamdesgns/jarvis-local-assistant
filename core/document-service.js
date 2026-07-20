@@ -231,6 +231,18 @@ class DocumentService {
     return { ok: true, path: target, message: `Created ${path.basename(target)}.` };
   }
 
+  async createBinaryFile(location, name, buffer) {
+    const directory = this.resolveLocation(location);
+    if (!directory || !this.isAllowed(directory)) throw new Error('Choose or approve that destination folder in Settings first.');
+    const extension = path.extname(cleanName(name, 'Upload'));
+    const base = cleanName(name, 'Upload').replace(/\.[^.]+$/, '');
+    let target = path.join(directory, `${base}${extension}`);
+    let count = 2;
+    while (fs.existsSync(target)) target = path.join(directory, `${base} ${count++}${extension}`);
+    await fs.promises.writeFile(target, buffer, { flag: 'wx' });
+    return { ok: true, path: target, message: `Created ${path.basename(target)}.` };
+  }
+
   async copyItem(source, destinationDirectory) {
     if (!this.isAllowed(source) || !this.isAllowed(destinationDirectory)) throw new Error('Both locations must be approved in Settings.');
     const target = path.join(destinationDirectory, path.basename(source));

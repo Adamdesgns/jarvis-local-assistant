@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { pickBindAddress, sseFrame, MobileServer } = require('../core/mobile-server');
 const { MobileAuth } = require('../core/mobile-auth');
+const { DocumentService } = require('../core/document-service');
 
 test('pickBindAddress: finds the Tailscale IPv4 and ignores everything else', () => {
   assert.equal(pickBindAddress({
@@ -213,4 +217,216 @@ test('/api/events accepts ?key= since EventSource cannot send headers; every oth
   const deniedSomekey = fakeRes();
   await server.handleRequest(jsonReq('GET', `/api/events?somekey=${encodeURIComponent(key)}`, null, {}), deniedSomekey);
   assert.equal(deniedSomekey.code, 401);
+});
+
+function binReq(method, url, buffer, headers = {}) {
+  const { Readable } = require('node:stream');
+  const req = Readable.from(buffer ? [buffer] : []);
+  Object.assign(req, { method, url, headers, socket: { remoteAddress: '100.1.1.1' } });
+  return req;
+}
+
+async function pairedServer(extra = {}) {
+  const auth = new MobileAuth({ now: () => 0 });
+  const { code } = auth.startPairing();
+  const server = new MobileServer({
+    auth,
+    router: { handle: async () => ({ response: 'Aye.' }) },
+    transcribe: async () => 'unused',
+    config: { getSettings: () => ({}) },
+    staticDir: __dirname,
+    ...extra
+  });
+  const pair = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/pair', { code, name: 'iPhone' }), pair);
+  const { key } = JSON.parse(pair.body);
+  return { server, key };
+}
+
+test('GET /api/folders returns the approved roots and requires auth', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-folders-'));
+  try {
+    const documents = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const { server, key } = await pairedServer({ documents });
+
+    const denied = fakeRes();
+    await server.handleRequest(jsonReq('GET', '/api/folders', null, {}), denied);
+    assert.equal(denied.code, 401);
+
+    const ok = fakeRes();
+    await server.handleRequest(jsonReq('GET', '/api/folders', null, { authorization: `Bearer ${key}` }), ok);
+    assert.equal(ok.code, 200);
+    assert.deepEqual(JSON.parse(ok.body).folders, [dir]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/upload: happy path writes the raw bytes into the approved destination and requires auth', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-happy-'));
+  try {
+    const documents = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const { server, key } = await pairedServer({ documents });
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x01, 0x02, 0x03]);
+
+    const denied = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, { 'x-filename': 'photo.png', 'x-destination': dir }), denied);
+    assert.equal(denied.code, 401);
+
+    const ok = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, {
+      authorization: `Bearer ${key}`, 'x-filename': 'photo.png', 'x-destination': dir
+    }), ok);
+    assert.equal(ok.code, 200);
+    const parsed = JSON.parse(ok.body);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.path, path.join(dir, 'photo.png'));
+    assert.ok(fs.readFileSync(parsed.path).equals(bytes));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/upload: missing or blank X-Filename / X-Destination is rejected with a clear error and no write', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-missing-'));
+  try {
+    const documents = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const { server, key } = await pairedServer({ documents });
+    const bytes = Buffer.from('hello');
+
+    const noName = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, { authorization: `Bearer ${key}`, 'x-destination': dir }), noName);
+    assert.equal(JSON.parse(noName.body).ok, false);
+    assert.ok(JSON.parse(noName.body).error);
+
+    const blankName = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, { authorization: `Bearer ${key}`, 'x-filename': '   ', 'x-destination': dir }), blankName);
+    assert.equal(JSON.parse(blankName.body).ok, false);
+
+    const noDest = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, { authorization: `Bearer ${key}`, 'x-filename': 'a.txt' }), noDest);
+    assert.equal(JSON.parse(noDest.body).ok, false);
+    assert.ok(JSON.parse(noDest.body).error);
+
+    const blankDest = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, { authorization: `Bearer ${key}`, 'x-filename': 'a.txt', 'x-destination': '  ' }), blankDest);
+    assert.equal(JSON.parse(blankDest.body).ok, false);
+
+    assert.deepEqual(fs.readdirSync(dir), []); // nothing was ever written
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/upload: a destination outside approved roots is refused, including a traversal attempt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-outside-'));
+  try {
+    const documents = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const { server, key } = await pairedServer({ documents });
+    const bytes = Buffer.from('hello');
+
+    // Flatly outside any approved root.
+    const outside = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, {
+      authorization: `Bearer ${key}`, 'x-filename': 'evil.txt', 'x-destination': 'C:\\Windows\\System32'
+    }), outside);
+    assert.equal(JSON.parse(outside.body).ok, false);
+    assert.ok(JSON.parse(outside.body).error);
+
+    // Traversal out of an approved root back up into a disallowed path.
+    const traversalDest = path.join(dir, '..', '..', 'Windows');
+    const traversal = fakeRes();
+    await server.handleRequest(binReq('POST', '/api/upload', bytes, {
+      authorization: `Bearer ${key}`, 'x-filename': 'evil.txt', 'x-destination': traversalDest
+    }), traversal);
+    assert.equal(JSON.parse(traversal.body).ok, false);
+    assert.ok(JSON.parse(traversal.body).error);
+
+    assert.deepEqual(fs.readdirSync(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/upload: filename traversal attempts never escape the destination folder', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-namejail-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-namejail-outside-'));
+  try {
+    const documents = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const { server, key } = await pairedServer({ documents });
+    const bytes = Buffer.from('payload');
+
+    for (const evilName of ['../../evil.txt', '..\\..\\evil.txt']) {
+      const res = fakeRes();
+      await server.handleRequest(binReq('POST', '/api/upload', bytes, {
+        authorization: `Bearer ${key}`, 'x-filename': evilName, 'x-destination': dir
+      }), res);
+      const parsed = JSON.parse(res.body);
+      // Either it lands harmlessly inside the destination, or it's rejected outright — never outside.
+      if (parsed.ok) {
+        assert.equal(path.dirname(parsed.path), dir, `filename "${evilName}" must resolve inside the destination`);
+      } else {
+        assert.ok(parsed.error);
+      }
+    }
+    // Nothing must have escaped into the sibling directory or above the temp root.
+    assert.deepEqual(fs.readdirSync(outside), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('POST /api/upload: a body over the 25 MB cap is rejected cleanly, not a crash, and the default /api/chat cap stays 10 MB', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-cap-'));
+  try {
+    const documents = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const { server, key } = await pairedServer({ documents });
+
+    function* chunks(count) {
+      const chunk = Buffer.alloc(1024 * 1024, 'a'); // 1MB per chunk
+      for (let i = 0; i < count; i++) yield chunk;
+    }
+    const { Readable } = require('node:stream');
+
+    // 26MB > 25MB upload cap — must be a clean {ok:false} response, not a 500 crash.
+    const overCap = Readable.from(chunks(26));
+    Object.assign(overCap, {
+      method: 'POST', url: '/api/upload',
+      headers: { authorization: `Bearer ${key}`, 'x-filename': 'big.bin', 'x-destination': dir },
+      socket: { remoteAddress: '100.1.1.1' }
+    });
+    const overRes = fakeRes();
+    await server.handleRequest(overCap, overRes);
+    assert.notEqual(overRes.code, 500);
+    const parsedOver = JSON.parse(overRes.body);
+    assert.equal(parsedOver.ok, false);
+    assert.ok(parsedOver.error);
+    assert.deepEqual(fs.readdirSync(dir), []); // rejected before any write
+
+    // 12MB is within the raised 25MB upload cap and must succeed.
+    const underCap = Readable.from(chunks(12));
+    Object.assign(underCap, {
+      method: 'POST', url: '/api/upload',
+      headers: { authorization: `Bearer ${key}`, 'x-filename': 'ok.bin', 'x-destination': dir },
+      socket: { remoteAddress: '100.1.1.1' }
+    });
+    const underRes = fakeRes();
+    await server.handleRequest(underCap, underRes);
+    assert.equal(JSON.parse(underRes.body).ok, true);
+
+    // The default body cap used by every other route (e.g. /api/chat) must remain 10MB, unchanged.
+    const stillOverChat = Readable.from(chunks(11));
+    Object.assign(stillOverChat, {
+      method: 'POST', url: '/api/chat',
+      headers: { authorization: `Bearer ${key}` },
+      socket: { remoteAddress: '100.1.1.1' }
+    });
+    const chatRes = fakeRes();
+    await server.handleRequest(stillOverChat, chatRes);
+    assert.equal(chatRes.code, 500); // existing behavior: oversized non-upload body still surfaces as a 500 {error}
+    assert.ok(JSON.parse(chatRes.body).error);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
