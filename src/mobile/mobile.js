@@ -94,6 +94,11 @@ function connectEvents() {
     el.hidden = false; el.textContent = step.summary || `Step ${step.index}…`;
   });
   es.addEventListener('reply', (e) => renderReply(JSON.parse(e.data).reply, false));
+  es.addEventListener('camera-alert', (e) => {
+    cameraAlert = JSON.parse(e.data);
+    if (document.body.classList.contains('cameras')) renderCameraAlertBanner();
+    else tabCamerasBadge.hidden = false;
+  });
   es.onerror = () => {};   // EventSource auto-reconnects
 }
 
@@ -170,6 +175,11 @@ for (const btn of document.querySelectorAll('.tab-item')) {
     const screen = btn.dataset.screen;
     show(screen);
     if (screen === 'send') loadFolders();
+    if (screen === 'cameras') {
+      tabCamerasBadge.hidden = true;
+      loadCameras();
+      renderCameraAlertBanner();   // surface an alert that arrived while another tab was open
+    }
   });
 }
 
@@ -314,6 +324,152 @@ sendUploadBtn.addEventListener('click', async () => {
   sendFiles = [];
   sendFileInput.value = '';
   updateSendFileSummary();
+});
+
+// --- cameras ---
+let camerasList = null;      // cached camera list after first successful load (retry on failure)
+let cameraAlert = null;      // most recent unread camera-alert event, or null
+let activeCameraKey = null;  // which camera's detail is currently open, if any
+let cameraShotUrl = null;    // object URL for the still on screen — revoke before replacing
+let cameraShotLoading = false;
+let cameraShotToken = 0;     // bumped on every fetch/nav so a stale response can't overwrite a newer one
+
+const camerasListView = document.getElementById('cameras-list-view');
+const camerasDetailView = document.getElementById('cameras-detail-view');
+const camerasStatus = document.getElementById('cameras-status');
+const camerasListEl = document.getElementById('cameras-list');
+const camerasAlertBanner = document.getElementById('cameras-alert-banner');
+const camerasDetailName = document.getElementById('cameras-detail-name');
+const camerasShotImg = document.getElementById('cameras-shot-img');
+const camerasShotLoadingEl = document.getElementById('cameras-shot-loading');
+const camerasShotError = document.getElementById('cameras-shot-error');
+const camerasShotTime = document.getElementById('cameras-shot-time');
+const camerasRefreshBtn = document.getElementById('cameras-refresh-btn');
+const tabCamerasBadge = document.getElementById('tab-cameras-badge');
+
+function formatClockTime(at) {
+  return new Date(at || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function renderCameraAlertBanner() {
+  if (!cameraAlert) { camerasAlertBanner.hidden = true; camerasAlertBanner.textContent = ''; return; }
+  camerasAlertBanner.hidden = false;
+  camerasAlertBanner.textContent = `🔔 ${cameraAlert.name} — ${cameraAlert.kind}, ${formatClockTime(cameraAlert.at)}`;
+}
+
+function renderCamerasList() {
+  camerasListEl.innerHTML = '';
+  if (!camerasList) return;
+  for (const camera of camerasList) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'card cameras-row';
+    row.dataset.key = camera.key;
+    const name = document.createElement('span');
+    name.className = 'cameras-row-name';
+    name.textContent = camera.name;
+    const chevron = document.createElement('span');
+    chevron.className = 'cameras-row-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '›';
+    row.append(name, chevron);
+    row.addEventListener('click', () => openCameraDetail(camera.key, camera.name));
+    camerasListEl.appendChild(row);
+  }
+}
+
+async function loadCameras() {
+  if (camerasList) return;   // "loaded when the Cameras tab is first opened" — fetch once per successful load
+  camerasStatus.hidden = false;
+  camerasStatus.textContent = 'Loading cameras…';
+  camerasListEl.innerHTML = '';
+  try {
+    const res = await fetch('/api/cameras', { headers: headers() });
+    if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); return show('pairing'); }
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      camerasStatus.textContent = out.error || 'Could not load cameras.';
+      return;
+    }
+    camerasList = out.cameras || [];
+    camerasStatus.textContent = camerasList.length ? '' : 'No cameras set up yet — add them in JARVIS on the PC.';
+    camerasStatus.hidden = camerasList.length > 0;
+    renderCamerasList();
+  } catch { show('offline'); }
+}
+
+function revokeCameraShot() {
+  if (cameraShotUrl) { URL.revokeObjectURL(cameraShotUrl); cameraShotUrl = null; }
+}
+
+function showCamerasList() {
+  activeCameraKey = null;
+  camerasDetailView.hidden = true;
+  camerasListView.hidden = false;
+  cameraShotToken++;         // invalidate any in-flight fetch for the camera we're leaving
+  cameraShotLoading = false;
+  camerasRefreshBtn.disabled = false;
+  revokeCameraShot();
+}
+
+function openCameraDetail(cameraKey, cameraName) {
+  if (cameraAlert && cameraAlert.key === cameraKey) { cameraAlert = null; renderCameraAlertBanner(); }
+  activeCameraKey = cameraKey;
+  camerasDetailName.textContent = cameraName;
+  camerasListView.hidden = true;
+  camerasDetailView.hidden = false;
+  fetchCameraSnapshot(cameraKey);
+}
+
+async function fetchCameraSnapshot(cameraKey) {
+  const token = ++cameraShotToken;
+  cameraShotLoading = true;
+  camerasRefreshBtn.disabled = true;
+  camerasShotError.hidden = true;
+  camerasShotImg.hidden = true;
+  camerasShotTime.hidden = true;
+  camerasShotLoadingEl.hidden = false;
+  try {
+    const res = await fetch(`/api/cameras/snapshot?key=${encodeURIComponent(cameraKey)}`, { headers: headers() });
+    if (token !== cameraShotToken) return;   // a newer request (or a back-nav) superseded this one
+    if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); return show('pairing'); }
+    if (!res.ok) {
+      const out = await res.json().catch(() => ({}));
+      camerasShotLoadingEl.hidden = true;
+      camerasShotError.hidden = false;
+      camerasShotError.textContent = out.error || 'Could not get a picture.';
+      return;
+    }
+    const blob = await res.blob();
+    if (token !== cameraShotToken) return;
+    revokeCameraShot();
+    cameraShotUrl = URL.createObjectURL(blob);
+    camerasShotImg.src = cameraShotUrl;
+    camerasShotImg.hidden = false;
+    camerasShotLoadingEl.hidden = true;
+    camerasShotTime.hidden = false;
+    camerasShotTime.textContent = `Taken ${formatClockTime()}`;
+  } catch {
+    if (token !== cameraShotToken) return;
+    camerasShotLoadingEl.hidden = true;
+    camerasShotError.hidden = false;
+    camerasShotError.textContent = 'Network error — check the connection and try again.';
+  } finally {
+    if (token === cameraShotToken) { cameraShotLoading = false; camerasRefreshBtn.disabled = false; }
+  }
+}
+
+document.getElementById('cameras-back-btn').addEventListener('click', showCamerasList);
+
+camerasRefreshBtn.addEventListener('click', () => {
+  if (cameraShotLoading || !activeCameraKey) return;   // battery cameras rate-limit — no hammering
+  fetchCameraSnapshot(activeCameraKey);
+});
+
+camerasAlertBanner.addEventListener('click', () => {
+  if (!cameraAlert) return;
+  const known = camerasList && camerasList.find((c) => c.key === cameraAlert.key);
+  openCameraDetail(cameraAlert.key, known ? known.name : cameraAlert.name);
 });
 
 async function boot() {

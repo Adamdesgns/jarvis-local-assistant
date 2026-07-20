@@ -32,9 +32,25 @@
     </footer>
   </section>
 
-  <section id="screen-cameras" class="screen-empty" hidden>
-    <div class="stack">
-      <p class="text-dim">Cameras are coming soon.</p>
+  <section id="screen-cameras" hidden>
+    <div id="cameras-list-view" class="stack cameras-stack">
+      <button id="cameras-alert-banner" type="button" class="card cameras-alert-card" hidden></button>
+      <div id="cameras-status" class="text-dim"></div>
+      <div id="cameras-list" class="stack cameras-list" aria-live="polite"></div>
+    </div>
+
+    <div id="cameras-detail-view" class="stack cameras-detail" hidden>
+      <button id="cameras-back-btn" class="btn btn-secondary cameras-back-btn">← Cameras</button>
+      <div class="card stack cameras-detail-card">
+        <h2 id="cameras-detail-name" class="cameras-detail-name"></h2>
+        <div id="cameras-shot-frame" class="cameras-shot-frame">
+          <img id="cameras-shot-img" class="cameras-shot-img" hidden>
+          <div id="cameras-shot-loading" class="text-dim" hidden>Loading snapshot…</div>
+          <p id="cameras-shot-error" class="error" hidden></p>
+        </div>
+        <p id="cameras-shot-time" class="text-dim" hidden></p>
+        <button id="cameras-refresh-btn" class="btn btn-primary btn-block">Refresh</button>
+      </div>
     </div>
   </section>
 
@@ -73,7 +89,7 @@
       <span class="tab-label">Chat</span>
     </button>
     <button id="tab-cameras" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-cameras" data-screen="cameras">
-      <span class="tab-glyph" aria-hidden="true">📷</span>
+      <span class="tab-glyph" aria-hidden="true">📷<span id="tab-cameras-badge" class="tab-badge" hidden></span></span>
       <span class="tab-label">Cameras</span>
     </button>
     <button id="tab-send" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-send" data-screen="send">

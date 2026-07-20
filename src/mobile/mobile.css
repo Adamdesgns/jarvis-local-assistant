@@ -373,6 +373,84 @@ textarea.field { resize: none; }
 .send-row[data-state="done"] .send-row-state { color: var(--accent); }
 .send-row[data-state="failed"] .send-row-state { color: var(--danger); }
 
+/* ==========================================================================
+   Cameras — a list view and a detail view live inside the one section
+   ([hidden] toggled between `#cameras-list-view` / `#cameras-detail-view`),
+   per the "no new <section>" constraint. Rows and the alert banner are real
+   <button>s for tap targets + a11y, so they need their own reset on top of
+   `.card` (buttons don't inherit font/cursor/text-align from a class alone).
+   ========================================================================== */
+
+.cameras-stack { width: 100%; }
+.cameras-stack .card { max-width: none; width: 100%; }
+
+.cameras-list { gap: var(--s2); }
+
+.cameras-row,
+.cameras-alert-card {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 44px;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.cameras-row { justify-content: space-between; }
+.cameras-row:active,
+.cameras-alert-card:active { transform: scale(.98); }
+
+.cameras-row-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cameras-row-chevron { color: var(--text-dim); font-size: 20px; flex-shrink: 0; }
+
+/* Highlighted card for an alert that arrived while the Cameras tab was
+   already open — thicker accent border so it reads as "new", not just
+   another row in the list. */
+.cameras-alert-card {
+  border-width: 2px;
+  border-color: var(--accent);
+}
+.cameras-alert-card[hidden] { display: none; }
+
+.cameras-detail { width: 100%; }
+.cameras-back-btn { align-self: flex-start; }
+
+.cameras-detail-card { max-width: none; width: 100%; align-items: center; text-align: center; }
+.cameras-detail-name { font-size: 20px; font-weight: 600; }
+
+.cameras-shot-frame {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-solid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: var(--s3);
+  text-align: center;
+}
+.cameras-shot-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Small unread-alert dot on the Cameras tab glyph, cleared when the tab is
+   opened. Positioned relative to the glyph, not the whole tab button, so it
+   sits at the corner of the camera emoji rather than the tab's edge. */
+.tab-glyph { position: relative; }
+.tab-badge {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.tab-badge[hidden] { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
