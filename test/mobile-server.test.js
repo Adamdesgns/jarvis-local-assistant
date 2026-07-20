@@ -24,7 +24,12 @@ test('sseFrame formats an SSE event', () => {
 });
 
 function fakeRes() {
-  const res = { code: 0, headers: null, body: '', writeHead(c, h) { this.code = c; this.headers = h; }, end(b) { this.body = String(b || ''); }, write(b) { this.body += b; } };
+  // end() preserves a Buffer as-is (rather than String()-coercing it) so
+  // binary responses (e.g. raw JPEG bytes) can be asserted on exactly.
+  // JSON.parse(buffer) and buffer.includes(str) both still work as expected
+  // via Buffer's implicit toString(), so this is backward compatible with
+  // every existing string-body assertion above.
+  const res = { code: 0, headers: null, body: '', writeHead(c, h) { this.code = c; this.headers = h; }, end(b) { this.body = Buffer.isBuffer(b) ? b : String(b || ''); }, write(b) { this.body += b; } };
   return res;
 }
 function jsonReq(method, url, body, headers = {}) {
@@ -501,4 +506,85 @@ test('POST /api/upload: the "Missing destination" guard rejects before consultin
   assert.equal(JSON.parse(res.body).ok, false);
   assert.match(JSON.parse(res.body).error, /destination/i);
   assert.deepEqual(calls, [], 'neither isAllowed() nor createBinaryFile() should ever be consulted for a missing destination');
+});
+
+// --- GET /api/cameras, GET /api/cameras/snapshot ---
+
+test('GET /api/cameras requires auth and returns the injected fake cameras service list, trimmed to key+name', async () => {
+  const fakeCameras = {
+    listCameras: async () => [
+      { key: 'blink:front', name: 'Front Door', accountId: 'blink', extra: 'should not leak' },
+      { key: 'ring:back', name: 'Back Yard', accountId: 'ring' }
+    ]
+  };
+  const { server, key } = await pairedServer({ getCameras: () => fakeCameras });
+
+  const denied = fakeRes();
+  await server.handleRequest(jsonReq('GET', '/api/cameras', null, {}), denied);
+  assert.equal(denied.code, 401);
+
+  const ok = fakeRes();
+  await server.handleRequest(jsonReq('GET', '/api/cameras', null, { authorization: `Bearer ${key}` }), ok);
+  assert.equal(ok.code, 200);
+  assert.deepEqual(JSON.parse(ok.body), {
+    cameras: [
+      { key: 'blink:front', name: 'Front Door' },
+      { key: 'ring:back', name: 'Back Yard' }
+    ]
+  });
+});
+
+test('GET /api/cameras: no camera service configured returns an empty array, not an error', async () => {
+  const { server, key } = await pairedServer(); // no getCameras at all
+  const ok = fakeRes();
+  await server.handleRequest(jsonReq('GET', '/api/cameras', null, { authorization: `Bearer ${key}` }), ok);
+  assert.equal(ok.code, 200);
+  assert.deepEqual(JSON.parse(ok.body), { cameras: [] });
+});
+
+test('GET /api/cameras/snapshot requires auth, returns raw image/jpeg bytes with Cache-Control: no-store for a known base64 fixture', async () => {
+  // A tiny fixture buffer standing in for JPEG bytes — the point is proving
+  // exact byte-for-byte round-trip through base64 decode, not real JPEG data.
+  const fixtureBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+  const fakeCameras = {
+    getSnapshot: async (key, opts) => {
+      assert.equal(key, 'blink:front');
+      assert.deepEqual(opts, { manual: true });
+      return { ok: true, jpegBase64: fixtureBytes.toString('base64') };
+    }
+  };
+  const { server, key } = await pairedServer({ getCameras: () => fakeCameras });
+
+  const denied = fakeRes();
+  await server.handleRequest(jsonReq('GET', '/api/cameras/snapshot?key=blink:front', null, {}), denied);
+  assert.equal(denied.code, 401);
+
+  const ok = fakeRes();
+  await server.handleRequest(jsonReq('GET', '/api/cameras/snapshot?key=blink:front', null, { authorization: `Bearer ${key}` }), ok);
+  assert.equal(ok.code, 200);
+  assert.equal(ok.headers['Content-Type'], 'image/jpeg');
+  assert.equal(ok.headers['Cache-Control'], 'no-store');
+  assert.ok(Buffer.isBuffer(ok.body), 'response body must be raw bytes, not a JSON/base64 string');
+  assert.ok(ok.body.equals(fixtureBytes), 'decoded bytes must exactly match the fixture');
+});
+
+test('GET /api/cameras/snapshot: unknown key or failed snapshot returns a JSON error, not a 200 or a broken image', async () => {
+  const fakeCameras = { getSnapshot: async () => ({ ok: false, message: 'That camera is no longer set up.' }) };
+  const { server, key } = await pairedServer({ getCameras: () => fakeCameras });
+
+  const res = fakeRes();
+  await server.handleRequest(jsonReq('GET', '/api/cameras/snapshot?key=nope', null, { authorization: `Bearer ${key}` }), res);
+  assert.notEqual(res.code, 200);
+  assert.notEqual(res.headers?.['Content-Type'], 'image/jpeg');
+  const parsed = JSON.parse(res.body);
+  assert.ok(parsed.error);
+});
+
+test('GET /api/cameras/snapshot: no camera service configured returns a JSON error, not a 200', async () => {
+  const { server, key } = await pairedServer(); // no getCameras at all
+  const res = fakeRes();
+  await server.handleRequest(jsonReq('GET', '/api/cameras/snapshot?key=blink:front', null, { authorization: `Bearer ${key}` }), res);
+  assert.notEqual(res.code, 200);
+  const parsed = JSON.parse(res.body);
+  assert.ok(parsed.error);
 });

@@ -372,6 +372,20 @@ async function syncMobileServer() {
   sendEverywhere('mobile:status', mobileServer.status());
 }
 
+// Fan the camera alert out to every paired phone over SSE. Deliberately
+// drops the base64 JPEG — SSE frames are line-based text and a multi-hundred
+// KB blob in one frame is a bad idea; the phone fetches the still itself via
+// GET /api/cameras/snapshot. Called before mobileServer/mobileAuth exist
+// (camera alerts can't fire before cameras.init(), which happens after both
+// are constructed further down in app.whenReady), but is defensive anyway
+// since it fires from an event callback, not construction order.
+function pushCameraAlertToPhones({ key, kind, name, body, at }) {
+  if (!mobileServer || !mobileAuth) return;
+  for (const device of mobileAuth.listDevices()) {
+    mobileServer.pushEvent(device.id, 'camera-alert', { key, kind, name, body, at });
+  }
+}
+
 function setupIpc() {
   ipcMain.handle('bootstrap', async () => ({
     settings: config.publicSettings(),
@@ -822,7 +836,10 @@ app.whenReady().then(async () => {
     // Autonomy listens where the alert is born: same payload the UI gets.
     emit: (channel, payload) => {
       sendEverywhere(channel, payload);
-      if (channel === 'cameras:alert') autonomy.handleCameraAlert(payload);
+      if (channel === 'cameras:alert') {
+        autonomy.handleCameraAlert(payload);
+        pushCameraAlertToPhones(payload);
+      }
     },
     notify: (title, body) => {
       if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
@@ -868,7 +885,11 @@ app.whenReady().then(async () => {
     config, router, auth: mobileAuth, documents,
     transcribe: (buffer, mimeType) => localVoice.transcribe(buffer, mimeType),
     staticDir: path.join(__dirname, 'src', 'mobile'),
-    onDevicesChanged: saveMobileDevices
+    onDevicesChanged: saveMobileDevices,
+    // Lazy getter: `cameras` is constructed above (before mobileServer), but
+    // this keeps the same defensive pattern used for buildToolRegistry's
+    // getCameras — cameras may be reassigned or absent in some code paths.
+    getCameras: () => cameras
   });
   if (config.getSettings().mobileEnabled) syncMobileServer();
   try {

@@ -37,9 +37,13 @@ async function readBody(req, limit = 10 * 1024 * 1024) {
 const UPLOAD_BODY_LIMIT = 25 * 1024 * 1024;
 
 class MobileServer {
-  constructor({ config, router, transcribe, auth, staticDir, documents, onDevicesChanged = () => {} }) {
+  constructor({ config, router, transcribe, auth, staticDir, documents, getCameras, onDevicesChanged = () => {} }) {
     this.config = config; this.router = router; this.transcribe = transcribe;
     this.auth = auth; this.staticDir = staticDir; this.documents = documents; this.onDevicesChanged = onDevicesChanged;
+    // Lazy getter: `cameras` may not exist yet at MobileServer construction
+    // time (main.js builds it after), or may never exist (no cameras set up
+    // at all) — same pattern as buildToolRegistry's getCameras for look_at_camera.
+    this.getCameras = typeof getCameras === 'function' ? getCameras : () => undefined;
     this.server = null; this.reason = ''; this.address = null; this.port = null;
     this.streams = new Map();   // deviceId → Set<res>
     this.lastReply = new Map(); // deviceId → { reply, at }
@@ -90,6 +94,12 @@ class MobileServer {
         }
         if (pathname === '/api/upload' && req.method === 'POST') {
           return this.#upload(req, res);
+        }
+        if (pathname === '/api/cameras' && req.method === 'GET') {
+          return this.#camerasList(res);
+        }
+        if (pathname === '/api/cameras/snapshot' && req.method === 'GET') {
+          return this.#cameraSnapshot(url, res);
         }
         if (pathname === '/api/events') {
           res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -155,6 +165,41 @@ class MobileServer {
       console.error('[mobile-server] upload failed:', error);
       return this.json(res, 400, { ok: false, error: "Couldn't save that file. Check the destination folder and try again." });
     }
+  }
+
+  // Only what the phone needs to render a list — never the raw driver
+  // camera object, which can carry account internals we don't want to ship
+  // over the wire.
+  async #camerasList(res) {
+    const cameras = this.getCameras();
+    if (!cameras) return this.json(res, 200, { cameras: [] });
+    let list = [];
+    try { list = (await cameras.listCameras()) || []; } catch { list = []; }
+    return this.json(res, 200, { cameras: list.map((camera) => ({ key: camera.key, name: camera.name })) });
+  }
+
+  // Raw JPEG bytes, not base64-in-JSON: snapshots can be hundreds of KB and
+  // base64 through a synchronous JSON.stringify write adds real latency over
+  // cellular. Cache-Control: no-store because a stale cached still would be
+  // actively misleading for a security camera.
+  async #cameraSnapshot(url, res) {
+    const cameras = this.getCameras();
+    if (!cameras) return this.json(res, 404, { error: 'No cameras are configured.' });
+    const query = new URLSearchParams(url.split('?')[1] || '');
+    const key = query.get('key') || '';
+    if (!key) return this.json(res, 400, { error: 'Missing camera key.' });
+    let shot;
+    try {
+      shot = await cameras.getSnapshot(key, { manual: true });
+    } catch (error) {
+      return this.json(res, 500, { error: error.message });
+    }
+    if (!shot || !shot.ok || !shot.jpegBase64) {
+      return this.json(res, 404, { error: shot?.message || 'Could not get a picture.' });
+    }
+    const buffer = Buffer.from(shot.jpegBase64, 'base64');
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
+    res.end(buffer);
   }
 
   #static(url, res) {
