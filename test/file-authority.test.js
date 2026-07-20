@@ -66,8 +66,45 @@ test('canRecycle: a directory skips the size test but still needs a bin-backed v
   const sub = path.join(dir, 'folder');
   fs.mkdirSync(sub);
   const docs = makeDocs([dir]);
-  assert.deepEqual(docs.canRecycle(sub), { ok: true });
-  fs.rmSync(dir, { recursive: true, force: true });
+  const realStat = fs.statSync;
+  // Pretend the directory reports as 3 GB, far above the recycle-size cap.
+  // If the isFile() guard were ever removed, this would trip the "too big"
+  // refusal instead of returning ok: true.
+  fs.statSync = (p, ...rest) => {
+    if (path.resolve(p) === path.resolve(sub)) return { isFile: () => false, size: 3 * 1024 * 1024 * 1024 };
+    return realStat(p, ...rest);
+  };
+  try {
+    assert.deepEqual(docs.canRecycle(sub), { ok: true });
+  } finally {
+    fs.statSync = realStat;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('canRecycle: refuses a volume with no Recycle Bin', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-bin-'));
+  const file = path.join(dir, 'note.txt');
+  fs.writeFileSync(file, 'hello');
+  const docs = makeDocs([dir]);
+  const realExistsSync = fs.existsSync;
+  const root = path.parse(path.resolve(file)).root;
+  const binPath = path.resolve(path.join(root, '$Recycle.Bin'));
+  // Pretend this volume's root has no $Recycle.Bin folder (e.g. a USB stick),
+  // while leaving every other existsSync check (including approvedRoots())
+  // working against the real filesystem.
+  fs.existsSync = (p, ...rest) => {
+    if (path.resolve(p) === binPath) return false;
+    return realExistsSync(p, ...rest);
+  };
+  try {
+    const out = docs.canRecycle(file);
+    assert.equal(out.ok, false);
+    assert.match(out.reason, /Recycle Bin/i);
+  } finally {
+    fs.existsSync = realExistsSync;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('applyOrganization: renames instead of overwriting a same-named file', async () => {
