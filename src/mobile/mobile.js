@@ -225,11 +225,38 @@ let sendUploading = false;
 
 const sendFileInput = document.getElementById('send-file-input');
 const sendFileSummary = document.getElementById('send-file-summary');
+const sendNameInput = document.getElementById('send-name');
 const sendDestination = document.getElementById('send-destination');
 const sendDestError = document.getElementById('send-dest-error');
 const sendUploadBtn = document.getElementById('send-upload-btn');
 const sendQueue = document.getElementById('send-queue');
 const sendSummary = document.getElementById('send-summary');
+
+// Blank means "use the smart default" — the server already renames a
+// meaningless arriving filename (bare GUID, all-hex, etc.) to something
+// findable and dated, so an empty field here is a real, supported choice,
+// not a missing one. A typed name rides in the existing X-Filename header —
+// that's the wire contract with the server, nothing new is invented here.
+// Only the ORIGINAL file's extension is ever kept, so a name typed without
+// one (the common case) still lands as a real, openable file.
+function buildUploadFilename(customName, originalName, index, total) {
+  const trimmed = String(customName || '').trim();
+  if (!trimmed) return originalName;
+  const dot = originalName.lastIndexOf('.');
+  const ext = dot > -1 ? originalName.slice(dot) : '';
+  // The field is a name, not a full filename — if he happens to retype the
+  // same extension it's collapsed rather than doubled, but the ORIGINAL
+  // file's extension always wins, same rule the server's smart default
+  // follows, so the saved file always stays openable.
+  const base = ext && trimmed.toLowerCase().endsWith(ext.toLowerCase())
+    ? trimmed.slice(0, trimmed.length - ext.length)
+    : trimmed;
+  // If more than one file is queued, one typed name can't apply to all of
+  // them verbatim without collisions once they land — number them the same
+  // way the server's own dedupe loop would.
+  const suffix = total > 1 ? ` ${index + 1}` : '';
+  return `${base}${suffix}${ext}`;
+}
 
 function updateSendUploadEnabled() {
   sendUploadBtn.disabled = sendUploading || sendFiles.length === 0 || sendDestination.options.length === 0;
@@ -286,26 +313,28 @@ sendUploadBtn.addEventListener('click', async () => {
   sendSummary.hidden = true;
   const destination = sendDestination.value;
   localStorage.setItem('jarvis-mobile-dest', destination);
+  const customName = sendNameInput.value;
 
   sendQueue.innerHTML = '';
-  const rows = sendFiles.map((file) => {
+  const rows = sendFiles.map((file, index) => {
+    const uploadFilename = buildUploadFilename(customName, file.name, index, sendFiles.length);
     const row = document.createElement('div');
     row.className = 'send-row';
     row.dataset.state = 'queued';
     const name = document.createElement('span');
     name.className = 'send-row-name';
-    name.textContent = file.name;
+    name.textContent = uploadFilename;
     const state = document.createElement('span');
     state.className = 'send-row-state';
     state.textContent = 'Queued';
     row.append(name, state);
     sendQueue.appendChild(row);
-    return { row, state, file };
+    return { row, state, file, uploadFilename };
   });
 
   let succeeded = 0;
   let attempted = 0;
-  for (const { row, state, file } of rows) {
+  for (const { row, state, file, uploadFilename } of rows) {
     attempted++;
     row.dataset.state = 'uploading';
     state.textContent = 'Uploading…';
@@ -314,7 +343,7 @@ sendUploadBtn.addEventListener('click', async () => {
         method: 'POST',
         headers: {
           'Content-Type': file.type || 'application/octet-stream',
-          'X-Filename': file.name,
+          'X-Filename': uploadFilename,
           'X-Destination': destination,
           Authorization: `Bearer ${key()}`
         },
@@ -339,7 +368,7 @@ sendUploadBtn.addEventListener('click', async () => {
         continue;
       }
       row.dataset.state = 'done';
-      const savedName = out.path ? out.path.split(/[\\/]/).pop() : file.name;
+      const savedName = out.path ? out.path.split(/[\\/]/).pop() : uploadFilename;
       state.textContent = `Saved as ${savedName}`;
       succeeded++;
     } catch {
@@ -358,6 +387,7 @@ sendUploadBtn.addEventListener('click', async () => {
   sendSummary.textContent = `${succeeded} of ${attempted} sent`;
   sendFiles = [];
   sendFileInput.value = '';
+  sendNameInput.value = '';
   updateSendFileSummary();
 });
 

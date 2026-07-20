@@ -29,6 +29,44 @@ function cleanName(value, fallback = 'Untitled') {
   return name;
 }
 
+// iOS Safari's Photo Library picker hands over a bare GUID instead of a real
+// filename (e.g. "9F4B5160-A908-4DEA-8D5F-76EFFBB43118.png"). JARVIS's file
+// search matches on name, so a file like that is functionally invisible the
+// moment it lands — nothing the owner would ever say ("the picture I sent")
+// matches a GUID. This is a small pure function so the "is this name
+// meaningless?" decision is directly testable without touching the
+// filesystem; callers only ever get a smart replacement name for input this
+// returns true for — a genuinely meaningful name (e.g. "invoice-march") must
+// never be touched.
+const GUID_RE = /^\{?[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\}?$/i;
+
+function isMeaninglessName(base) {
+  const trimmed = String(base === undefined || base === null ? '' : base).trim();
+  if (!trimmed) return true;
+  if (GUID_RE.test(trimmed)) return true;
+  const stripped = trimmed.replace(/[\s\-_{}]/g, '');
+  if (!stripped) return true;
+  // "all hex digits" (which also covers "no letters at all", since decimal
+  // digits are a subset of hex digits) catches a GUID with no dashes, a
+  // content hash, or a bare numeric timestamp — none of which a person would
+  // ever say aloud to find the file again.
+  return /^[0-9a-f]+$/i.test(stripped);
+}
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.heic', '.heif', '.gif', '.webp', '.bmp', '.tiff', '.tif']);
+
+function pad2(number) { return String(number).padStart(2, '0'); }
+
+// A findable, dated, speakable fallback name for arriving files whose given
+// name is meaningless (see isMeaninglessName above) — e.g. "Phone photo
+// 2026-07-20 12-16". This is a *fallback* for meaningless input, never a
+// substitute for cleanName/the dedupe loop/the approved-folder guard.
+function smartUploadName(extension, now = new Date()) {
+  const stamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}-${pad2(now.getMinutes())}`;
+  const prefix = IMAGE_EXTENSIONS.has(String(extension || '').toLowerCase()) ? 'Phone photo' : 'Phone file';
+  return `${prefix} ${stamp}`;
+}
+
 function arrayOf(value) {
   if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
@@ -253,14 +291,21 @@ class DocumentService {
   // already-validated path (e.g. from the phone's file picker) can silently
   // rewrite "…\Documents\Invoices" down to "…\Documents". Callers that hold
   // a label, not a path, must resolve it themselves before calling this.
-  async createBinaryFile(directory, name, buffer) {
+  async createBinaryFile(directory, name, buffer, now = new Date()) {
     if (!directory || !this.isAllowed(directory)) throw new Error('Choose or approve that destination folder in Settings first.');
     const cleaned = cleanName(name, 'Upload');
     const extension = path.extname(cleaned);
     const base = cleaned.replace(/\.[^.]+$/, '');
-    let target = path.join(directory, `${base}${extension}`);
+    // A meaningless name (bare GUID, all-hex, etc. — see isMeaninglessName)
+    // gets a findable, dated fallback instead. This runs on the ALREADY
+    // sanitized/traversal-stripped `base` from cleanName above, and every
+    // guard below (dedupe loop, direct-child-of-directory check, wx write)
+    // still applies unchanged to whichever base name wins — this is a name
+    // choice, not a bypass of any of them.
+    const finalBase = isMeaninglessName(base) ? smartUploadName(extension, now) : base;
+    let target = path.join(directory, `${finalBase}${extension}`);
     let count = 2;
-    while (fs.existsSync(target)) target = path.join(directory, `${base} ${count++}${extension}`);
+    while (fs.existsSync(target)) target = path.join(directory, `${finalBase} ${count++}${extension}`);
     // Belt-and-braces: whatever produced `target`, it must still be a direct
     // child of the approved directory before we ever touch disk.
     if (path.resolve(path.dirname(target)) !== path.resolve(directory)) throw new Error('That destination is invalid.');
@@ -377,4 +422,4 @@ class DocumentService {
   }
 }
 
-module.exports = { DocumentService, cleanName, DOCUMENT_EXTENSIONS };
+module.exports = { DocumentService, cleanName, DOCUMENT_EXTENSIONS, isMeaninglessName, smartUploadName };
