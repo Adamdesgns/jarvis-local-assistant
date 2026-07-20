@@ -1,5 +1,13 @@
 # JARVIS Changelog
 
+## 0.16.0 — July 20, 2026
+
+### Added — Living-with-it fixes from real use
+- **Interrupt anytime**: press Escape, the stop button, or say "JARVIS, stop" (or "stop", "quiet", "nevermind") to cut off a spoken reply mid-sentence — it now stops his voice, not just his thinking.
+- **Close apps on request**: "close Chrome", "quit Notepad", "close File Explorer". Closes gracefully (apps can prompt to save); never force-kills, and never touches the Windows shell — the taskbar, Start menu and desktop always survive a "close File Explorer".
+- **Speaks with other windows open**: fixed a Chromium quirk that silently paused JARVIS's voice when another window (like File Explorer) covered him.
+- **Phone photos get findable names**: a photo sent from iOS used to land as a meaningless GUID JARVIS couldn't find. It now arrives as e.g. "Phone photo 2026-07-20 12-16.png", and the Send screen has an optional name field. Genuinely-named files are left alone.
+
 ## 0.15.0 — July 20, 2026
 
 ### Added — File authority: moves, copies, renames and organizing happen on request without an approval card; "delete" means the Recycle Bin and is refused when the bin cannot hold the item; permanent erasure remains impossible.
