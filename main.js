@@ -415,7 +415,8 @@ function setupIpc() {
     const status = mobileServer.status();
     if (!status.running) return { ok: false, reason: status.reason || 'Turn the mobile toggle on first.' };
     const { code, expiresAt } = mobileAuth.startPairing();
-    const url = `http://${status.address}:${status.port}/`;
+    const publicUrl = String(config.getSettings().mobilePublicUrl || '').trim().replace(/\/+$/, '');
+    const url = publicUrl ? `${publicUrl}/` : `http://${status.address}:${status.port}/`;
     const qrUrl = `${url}#${code}`;
     const qr = await QRCode.toDataURL(qrUrl, { margin: 1, width: 240 });
     return { ok: true, code, url, qr, expiresAt };

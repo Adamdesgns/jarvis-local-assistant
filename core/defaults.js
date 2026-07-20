@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
   wakeSensitivity: 0.58,
   mobileEnabled: false,
   mobilePort: 27183,
+  mobilePublicUrl: '',
   startWithWindows: false,
   minimizeToOrb: true,
   orbAlwaysOnTop: true,

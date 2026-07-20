@@ -582,6 +582,7 @@ test('settings merge preserves nested defaults', () => {
   assert.equal(mergeSettings(DEFAULT_SETTINGS, { ollamaUrl: 'http://bad-old-address:9999' }).ollamaUrl, 'http://127.0.0.1:11434');
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobileEnabled, false);
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobilePort, 27183);
+  assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).mobilePublicUrl, '');
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).schedulesEnabled, false);
 });
 
@@ -598,6 +599,20 @@ test('config store persists mobile settings through updateSettings', () => {
     assert.equal(reloaded.getSettings().mobilePort, 27200);
     store.updateSettings({ schedulesEnabled: true });
     assert.equal(new ConfigStore(dir).getSettings().schedulesEnabled, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('config store persists mobilePublicUrl through updateSettings (whitelist regression guard)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-config-'));
+  try {
+    const store = new ConfigStore(dir);
+    const updated = store.updateSettings({ mobilePublicUrl: 'https://alienadam.taile7c34c.ts.net' });
+    assert.equal(updated.mobilePublicUrl, 'https://alienadam.taile7c34c.ts.net');
+    // Reload from disk to confirm the whitelist didn't silently drop the write.
+    const reloaded = new ConfigStore(dir);
+    assert.equal(reloaded.getSettings().mobilePublicUrl, 'https://alienadam.taile7c34c.ts.net');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

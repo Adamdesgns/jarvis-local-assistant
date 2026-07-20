@@ -1048,6 +1048,7 @@ function openSettings() {
   $('setting-autonomy-night-end').value = String(state.settings.autonomyNightEnd ?? 7);
   $('setting-mobile').checked = Boolean(state.settings.mobileEnabled);
   $('setting-mobile-port').value = state.settings.mobilePort || 27183;
+  $('setting-mobile-public-url').value = state.settings.mobilePublicUrl || '';
   $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
   updateScheduleFormVisibility();
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
@@ -1085,6 +1086,7 @@ async function saveSettings(event) {
     autonomyNightEnd: Number($('setting-autonomy-night-end').value),
     mobileEnabled: $('setting-mobile').checked,
     mobilePort: Number($('setting-mobile-port').value) || 27183,
+    mobilePublicUrl: $('setting-mobile-public-url').value.trim(),
     schedulesEnabled: $('setting-schedules').checked,
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots
