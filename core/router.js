@@ -287,12 +287,12 @@ class CommandRouter {
       const destination = this.documents.resolveLocation(location);
       if (!source) result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
       else if (!destination) result = this.#result(`Approve or assign the ${location} folder in Settings first.`, 'documents', { success: false });
-      else result = this.#fileApproval(operation.toLowerCase(), source.path, { destination }, `${operation.toUpperCase()} ${source.name}`, `${operation} ${source.path} to ${destination}`, stream);
+      else result = await this.#runFileAction(operation.toLowerCase(), source.path, { destination }, stream);
     } else if (this.documents && /^rename\s+(.+?)\s+to\s+(.+)$/i.test(text)) {
       const [, query, newName] = text.match(/^rename\s+(.+?)\s+to\s+(.+)$/i);
       const source = (await this.tools.searchFiles(query))[0];
       result = source
-        ? this.#fileApproval('rename', source.path, { newName }, `RENAME ${source.name}`, `Rename ${source.path} to ${newName}`, stream)
+        ? await this.#runFileAction('rename', source.path, { newName }, stream)
         : this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
     } else if (this.documents && /^(?:delete|trash|remove)\s+(.+)$/i.test(text)) {
       const query = text.match(/^(?:delete|trash|remove)\s+(.+)$/i)[1];
@@ -306,8 +306,7 @@ class CommandRouter {
         const plan = await this.documents.planOrganization(location);
         if (!plan.moves.length) result = this.#result(`The ${location} folder is already organized or contains no loose files.`, 'documents');
         else {
-          const groups = [...new Set(plan.moves.map((item) => item.category))].join(', ');
-          result = this.#fileApproval('organize', plan.directory, { plan }, `ORGANIZE ${pathLabel(plan.directory)}`, `Move ${plan.moves.length} loose files into: ${groups}. Nothing will be deleted.`, stream);
+          result = await this.#runFileAction('organize', plan.directory, { plan }, stream);
         }
       } catch (error) {
         result = this.#result(error.message, 'documents', { success: false });
@@ -456,6 +455,8 @@ class CommandRouter {
     return { id: crypto.randomUUID(), response, source, timestamp: new Date().toISOString(), ...extra };
   }
 
+  // Delete/trash still goes through the approval card — Task 3 handles that
+  // branch. This stays in place for #fileApproval's one remaining caller.
   #fileApproval(operation, source, extra, title, detail, stream = {}) {
     if (stream.unattended) {
       return this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
@@ -465,6 +466,26 @@ class CommandRouter {
     return this.#result('Review the file action before I continue.', 'safety', {
       approval: { id, title, detail, risk: operation === 'trash' ? 'HIGH' : 'REVIEW' }
     });
+  }
+
+  // Owner-issued file work runs immediately: the approved-folder boundary and
+  // the no-overwrite guards are the safety, not the dialog. Unattended runs
+  // (scheduled tasks) are still refused before anything touches disk.
+  async #runFileAction(operation, source, extra, stream = {}) {
+    if (stream.unattended) {
+      return this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+    }
+    try {
+      let outcome;
+      if (operation === 'copy') outcome = await this.documents.copyItem(source, extra.destination);
+      else if (operation === 'move') outcome = await this.documents.moveItem(source, extra.destination);
+      else if (operation === 'rename') outcome = await this.documents.renameItem(source, extra.newName);
+      else if (operation === 'organize') outcome = await this.documents.applyOrganization(extra.plan);
+      else return this.#result('I do not know that file action.', 'documents', { success: false });
+      return this.#result(outcome.message, 'documents', { success: Boolean(outcome && outcome.ok) });
+    } catch (error) {
+      return this.#result(error.message, 'documents', { success: false });
+    }
   }
 
   #log(command, result) {

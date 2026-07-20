@@ -125,3 +125,59 @@ test('applyOrganization: renames instead of overwriting a same-named file', asyn
   assert.equal(fs.readFileSync(path.join(destination, 'notes 2.txt'), 'utf8'), 'INCOMING');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+const { CommandRouter } = require('../core/router');
+
+function makeRouter(documentCalls) {
+  return new CommandRouter({
+    config: { getSettings: () => ({ searchRoots: [], projects: {}, assistantName: 'JARVIS' }) },
+    tools: { searchFiles: async () => [{ path: 'C:\\Approved\\report.pdf', name: 'report.pdf' }] },
+    documents: {
+      resolveLocation: () => 'C:\\Approved\\Archive',
+      planOrganization: async () => ({ directory: 'C:\\Approved', moves: [{ source: 'C:\\Approved\\a.txt', destination: 'C:\\Approved\\Documents', category: 'Documents' }] }),
+      canRecycle: () => ({ ok: true }),
+      copyItem: async (...a) => { documentCalls.push(['copy', ...a]); return { ok: true, message: 'Copied report.pdf.' }; },
+      moveItem: async (...a) => { documentCalls.push(['move', ...a]); return { ok: true, message: 'Moved report.pdf.' }; },
+      renameItem: async (...a) => { documentCalls.push(['rename', ...a]); return { ok: true, message: 'Renamed it to final.pdf.' }; },
+      applyOrganization: async (...a) => { documentCalls.push(['organize', ...a]); return { ok: true, message: 'Organized 1 file into labeled folders.' }; },
+      trashItem: async (...a) => { documentCalls.push(['trash', ...a]); return { ok: true, message: 'Moved report.pdf to the Recycle Bin.' }; }
+    },
+    ai: { reply: async () => ({ ok: true, text: 'ok' }) },
+    memory: { search: () => [], add: () => {}, forget: () => {} },
+    tasks: { list: () => [], add: () => {}, update: () => {}, summary: () => ({ open: 0, overdue: 0, tasks: [] }) },
+    log: { write: () => {} },
+    cameras: null
+  });
+}
+
+test('attended move executes at once with no approval card', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  const result = await router.handle('move report to archive');
+  assert.equal(result.approval, undefined, 'no approval card should be raised');
+  assert.equal(router.pending.size, 0, 'nothing should be queued');
+  assert.equal(calls[0][0], 'move');
+  assert.match(result.response, /Moved/);
+});
+
+test('attended rename and organize execute at once', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  const renamed = await router.handle('rename report to final.pdf');
+  assert.equal(renamed.approval, undefined);
+  assert.equal(calls[0][0], 'rename');
+
+  const organized = await router.handle('organize my downloads');
+  assert.equal(organized.approval, undefined);
+  assert.equal(calls[1][0], 'organize');
+  assert.equal(router.pending.size, 0);
+});
+
+test('a failing file operation reports the reason instead of throwing', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  router.documents.moveItem = async () => { throw new Error('report.pdf already exists at the destination.'); };
+  const result = await router.handle('move report to archive');
+  assert.equal(result.success, false);
+  assert.match(result.response, /already exists/);
+});

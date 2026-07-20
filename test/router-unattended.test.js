@@ -346,10 +346,14 @@ test('unattended: "organize my documents" does not queue a pending approval and 
   assert.match(result.response, /at the desk/i);
 });
 
-test('attended: "organize my documents" still queues a pending file approval (proves no regression)', async () => {
-  const documents = { planOrganization: async () => ({ directory: 'C:\\Docs', moves: [{ category: 'PDFs' }] }) };
+test('attended: "organize my documents" executes at once, no approval card (owner file work no longer needs a card — file-authority Task 2)', async () => {
+  const documents = {
+    planOrganization: async () => ({ directory: 'C:\\Docs', moves: [{ source: 'C:\\Docs\\a.pdf', destination: 'C:\\Docs\\PDFs', category: 'PDFs' }] }),
+    applyOrganization: async () => ({ ok: true, message: 'Organized 1 file into labeled folders.' })
+  };
   const router = routerForApprovals({ documents });
   const result = await router.handle('organize my documents', 'general');
-  assert.equal(router.pending.size, 1);
-  assert.ok(result.approval?.id);
+  assert.equal(router.pending.size, 0);
+  assert.equal(result.approval, undefined);
+  assert.match(result.response, /Organized/);
 });
