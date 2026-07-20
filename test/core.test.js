@@ -516,7 +516,8 @@ test('AI service keeps per-project sessions and resets them', () => {
   assert.match(prompt, /Never claim a computer action happened/);
   assert.match(prompt, /Never invent file names/);
   assert.match(prompt, /Casual greetings and "how are you" are small talk/);
-  assert.match(prompt, /approval card/);
+  assert.match(prompt, /Recycle Bin/);
+  assert.match(prompt, /Permanently erasing files is not something you can do/);
 });
 
 test('stream accumulator collects text and tool calls; cancel is safe when idle', () => {
