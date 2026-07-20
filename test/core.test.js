@@ -658,7 +658,7 @@ test('security classifies safe, confirmation, and blocked commands', () => {
   assert.equal(classifyCommand('send the email').level, 'blocked');
 });
 
-test('router requires approval before moving a file to the Recycle Bin', async () => {
+test('router trashes a deleted file at once, with no approval card', async () => {
   let trashed = '';
   const router = new CommandRouter({
     config: { getSettings: () => ({ projects: {} }) },
@@ -666,6 +666,7 @@ test('router requires approval before moving a file to the Recycle Bin', async (
       searchFiles: async () => [{ name: 'old-notes.txt', path: 'C:\\Docs\\old-notes.txt', score: 10 }]
     },
     documents: {
+      canRecycle: () => ({ ok: true }),
       trashItem: async (source) => { trashed = source; return { ok: true, message: 'Moved to Recycle Bin.' }; }
     },
     ai: {},
@@ -674,19 +675,12 @@ test('router requires approval before moving a file to the Recycle Bin', async (
     log: { write: () => {} }
   });
 
-  const pending = await router.handle('Delete old notes');
-  assert.ok(pending.approval?.id);
-  assert.equal(pending.approval.risk, 'HIGH');
-  assert.equal(trashed, '');
-
-  const denied = await router.resolveApproval(pending.approval.id, false);
-  assert.match(denied.response, /cancelled/i);
-  assert.equal(trashed, '');
-
-  const again = await router.handle('Delete old notes');
-  const approved = await router.resolveApproval(again.approval.id, true);
-  assert.equal(approved.success, true);
+  const result = await router.handle('Delete old notes');
+  assert.equal(result.approval, undefined, 'delete must not raise an approval card any more');
+  assert.equal(router.pending.size, 0);
+  assert.equal(result.success, true);
   assert.equal(trashed, 'C:\\Docs\\old-notes.txt');
+  assert.match(result.response, /Recycle Bin/i);
 });
 
 test('settings merge preserves nested defaults', () => {

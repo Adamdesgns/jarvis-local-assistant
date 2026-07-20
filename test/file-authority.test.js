@@ -181,3 +181,32 @@ test('a failing file operation reports the reason instead of throwing', async ()
   assert.equal(result.success, false);
   assert.match(result.response, /already exists/);
 });
+
+test('delete moves the file to the Recycle Bin with no approval card', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  const result = await router.handle('delete report');
+  assert.equal(result.approval, undefined, 'delete must not raise an approval card any more');
+  assert.equal(router.pending.size, 0);
+  assert.equal(calls[0][0], 'trash');
+  assert.match(result.response, /Recycle Bin/i);
+});
+
+test('delete is refused when the Recycle Bin would not catch it', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  router.documents.canRecycle = () => ({ ok: false, reason: "That's on a network drive, which has no Recycle Bin — I'd have to erase it for good. I'd rather you did that one yourself, sir." });
+  const result = await router.handle('delete report');
+  assert.equal(result.success, false);
+  assert.match(result.response, /network drive/i);
+  assert.equal(calls.length, 0, 'nothing may be trashed when the bin check fails');
+});
+
+test('delete is still refused entirely for unattended runs', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  const result = await router.handle('delete report', 'general', { unattended: true });
+  assert.match(result.response, /at the desk/i);
+  assert.equal(calls.length, 0);
+  assert.equal(router.pending.size, 0);
+});

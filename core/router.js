@@ -38,10 +38,6 @@ function extractFileQuery(text) {
     .replace(/^(?:open)\s+(?:the\s+)?(?:file|document)\s+/i, ''));
 }
 
-function pathLabel(target) {
-  return String(target || '').split(/[\\/]/).filter(Boolean).pop() || 'FOLDER';
-}
-
 function smallTalkReply(text) {
   if (/^(?:how are you|how are you doing|how's it going|how are things|you good|are you ok|are you okay)$/i.test(text)) {
     return 'Systems steady, mood excellent, and I have not yet formed an opinion about your browser tabs.';
@@ -297,9 +293,25 @@ class CommandRouter {
     } else if (this.documents && /^(?:delete|trash|remove)\s+(.+)$/i.test(text)) {
       const query = text.match(/^(?:delete|trash|remove)\s+(.+)$/i)[1];
       const source = (await this.tools.searchFiles(query))[0];
-      result = source
-        ? this.#fileApproval('trash', source.path, {}, `MOVE ${source.name} TO RECYCLE BIN`, `This can be restored later from the Windows Recycle Bin.\n${source.path}`, stream)
-        : this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
+      if (!source) {
+        result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
+      } else if (stream.unattended) {
+        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+      } else {
+        // "Delete" means the Recycle Bin and nothing more — and only when the
+        // bin will really catch it. JARVIS has no permanent-erase capability.
+        const check = this.documents.canRecycle(source.path);
+        if (!check.ok) {
+          result = this.#result(check.reason, 'documents', { success: false });
+        } else {
+          try {
+            const outcome = await this.documents.trashItem(source.path);
+            result = this.#result(outcome.message, 'documents', { success: Boolean(outcome && outcome.ok) });
+          } catch (error) {
+            result = this.#result(error.message, 'documents', { success: false });
+          }
+        }
+      }
     } else if (this.documents && /^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i.test(text)) {
       const location = text.match(/^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i)[1];
       try {
@@ -453,19 +465,6 @@ class CommandRouter {
 
   #result(response, source, extra = {}) {
     return { id: crypto.randomUUID(), response, source, timestamp: new Date().toISOString(), ...extra };
-  }
-
-  // Delete/trash still goes through the approval card — Task 3 handles that
-  // branch. This stays in place for #fileApproval's one remaining caller.
-  #fileApproval(operation, source, extra, title, detail, stream = {}) {
-    if (stream.unattended) {
-      return this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
-    }
-    const id = crypto.randomUUID();
-    this.pending.set(id, { type: 'file', operation, source, ...extra });
-    return this.#result('Review the file action before I continue.', 'safety', {
-      approval: { id, title, detail, risk: operation === 'trash' ? 'HIGH' : 'REVIEW' }
-    });
   }
 
   // Owner-issued file work runs immediately: the approved-folder boundary and

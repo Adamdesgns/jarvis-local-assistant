@@ -327,14 +327,19 @@ test('unattended: "delete old files" does not queue a pending approval and retur
   assert.match(result.response, /at the desk/i);
 });
 
-test('attended: "delete old files" still queues a pending file approval (proves no regression)', async () => {
-  const documents = { trashItem: async () => ({ ok: true, message: 'Moved to Recycle Bin.' }) };
+test('attended: "delete old files" executes at once, no approval card (owner file work no longer needs a card — file-authority Task 3)', async () => {
+  const calls = { trashItem: [] };
+  const documents = {
+    canRecycle: () => ({ ok: true }),
+    trashItem: async (target) => { calls.trashItem.push(target); return { ok: true, message: 'Moved to Recycle Bin.' }; }
+  };
   const tools = fakeTools({ searchFiles: async () => [{ name: 'old-notes.txt', path: 'C:\\Docs\\old-notes.txt', score: 10 }] });
   const router = routerForApprovals({ tools, documents });
   const result = await router.handle('delete old files', 'general');
-  assert.equal(router.pending.size, 1);
-  assert.ok(result.approval?.id);
-  assert.equal(result.approval.risk, 'HIGH');
+  assert.equal(router.pending.size, 0);
+  assert.equal(result.approval, undefined);
+  assert.deepEqual(calls.trashItem, ['C:\\Docs\\old-notes.txt']);
+  assert.match(result.response, /Recycle Bin/i);
 });
 
 test('unattended: "organize my documents" does not queue a pending approval and returns an at-the-desk message', async () => {
