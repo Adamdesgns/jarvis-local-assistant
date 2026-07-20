@@ -12,6 +12,10 @@ const SKIP_DIRECTORIES = new Set(['.git', '.svn', 'node_modules', 'AppData', '$R
 
 const RESERVED_DEVICE_NAME = /^(CON|PRN|AUX|NUL|COM\d|LPT\d)(\.|$)/i;
 
+// Windows permanently erases items the Recycle Bin can't hold, so JARVIS
+// refuses those rather than destroying something he was asked to "delete".
+const RECYCLE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+
 function cleanName(value, fallback = 'Untitled') {
   // Slice BEFORE trim: trimming first can leave a trailing space re-exposed
   // by the subsequent slice (e.g. "...aaa   bbb" truncated mid-run of spaces).
@@ -292,6 +296,31 @@ class DocumentService {
     return { ok: true, path: target, message: `Renamed it to ${finalName}.` };
   }
 
+  // Is this item one the Recycle Bin will actually catch? Windows silently
+  // erases for good on network shares, on volumes without a bin (most USB
+  // sticks), and for items over the bin's quota. JARVIS refuses those.
+  canRecycle(target) {
+    const resolved = path.resolve(target);
+    // Checked ahead of isAllowed(): approvedRoots() probes each root with
+    // fs.existsSync, which for an unreachable UNC path can block for seconds
+    // before returning false — slow, and it would surface the wrong reason
+    // ("outside approved folders" instead of "network drive").
+    if (resolved.startsWith('\\\\')) {
+      return { ok: false, reason: "That's on a network drive, which has no Recycle Bin — I'd have to erase it for good. I'd rather you did that one yourself, sir." };
+    }
+    if (!this.isAllowed(target)) return { ok: false, reason: 'That item is outside your approved folders.' };
+    const root = path.parse(resolved).root;
+    if (!root || !fs.existsSync(path.join(root, '$Recycle.Bin'))) {
+      return { ok: false, reason: "That drive has no Recycle Bin, so deleting would erase it for good. I'd rather you did that one yourself, sir." };
+    }
+    let stats;
+    try { stats = fs.statSync(resolved); } catch { return { ok: false, reason: "I couldn't find that item." }; }
+    if (stats.isFile() && stats.size > RECYCLE_MAX_BYTES) {
+      return { ok: false, reason: "That file is too big for the Recycle Bin — Windows would erase it for good. I'd rather you did that one yourself, sir." };
+    }
+    return { ok: true };
+  }
+
   async trashItem(target) {
     if (!this.isAllowed(target)) throw new Error('That item is outside your approved folders.');
     await this.shell.trashItem(target);
@@ -326,7 +355,14 @@ class DocumentService {
     for (const item of plan.moves || []) {
       if (!this.isAllowed(item.source) || !this.isAllowed(item.destination)) continue;
       await fs.promises.mkdir(item.destination, { recursive: true });
-      await fs.promises.rename(item.source, path.join(item.destination, path.basename(item.source)));
+      // Organizing runs without an approval card now, so a name collision must
+      // never destroy the file already sitting there.
+      const extension = path.extname(item.source);
+      const base = path.basename(item.source, extension);
+      let target = path.join(item.destination, path.basename(item.source));
+      let count = 2;
+      while (fs.existsSync(target)) target = path.join(item.destination, `${base} ${count++}${extension}`);
+      await fs.promises.rename(item.source, target);
       moved += 1;
     }
     return { ok: true, message: `Organized ${moved} file${moved === 1 ? '' : 's'} into labeled folders.` };
