@@ -239,6 +239,61 @@ function auditionVoice() {
   speechSynthesis.speak(utterance);
 }
 
+// --- Speech resilience -------------------------------------------------
+// Chromium can silently drop an in-flight SpeechSynthesisUtterance into a
+// paused state — speaking stays true, paused flips true, and neither onend
+// nor onerror ever fires — when JARVIS loses focus or is fully occluded by
+// another window (observed here: File Explorer covering the app). This is
+// NOT the same thing backgroundThrottling:false already guards against (that
+// flag only governs JS timer/animation throttling); it happens at the audio/
+// occlusion layer instead, so it needs its own recovery path. A single
+// resume() before speak() (the pre-existing line below) only helps an
+// utterance that was ALREADY stuck from a previous call — it does nothing
+// for one that gets paused mid-playback, which is the realistic case here.
+// A short watchdog that keeps nudging resume() for as long as an utterance
+// is outstanding fixes that: resume() is a harmless no-op when nothing is
+// paused, and reliably un-sticks the engine when something is.
+let speechWatchdog = null;
+
+// Pure decision function, unit-tested in test/speech-resilience.test.js.
+// Given a snapshot of speechSynthesis's tri-state (speaking/paused/pending),
+// decide whether it's worth calling resume() right now: only when there is
+// an utterance actually in flight (speaking or queued) AND the engine has
+// reported itself paused. Calling resume() with nothing queued or nothing
+// paused is harmless, but skipping it keeps the watchdog from doing pointless
+// work every tick.
+function shouldAttemptResume(synthState) {
+  if (!synthState) return false;
+  const { speaking, paused, pending } = synthState;
+  return Boolean(paused && (speaking || pending));
+}
+
+function stopSpeechWatchdog() {
+  if (speechWatchdog) {
+    clearInterval(speechWatchdog);
+    speechWatchdog = null;
+  }
+}
+
+function startSpeechWatchdog() {
+  stopSpeechWatchdog();
+  speechWatchdog = setInterval(() => {
+    if (!('speechSynthesis' in window)) return stopSpeechWatchdog();
+    const synthState = {
+      speaking: speechSynthesis.speaking,
+      paused: speechSynthesis.paused,
+      pending: speechSynthesis.pending
+    };
+    if (shouldAttemptResume(synthState)) {
+      speechSynthesis.resume();
+    } else if (!synthState.speaking && !synthState.pending) {
+      // Utterance finished (or was cancelled) without the interval getting
+      // cleared by onend/onerror — stop polling rather than run forever.
+      stopSpeechWatchdog();
+    }
+  }, 300);
+}
+
 function speak(message, retry = false) {
   if (!state.settings.voiceEnabled || !message || !('speechSynthesis' in window)) {
     if (!state.searchActive) setCoreState('ready');
@@ -253,18 +308,32 @@ function speak(message, retry = false) {
   }
   speechSynthesis.cancel();
   speechSynthesis.resume?.();
+  stopSpeechWatchdog();
   const utterance = new SpeechSynthesisUtterance(message.replace(/[*#•]/g, ' '));
   utterance.voice = selectVoice();
   utterance.rate = .98;
   utterance.pitch = .88;
   utterance.volume = .92;
   utterance.onstart = () => setCoreState('speaking', 'LOCAL VOICE RESPONSE');
-  utterance.onend = () => { if (!state.searchActive) setCoreState('ready'); };
+  utterance.onend = () => { stopSpeechWatchdog(); if (!state.searchActive) setCoreState('ready'); };
   utterance.onerror = (event) => {
-    console.warn(`[JARVIS] Spoken reply failed: ${event.error || 'unknown speech error'}`);
+    stopSpeechWatchdog();
+    const reason = event.error || 'unknown speech error';
+    console.warn(`[JARVIS] Spoken reply failed: ${reason}`);
+    // "canceled"/"interrupted" are expected — speak() itself calls cancel()
+    // before every utterance, and interruptJarvis() cancels on demand. Only
+    // surface genuinely unexpected failures so a real regression is visible
+    // instead of silent, without spamming a toast on every normal reply.
+    if (reason !== 'canceled' && reason !== 'interrupted') {
+      showToast(`Voice reply failed: ${reason}`, 4200);
+    }
     if (!state.searchActive) setCoreState('ready');
   };
   speechSynthesis.speak(utterance);
+  // Started (or queued as pending) immediately, before onstart necessarily
+  // fires — the stuck-paused state can happen before onstart too, so the
+  // watchdog needs to be live from here, not from inside onstart.
+  startSpeechWatchdog();
 }
 
 // Full stop: abort whatever the brain is doing AND kill the voice — either
@@ -273,6 +342,7 @@ function speak(message, retry = false) {
 function interruptJarvis() {
   window.jarvis.cancelAI();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
+  stopSpeechWatchdog();
   document.body.classList.remove('busy');
   if (!state.searchActive) setCoreState('ready');
 }
@@ -1526,5 +1596,5 @@ async function initialize() {
 // Dual export, same pattern as src/skins.js: node:test can require this file
 // to unit-test isInterrupt() directly; the browser loads it as a classic
 // <script> where `module` is never defined, so this line is a no-op there.
-if (typeof module !== 'undefined' && module.exports) module.exports = { isInterrupt, INTERRUPT_PHRASES };
+if (typeof module !== 'undefined' && module.exports) module.exports = { isInterrupt, INTERRUPT_PHRASES, shouldAttemptResume };
 if (typeof window !== 'undefined') window.addEventListener('DOMContentLoaded', initialize);

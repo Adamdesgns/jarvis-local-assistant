@@ -30,6 +30,16 @@ const { ScheduleStore } = require('./core/schedule-store');
 const { ScheduleService } = require('./core/schedule-service');
 const QRCode = require('qrcode');
 
+// Chromium's native Windows window-occlusion tracker is a separate mechanism
+// from Electron's per-window `backgroundThrottling` option (already false on
+// both windows below): it independently marks a window "occluded" whenever
+// another window fully covers it on screen — e.g. File Explorer maximized on
+// top of JARVIS — and that occlusion signal is what silently pauses/stalls
+// in-flight work like SpeechSynthesis. `backgroundThrottling:false` only
+// disables JS timer/animation throttling and does not stop this. Must be set
+// before the app is ready.
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+
 let mainWindow;
 let widgetWindow;
 let tray;
