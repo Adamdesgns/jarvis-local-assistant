@@ -1,10 +1,28 @@
 const key = () => localStorage.getItem('jarvis-mobile-key');
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${key()}` });
 
+// pairing/offline are full-screen takeovers (no tab bar); chat/cameras/send
+// are tabbed screens reachable via the bottom tab bar.
+const ALL_SCREENS = ['pairing', 'chat', 'cameras', 'send', 'offline'];
+const TAB_SCREENS = ['chat', 'cameras', 'send'];
+let lastTab = 'chat';   // which tab to return to after a takeover (offline) clears
+
 function show(screen) {
+  const isTabbed = TAB_SCREENS.includes(screen);
+  if (isTabbed) lastTab = screen;
+
   document.body.className = screen;
-  for (const s of ['pairing', 'chat', 'offline']) document.getElementById(`screen-${s}`).hidden = s !== screen;
-  if (screen === 'chat') document.body.classList.add('online');
+  for (const s of ALL_SCREENS) document.getElementById(`screen-${s}`).hidden = s !== screen;
+  if (isTabbed) document.body.classList.add('online');
+
+  const tabBar = document.getElementById('tab-bar');
+  tabBar.hidden = !isTabbed;
+  for (const t of TAB_SCREENS) {
+    const btn = document.getElementById(`tab-${t}`);
+    const active = t === screen;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+  }
 }
 
 function bubble(who, text) {
@@ -146,6 +164,11 @@ document.getElementById('pair-btn').addEventListener('click', async () => {
 
 document.getElementById('retry-btn').addEventListener('click', boot);
 
+// --- tab bar ---
+for (const btn of document.querySelectorAll('.tab-item')) {
+  btn.addEventListener('click', () => show(btn.dataset.screen));
+}
+
 async function boot() {
   if (location.hash.length > 1) { document.getElementById('pair-code').value = location.hash.slice(1); history.replaceState(null, '', '/'); }
   if (!key()) return show('pairing');
@@ -153,7 +176,7 @@ async function boot() {
     const res = await fetch('/api/last', { headers: headers() });
     if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); return show('pairing'); }
     const out = await res.json();
-    show('chat');
+    show(lastTab);
     if (out.reply && out.reply !== lastRendered) { lastRendered = out.reply; bubble('jarvis', out.reply); }
     connectEvents();
   } catch { show('offline'); }

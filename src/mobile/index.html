@@ -32,10 +32,37 @@
     </footer>
   </section>
 
+  <section id="screen-cameras" class="screen-empty" hidden>
+    <div class="stack">
+      <p class="text-dim">Cameras are coming soon.</p>
+    </div>
+  </section>
+
+  <section id="screen-send" class="screen-empty" hidden>
+    <div class="stack">
+      <p class="text-dim">Send is coming soon.</p>
+    </div>
+  </section>
+
   <section id="screen-offline" class="screen-offline" hidden>
     <p>JARVIS is unreachable — is the PC awake?</p>
     <button id="retry-btn" class="btn btn-primary">RETRY</button>
   </section>
+
+  <nav id="tab-bar" class="bar bar-bottom tab-bar" hidden>
+    <button id="tab-chat" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-chat" data-screen="chat">
+      <span class="tab-glyph" aria-hidden="true">💬</span>
+      <span class="tab-label">Chat</span>
+    </button>
+    <button id="tab-cameras" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-cameras" data-screen="cameras">
+      <span class="tab-glyph" aria-hidden="true">📷</span>
+      <span class="tab-label">Cameras</span>
+    </button>
+    <button id="tab-send" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-send" data-screen="send">
+      <span class="tab-glyph" aria-hidden="true">📤</span>
+      <span class="tab-label">Send</span>
+    </button>
+  </nav>
 
   <script src="/mobile.js"></script>
 </body>

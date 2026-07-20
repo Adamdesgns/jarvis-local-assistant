@@ -131,6 +131,52 @@ section[hidden] { display: none; }
   padding-bottom: calc(env(safe-area-inset-bottom) + var(--s4));
 }
 
+/* Cameras/Send placeholders — tabbed screens, so the tab bar (not this
+   section) owns the safe-area reserve at the bottom of the viewport. */
+.screen-empty {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Tab bar — bottom navigation across the three tabbed screens (chat,
+   cameras, send). Hidden entirely on takeover screens (pairing, offline);
+   `.tab-bar[hidden]` must stay an explicit author rule for the same reason
+   `section[hidden]` is — `.tab-bar { display: flex }` is an author rule too
+   and beats the [hidden] UA default on its own.
+   ========================================================================== */
+
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  padding: var(--s2) var(--s2) calc(env(safe-area-inset-bottom) + var(--s2));
+}
+.tab-bar[hidden] { display: none; }
+
+.tab-item {
+  flex: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  cursor: pointer;
+  transition: color .15s ease, transform .15s ease;
+}
+.tab-item:active { transform: scale(.94); }
+.tab-item.active { color: var(--accent); }
+
+.tab-glyph { font-size: 22px; line-height: 1; }
+.tab-label { font-size: 11px; font-weight: 500; }
+
 /* ==========================================================================
    Layout primitives
    ========================================================================== */
@@ -242,7 +288,9 @@ textarea.field { resize: none; }
    Chat
    ========================================================================== */
 
-.composer-bar { display: flex; gap: var(--s2); align-items: flex-end; }
+/* The tab bar below now owns the safe-area-inset-bottom reserve, so the
+   composer only needs its normal bottom padding — not a second helping. */
+.composer-bar { display: flex; gap: var(--s2); align-items: flex-end; padding-bottom: var(--s3); }
 .composer-bar .field { flex: 1; }
 
 .thread {
