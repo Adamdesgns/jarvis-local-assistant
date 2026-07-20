@@ -40,6 +40,23 @@ test('isMeaninglessName: a genuinely meaningful name is left alone', () => {
   assert.equal(isMeaninglessName('IMG_1234'), false); // has non-hex letters (I, M, G)
 });
 
+test('isMeaninglessName: short real words that happen to be spelled only with hex letters (a-f) are left alone', () => {
+  // a-f are letters, not just hex digits — "all hex digits" is not the same
+  // test as "looks machine-generated". These are real English words a person
+  // would type or say aloud, and must never be silently renamed.
+  for (const word of ['cafe', 'beef', 'dead', 'face', 'fade', 'decade', 'facade', 'bad', 'ace']) {
+    assert.equal(isMeaninglessName(word), false, `${word} is a real word and must be preserved`);
+  }
+});
+
+test('isMeaninglessName: a long hex-only run (>= 12 chars) is still meaningless, even when it is all hex letters', () => {
+  // Long enough that it can no longer plausibly be a word someone typed —
+  // this is the "content hash" / "dashless GUID" shape the heuristic exists
+  // to catch.
+  assert.equal(isMeaninglessName('deadbeefcafe'), true); // exactly 12 hex chars
+  assert.equal(isMeaninglessName('deadbeefcafebabe'), true);
+});
+
 // --- smartUploadName: the fallback name generator ---
 
 test('smartUploadName: image extensions get a "Phone photo" prefix with a real, dated timestamp', () => {
@@ -115,10 +132,20 @@ test('createBinaryFile: a meaningless name with no recognized image extension ge
   }
 });
 
-test('createBinaryFile: a traversal-style filename still cannot escape the destination, even when it happens to be meaningless', async () => {
+test('createBinaryFile: a dotted traversal-style filename is still confined to the destination by sanitising alone', async () => {
   // Nested two levels inside a sandbox we own, matching the pattern used in
   // test/mobile-server.test.js's own namejail test, so "../../evil" resolves
   // to somewhere inside the sandbox we can safely assert on and clean up.
+  //
+  // Note on the name of this test: "../../deadbeef.png" is NOT classified
+  // meaningless. cleanName() strips path separators (/ and \) — the only
+  // characters that make a name traversal-shaped — before extension/base are
+  // ever computed and before isMeaninglessName() runs at all. By the time
+  // the meaningless-check sees anything, the traversal shape is already
+  // gone (the surviving dots break the hex-run test too). So a traversal-
+  // shaped input and the meaningless-rename branch can never actually
+  // interact in the same call; this test only verifies that cleanName's
+  // ordinary sanitising keeps the write confined to the destination.
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-names-namejail-'));
   const dir = path.join(sandbox, 'nested', 'dest');
   fs.mkdirSync(dir, { recursive: true });
@@ -126,7 +153,6 @@ test('createBinaryFile: a traversal-style filename still cannot escape the desti
     const docs = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
     const buffer = Buffer.from('payload');
 
-    // An all-hex traversal-shaped name: meaningless AND traversal-shaped at once.
     const result = await docs.createBinaryFile(dir, '../../deadbeef.png', buffer);
     assert.equal(result.ok, true);
     assert.equal(path.dirname(result.path), dir, 'must resolve inside the destination, never above it');
@@ -149,6 +175,40 @@ test('createBinaryFile: extension is always preserved, whatever the extension is
       const result = await docs.createBinaryFile(dir, `ABCDEF1234567890ABCDEF1234567890${ext}`, buffer, now);
       assert.equal(path.extname(result.path), ext, `extension ${ext} must survive the rename`);
     }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('createBinaryFile: short hex-letter real words arrive completely untouched, not mistaken for machine-generated names', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-names-hexwords-'));
+  try {
+    const docs = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const buffer = Buffer.from('bytes');
+
+    for (const [filename, expected] of [
+      ['cafe.jpg', 'cafe.jpg'],
+      ['beef.png', 'beef.png'],
+      ['bad.pdf', 'bad.pdf'],
+      ['decade.txt', 'decade.txt']
+    ]) {
+      const result = await docs.createBinaryFile(dir, filename, buffer);
+      assert.equal(path.basename(result.path), expected, `${filename} is a real word and must be preserved`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('createBinaryFile: a genuinely long hash-like name (12+ hex chars) still gets renamed', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-names-longhash-'));
+  try {
+    const docs = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const buffer = Buffer.from('bytes');
+    const now = new Date(2026, 6, 20, 12, 16);
+
+    const result = await docs.createBinaryFile(dir, 'deadbeefcafe.png', buffer, now);
+    assert.equal(path.basename(result.path), 'Phone photo 2026-07-20 12-16.png');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

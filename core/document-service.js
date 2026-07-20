@@ -46,11 +46,19 @@ function isMeaninglessName(base) {
   if (GUID_RE.test(trimmed)) return true;
   const stripped = trimmed.replace(/[\s\-_{}]/g, '');
   if (!stripped) return true;
-  // "all hex digits" (which also covers "no letters at all", since decimal
-  // digits are a subset of hex digits) catches a GUID with no dashes, a
-  // content hash, or a bare numeric timestamp — none of which a person would
-  // ever say aloud to find the file again.
-  return /^[0-9a-f]+$/i.test(stripped);
+  // No letters at all (a bare numeric timestamp, a serial number, etc.)
+  // reads like something machine-generated — nobody says a bare number
+  // aloud to find a file again.
+  if (!/[a-z]/i.test(stripped)) return true;
+  // A long (>= 12 char) run of nothing but hex characters is machine-
+  // generated: a dashless GUID, a content hash, and similar shapes. Below
+  // that length, "all hex" stops being a reliable signal — a-f are letters,
+  // so short hex-only runs collide with real words a person actually types
+  // or says ("cafe", "beef", "dead", "bad", "ace", "decade", "facade").
+  // Those must be left alone, so the length floor is what separates
+  // "deadbeefcafe" (renamed) from "cafe" (preserved).
+  if (stripped.length >= 12 && /^[0-9a-f]+$/i.test(stripped)) return true;
+  return false;
 }
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.heic', '.heif', '.gif', '.webp', '.bmp', '.tiff', '.tif']);
