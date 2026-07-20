@@ -1,5 +1,9 @@
 # JARVIS Changelog
 
+## 0.15.0 — July 20, 2026
+
+### Added — File authority: moves, copies, renames and organizing happen on request without an approval card; "delete" means the Recycle Bin and is refused when the bin cannot hold the item; permanent erasure remains impossible.
+
 ## 0.14.0 — July 19, 2026
 
 ### Added — JARVIS Mobile v2: bottom tabs, cameras on the phone (stills + alerts), phone-to-PC file sending, macOS-style look, HTTPS pairing QR

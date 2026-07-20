@@ -147,6 +147,25 @@ test('#chat: an approval-shaped router result becomes a desktop-confirmation rep
   assert.deepEqual(cancelled, [{ id: 'approval-1', approved: false }]);
 });
 
+test('#chat: a file result from the phone comes back as the real outcome, not a desktop redirect', async () => {
+  const auth = new MobileAuth({ now: () => 0 });
+  const { code } = auth.startPairing();
+  const server = new MobileServer({
+    auth,
+    router: { handle: async () => ({ response: 'Moved report.pdf.', success: true }) },
+    transcribe: async () => '', config: { getSettings: () => ({}) }, staticDir: __dirname,
+    documents: { approvedRoots: () => [] }
+  });
+  const pair = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/pair', { code, name: 'iPhone' }), pair);
+  const { key } = JSON.parse(pair.body);
+
+  const res = fakeRes();
+  await server.handleRequest(jsonReq('POST', '/api/chat', { text: 'move report to archive' }, { authorization: `Bearer ${key}` }), res);
+  assert.equal(JSON.parse(res.body).reply, 'Moved report.pdf.');
+  assert.doesNotMatch(JSON.parse(res.body).reply, /at the desktop/i);
+});
+
 test('static file serving never leaks content outside staticDir on traversal attempts', async () => {
   const auth = new MobileAuth({ now: () => 0 });
   const server = new MobileServer({
