@@ -518,6 +518,12 @@ test('AI service keeps per-project sessions and resets them', () => {
   assert.match(prompt, /Casual greetings and "how are you" are small talk/);
   assert.match(prompt, /Recycle Bin/);
   assert.match(prompt, /Permanently erasing files is not something you can do/);
+  // The model itself holds no file-mutation tools — for phrasings the router
+  // regexes miss, it must tell him the exact command rather than believing
+  // the work "just happens".
+  assert.match(prompt, /no file[- ]mutation tools/i);
+  assert.match(prompt, /move <file> to <folder>/);
+  assert.match(prompt, /delete <file>/);
 });
 
 test('stream accumulator collects text and tool calls; cancel is safe when idle', () => {

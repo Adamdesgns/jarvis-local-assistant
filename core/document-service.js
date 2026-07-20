@@ -14,7 +14,12 @@ const RESERVED_DEVICE_NAME = /^(CON|PRN|AUX|NUL|COM\d|LPT\d)(\.|$)/i;
 
 // Windows permanently erases items the Recycle Bin can't hold, so JARVIS
 // refuses those rather than destroying something he was asked to "delete".
-const RECYCLE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+// Windows actually sizes the bin at roughly 5% of the volume, not a flat
+// number — on anything smaller than a ~10 GB partition the real quota is
+// under 2 GB, so a flat 2 GB cap here would wave through files the bin
+// cannot really hold. 512 MB is a conservative floor that stays safe on
+// small volumes too.
+const RECYCLE_MAX_BYTES = 512 * 1024 * 1024;
 
 function cleanName(value, fallback = 'Untitled') {
   // Slice BEFORE trim: trimming first can leave a trailing space re-exposed
@@ -315,8 +320,11 @@ class DocumentService {
     }
     let stats;
     try { stats = fs.statSync(resolved); } catch { return { ok: false, reason: "I couldn't find that item." }; }
-    if (stats.isFile() && stats.size > RECYCLE_MAX_BYTES) {
-      return { ok: false, reason: "That file is too big for the Recycle Bin — Windows would erase it for good. I'd rather you did that one yourself, sir." };
+    if (!stats.isFile()) {
+      return { ok: false, reason: "Delete only covers files, sir — a folder over the Recycle Bin's quota is exactly what Windows erases for good. I'd rather you moved or cleared that one yourself." };
+    }
+    if (stats.size > RECYCLE_MAX_BYTES) {
+      return { ok: false, reason: "That file may be too large for this drive's Recycle Bin quota — Windows sizes the bin at roughly 5% of the volume, so a file this size could get erased for good instead of recycled. I'd rather you did that one yourself, sir." };
     }
     return { ok: true };
   }

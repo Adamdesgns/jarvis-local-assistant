@@ -45,41 +45,43 @@ test('canRecycle: refuses a file bigger than the Recycle Bin will hold', () => {
   fs.writeFileSync(file, 'x');
   const docs = makeDocs([dir]);
   const realStat = fs.statSync;
-  // Pretend it is 3 GB without writing 3 GB to disk.
+  // 600 MB: comfortably under the old flat 2 GB cap, but over the new
+  // conservative 512 MB cap — Windows actually sizes the bin at roughly 5% of
+  // the volume, so on anything smaller than a ~10 GB partition the real quota
+  // is well under 2 GB and a file this size would have been erased for good.
   fs.statSync = (p, ...rest) => {
     const s = realStat(p, ...rest);
-    if (path.resolve(p) === path.resolve(file)) return { ...s, size: 3 * 1024 * 1024 * 1024, isFile: () => true };
+    if (path.resolve(p) === path.resolve(file)) return { ...s, size: 600 * 1024 * 1024, isFile: () => true };
     return s;
   };
   try {
     const out = docs.canRecycle(file);
     assert.equal(out.ok, false);
-    assert.match(out.reason, /too big/i);
+    assert.match(out.reason, /quota|too big|too large/i);
   } finally {
     fs.statSync = realStat;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('canRecycle: a directory skips the size test but still needs a bin-backed volume', () => {
+test('canRecycle: refuses a directory outright — "delete" means files only', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-bin-'));
   const sub = path.join(dir, 'folder');
   fs.mkdirSync(sub);
   const docs = makeDocs([dir]);
-  const realStat = fs.statSync;
-  // Pretend the directory reports as 3 GB, far above the recycle-size cap.
-  // If the isFile() guard were ever removed, this would trip the "too big"
-  // refusal instead of returning ok: true.
-  fs.statSync = (p, ...rest) => {
-    if (path.resolve(p) === path.resolve(sub)) return { isFile: () => false, size: 3 * 1024 * 1024 * 1024 };
-    return realStat(p, ...rest);
-  };
-  try {
-    assert.deepEqual(docs.canRecycle(sub), { ok: true });
-  } finally {
-    fs.statSync = realStat;
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  const out = docs.canRecycle(sub);
+  assert.equal(out.ok, false, 'a directory must never be recyclable via "delete"');
+  assert.match(out.reason, /folder/i);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('canRecycle: still allows a normal file inside an approved root', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-bin-'));
+  const file = path.join(dir, 'note.txt');
+  fs.writeFileSync(file, 'hello');
+  const docs = makeDocs([dir]);
+  assert.deepEqual(docs.canRecycle(file), { ok: true });
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('canRecycle: refuses a volume with no Recycle Bin', () => {
@@ -131,7 +133,7 @@ const { CommandRouter } = require('../core/router');
 function makeRouter(documentCalls) {
   return new CommandRouter({
     config: { getSettings: () => ({ searchRoots: [], projects: {}, assistantName: 'JARVIS' }) },
-    tools: { searchFiles: async () => [{ path: 'C:\\Approved\\report.pdf', name: 'report.pdf' }] },
+    tools: { searchFiles: async () => [{ path: 'C:\\Approved\\report.pdf', name: 'report.pdf', score: 8 }] },
     documents: {
       resolveLocation: () => 'C:\\Approved\\Archive',
       planOrganization: async () => ({ directory: 'C:\\Approved', moves: [{ source: 'C:\\Approved\\a.txt', destination: 'C:\\Approved\\Documents', category: 'Documents' }] }),
@@ -209,4 +211,47 @@ test('delete is still refused entirely for unattended runs', async () => {
   assert.match(result.response, /at the desk/i);
   assert.equal(calls.length, 0);
   assert.equal(router.pending.size, 0);
+});
+
+test('"remove" no longer triggers delete — innocent phrasing must not be trashed', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  const result = await router.handle('remove the extra spacing from my resume');
+  assert.equal(calls.length, 0, 'trashItem must never be called for this phrasing — "remove" is not a delete verb any more');
+});
+
+test('delete refuses an ambiguous match instead of guessing which file he means', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  router.tools.searchFiles = async () => [
+    { path: 'C:\\Approved\\report_draft.docx', name: 'report_draft.docx', score: 5 },
+    { path: 'C:\\Approved\\report_final.docx', name: 'report_final.docx', score: 4 }
+  ];
+  const result = await router.handle('delete report');
+  assert.equal(calls.length, 0, 'nothing may be trashed when the match is not confident');
+  assert.equal(result.success, false);
+  assert.match(result.response, /which|sure|confident/i);
+});
+
+test('delete still trashes a clear, confident single match', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  router.tools.searchFiles = async () => [{ path: 'C:\\Approved\\report.pdf', name: 'report.pdf', score: 8 }];
+  const result = await router.handle('delete report');
+  assert.equal(calls[0][0], 'trash');
+  assert.match(result.response, /Recycle Bin/i);
+});
+
+test('resolveApproval no longer has a file-approval path — a leftover pending file entry cannot bypass canRecycle', async () => {
+  const calls = [];
+  const router = makeRouter(calls);
+  // Nothing in the router ever queues a { type: 'file' } pending entry any
+  // more (file work runs immediately), but resolveApproval used to still
+  // handle one if it somehow showed up — including 'trash', with no
+  // canRecycle check at all. Simulate that leftover entry directly.
+  const id = 'leftover-file-approval';
+  router.pending.set(id, { type: 'file', operation: 'trash', source: 'C:\\Approved\\report.pdf' });
+  const result = await router.resolveApproval(id, true);
+  assert.equal(calls.length, 0, 'trashItem must never run through resolveApproval — the dead file-approval path must be gone');
+  assert.equal(result.success, false);
 });

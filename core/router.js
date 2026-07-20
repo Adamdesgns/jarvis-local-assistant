@@ -251,25 +251,35 @@ class CommandRouter {
       }
     } else if (this.documents && /^create\s+(?:a\s+)?folder(?:\s+(?:called|named))?\s+(.+?)\s+in\s+(.+)$/i.test(text)) {
       const [, name, location] = text.match(/^create\s+(?:a\s+)?folder(?:\s+(?:called|named))?\s+(.+?)\s+in\s+(.+)$/i);
-      try {
-        const created = await this.documents.createFolder(location, name);
-        result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
-      } catch (error) {
-        result = this.#result(error.message, 'documents', { success: false });
+      if (stream.unattended) {
+        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+      } else {
+        try {
+          const created = await this.documents.createFolder(location, name);
+          result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
+        } catch (error) {
+          result = this.#result(error.message, 'documents', { success: false });
+        }
       }
     } else if (this.documents && /^create\s+(?:a\s+)?(?:note|text file)(?:\s+(?:called|named))?\s+(.+?)\s+(?:that says|saying|with)\s+(.+)$/i.test(text)) {
       const [, name, content] = text.match(/^create\s+(?:a\s+)?(?:note|text file)(?:\s+(?:called|named))?\s+(.+?)\s+(?:that says|saying|with)\s+(.+)$/i);
-      try {
-        const created = await this.documents.createTextFile('documents', name, content, '.txt');
-        result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
-      } catch (error) {
-        result = this.#result(error.message, 'documents', { success: false });
+      if (stream.unattended) {
+        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+      } else {
+        try {
+          const created = await this.documents.createTextFile('documents', name, content, '.txt');
+          result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
+        } catch (error) {
+          result = this.#result(error.message, 'documents', { success: false });
+        }
       }
     } else if (this.documents && /^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i.test(text)) {
       const [, name, topic] = text.match(/^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i);
       const draft = await this.ai.reply(`Write a concise, useful Markdown report about: ${topic}. Use a title, short summary, key points, and next actions.`, { unattended: stream.unattended === true });
       if (!draft.ok) result = this.#result(draft.text, draft.source, { success: false });
-      else {
+      else if (stream.unattended) {
+        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+      } else {
         try {
           const created = await this.documents.createTextFile('documents', name, draft.text, '.md');
           result = this.#result(`${created.message} I saved the report in your approved Documents folder.`, 'documents', { createdPath: created.path, success: true });
@@ -290,11 +300,23 @@ class CommandRouter {
       result = source
         ? await this.#runFileAction('rename', source.path, { newName }, stream)
         : this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
-    } else if (this.documents && /^(?:delete|trash|remove)\s+(.+)$/i.test(text)) {
-      const query = text.match(/^(?:delete|trash|remove)\s+(.+)$/i)[1];
-      const source = (await this.tools.searchFiles(query))[0];
+    } else if (this.documents && /^(?:delete|trash)\s+(.+)$/i.test(text)) {
+      const query = text.match(/^(?:delete|trash)\s+(.+)$/i)[1];
+      const matches = await this.tools.searchFiles(query);
+      const source = matches[0];
+      const second = matches[1];
+      // Deleting is not something JARVIS can undo (only Windows' Recycle Bin
+      // can), so it demands a clear best hit: a real name match, and — when
+      // there's a runner-up — a solid lead over it. Same +3 gap the "find and
+      // open" branches use for "confident", plus a floor of 5 (at least a
+      // name.startsWith hit in ToolService.searchFiles' scoring) so a single
+      // weak, coincidental match doesn't get trashed either.
+      const confident = source && typeof source.score === 'number' && source.score >= 5
+        && (!second || typeof second.score !== 'number' || source.score >= second.score + 3);
       if (!source) {
         result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
+      } else if (!confident) {
+        result = this.#result(`I'm not sure which file you mean by “${query}.” Choose the one you want, or ask me again with a more exact name.`, 'documents', { files: matches.slice(0, 5), query, needsChoice: matches.length > 1, success: false });
       } else if (stream.unattended) {
         result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
       } else {
@@ -431,19 +453,9 @@ class CommandRouter {
       const executed = await this.tools.executePowerAction(action.action);
       return this.#result(executed.message, 'windows', { success: executed.ok });
     }
-    if (action.type === 'file' && this.documents) {
-      try {
-        let executed;
-        if (action.operation === 'copy') executed = await this.documents.copyItem(action.source, action.destination);
-        if (action.operation === 'move') executed = await this.documents.moveItem(action.source, action.destination);
-        if (action.operation === 'rename') executed = await this.documents.renameItem(action.source, action.newName);
-        if (action.operation === 'trash') executed = await this.documents.trashItem(action.source);
-        if (action.operation === 'organize') executed = await this.documents.applyOrganization(action.plan);
-        return this.#result(executed?.message || 'File action completed.', 'documents', { success: Boolean(executed?.ok) });
-      } catch (error) {
-        return this.#result(`The file action did not complete. ${error.message}`, 'documents', { success: false });
-      }
-    }
+    // File work runs immediately now (see #runFileAction) and never queues a
+    // pending approval, so there is intentionally no 'file' case here any
+    // more — one used to call trashItem with no canRecycle check at all.
     return this.#result('That action is not available.', 'safety', { success: false });
   }
 

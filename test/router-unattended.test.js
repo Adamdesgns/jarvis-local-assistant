@@ -282,11 +282,76 @@ test('attended: "ask my documents: what is the deadline" does not mark the conte
   assert.notEqual(calls.answerFromDocuments[0].context?.unattended, true);
 });
 
+// ---- Security review (file-authority branch), finding 2: the create-folder,
+// create-note/text-file, and create-report branches (core/router.js ~252-279)
+// had no stream.unattended guard at all, unlike every other mutating branch —
+// a scheduled task could write files to disk with nobody watching. ----------
+
+function documentCreateSpies() {
+  const calls = { createFolder: [], createTextFile: [] };
+  return {
+    calls,
+    createFolder: async (location, name) => { calls.createFolder.push({ location, name }); return { ok: true, path: 'C:\\Docs\\New Folder', message: 'Created folder New Folder.' }; },
+    createTextFile: async (location, name, content, ext) => { calls.createTextFile.push({ location, name, content, ext }); return { ok: true, path: 'C:\\Docs\\note.txt', message: 'Created note.txt.' }; }
+  };
+}
+
+test('unattended: "create folder called Backups in downloads" does not call documents.createFolder and explains it needs Adam at the desk', async () => {
+  const documents = documentCreateSpies();
+  const router = routerWithDocuments({ documents });
+  const result = await router.handle('create folder called Backups in downloads', 'general', { unattended: true });
+  assert.equal(documents.calls.createFolder.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "create folder called Backups in downloads" calls documents.createFolder (proves attended behavior unchanged)', async () => {
+  const documents = documentCreateSpies();
+  const router = routerWithDocuments({ documents });
+  const result = await router.handle('create folder called Backups in downloads', 'general');
+  assert.equal(documents.calls.createFolder.length, 1);
+  assert.match(result.response, /Created folder/i);
+});
+
+test('unattended: "create a note called Reminder saying call the vet" does not call documents.createTextFile and explains it needs Adam at the desk', async () => {
+  const documents = documentCreateSpies();
+  const router = routerWithDocuments({ documents });
+  const result = await router.handle('create a note called Reminder saying call the vet', 'general', { unattended: true });
+  assert.equal(documents.calls.createTextFile.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "create a note called Reminder saying call the vet" calls documents.createTextFile (proves attended behavior unchanged)', async () => {
+  const documents = documentCreateSpies();
+  const router = routerWithDocuments({ documents });
+  const result = await router.handle('create a note called Reminder saying call the vet', 'general');
+  assert.equal(documents.calls.createTextFile.length, 1);
+  assert.match(result.response, /Created note/i);
+});
+
+test('unattended: "create a report called Q3 about sales" does not call documents.createTextFile and explains it needs Adam at the desk', async () => {
+  const documents = documentCreateSpies();
+  const ai = fakeAi();
+  const router = routerWithDocuments({ documents, ai });
+  const result = await router.handle('create a report called Q3 about sales', 'general', { unattended: true });
+  assert.equal(documents.calls.createTextFile.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "create a report called Q3 about sales" calls documents.createTextFile (proves attended behavior unchanged)', async () => {
+  const documents = documentCreateSpies();
+  const ai = fakeAi();
+  const router = routerWithDocuments({ documents, ai });
+  const result = await router.handle('create a report called Q3 about sales', 'general');
+  assert.equal(documents.calls.createTextFile.length, 1);
+  assert.match(result.response, /I saved the report/i);
+});
+
 // ---- FINDING 11: orphan approval entries — unattended runs must not queue
 // an approval that nothing will ever resolve (router.pending is a leak, and
 // "Review the file action before I continue" is nonsense spoken to an empty
-// room). Covers both the power-confirm path (~line 105) and #fileApproval
-// (~line 456), which are used by delete/copy/move/rename/organize. ----------
+// room). Covers both the power-confirm path (~line 105) and the file
+// branches (delete/copy/move/rename/organize), which now run immediately via
+// #runFileAction rather than queuing any pending approval. ----------
 
 function routerForApprovals({ tools, documents } = {}) {
   return new CommandRouter({
