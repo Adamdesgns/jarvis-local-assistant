@@ -150,7 +150,10 @@ class MobileServer {
       const result = await this.documents.createBinaryFile(destination, filename, buffer);
       return this.json(res, 200, { ok: true, path: result.path });
     } catch (error) {
-      return this.json(res, 400, { ok: false, error: error.message });
+      // Never hand the phone a raw error message — it can carry the
+      // absolute server-side path. Log the detail here instead.
+      console.error('[mobile-server] upload failed:', error);
+      return this.json(res, 400, { ok: false, error: "Couldn't save that file. Check the destination folder and try again." });
     }
   }
 

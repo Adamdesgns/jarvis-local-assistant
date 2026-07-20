@@ -10,8 +10,14 @@ const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.json', '.csv', '.log', '.js', 
 const DOCUMENT_EXTENSIONS = new Set([...TEXT_EXTENSIONS, '.pdf', '.docx', '.xlsx']);
 const SKIP_DIRECTORIES = new Set(['.git', '.svn', 'node_modules', 'AppData', '$Recycle.Bin', 'System Volume Information', 'Windows', 'ProgramData', '.venv']);
 
+const RESERVED_DEVICE_NAME = /^(CON|PRN|AUX|NUL|COM\d|LPT\d)(\.|$)/i;
+
 function cleanName(value, fallback = 'Untitled') {
-  return String(value || fallback).replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim().slice(0, 120) || fallback;
+  // Slice BEFORE trim: trimming first can leave a trailing space re-exposed
+  // by the subsequent slice (e.g. "...aaa   bbb" truncated mid-run of spaces).
+  const name = String(value || fallback).replace(/[<>:"/\\|?*\x00-\x1F]/g, '').slice(0, 120).trim();
+  if (!name || /^\.+$/.test(name) || RESERVED_DEVICE_NAME.test(name)) return fallback;
+  return name;
 }
 
 function arrayOf(value) {
@@ -231,14 +237,24 @@ class DocumentService {
     return { ok: true, path: target, message: `Created ${path.basename(target)}.` };
   }
 
-  async createBinaryFile(location, name, buffer) {
-    const directory = this.resolveLocation(location);
+  // `directory` here must already be a resolved, absolute destination — NOT
+  // a voice-command label. resolveLocation() is a fuzzy matcher built for
+  // spoken phrases like "my documents"; it substring-matches project names
+  // and root basenames against the whole string, so feeding it an
+  // already-validated path (e.g. from the phone's file picker) can silently
+  // rewrite "…\Documents\Invoices" down to "…\Documents". Callers that hold
+  // a label, not a path, must resolve it themselves before calling this.
+  async createBinaryFile(directory, name, buffer) {
     if (!directory || !this.isAllowed(directory)) throw new Error('Choose or approve that destination folder in Settings first.');
-    const extension = path.extname(cleanName(name, 'Upload'));
-    const base = cleanName(name, 'Upload').replace(/\.[^.]+$/, '');
+    const cleaned = cleanName(name, 'Upload');
+    const extension = path.extname(cleaned);
+    const base = cleaned.replace(/\.[^.]+$/, '');
     let target = path.join(directory, `${base}${extension}`);
     let count = 2;
     while (fs.existsSync(target)) target = path.join(directory, `${base} ${count++}${extension}`);
+    // Belt-and-braces: whatever produced `target`, it must still be a direct
+    // child of the approved directory before we ever touch disk.
+    if (path.resolve(path.dirname(target)) !== path.resolve(directory)) throw new Error('That destination is invalid.');
     await fs.promises.writeFile(target, buffer, { flag: 'wx' });
     return { ok: true, path: target, message: `Created ${path.basename(target)}.` };
   }

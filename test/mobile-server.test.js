@@ -349,7 +349,14 @@ test('POST /api/upload: a destination outside approved roots is refused, includi
 });
 
 test('POST /api/upload: filename traversal attempts never escape the destination folder', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-namejail-'));
+  // `dir` is nested two levels inside a sandbox we own (sandbox/nested/dest),
+  // so that "../../evil.txt" — which climbs exactly two levels above `dir` —
+  // resolves to a path INSIDE the sandbox we control and can safely assert
+  // on and clean up, rather than probing a real, uncontrolled ancestor
+  // directory (e.g. os.tmpdir()'s parent) that other processes may be using.
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-namejail-sandbox-'));
+  const dir = path.join(sandbox, 'nested', 'dest');
+  fs.mkdirSync(dir, { recursive: true });
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-upload-namejail-outside-'));
   try {
     const documents = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
@@ -362,17 +369,25 @@ test('POST /api/upload: filename traversal attempts never escape the destination
         authorization: `Bearer ${key}`, 'x-filename': evilName, 'x-destination': dir
       }), res);
       const parsed = JSON.parse(res.body);
-      // Either it lands harmlessly inside the destination, or it's rejected outright — never outside.
-      if (parsed.ok) {
-        assert.equal(path.dirname(parsed.path), dir, `filename "${evilName}" must resolve inside the destination`);
-      } else {
-        assert.ok(parsed.error);
-      }
+      // Must land harmlessly inside the destination — asserted unconditionally,
+      // not only when parsed.ok happens to be true (a conditional assertion
+      // here would accept ANY rejection as a "pass", including one caused by
+      // an unrelated bug that has nothing to do with traversal safety).
+      assert.equal(parsed.ok, true, `filename "${evilName}" should be sanitized, not rejected: ${parsed.error}`);
+      assert.equal(path.dirname(parsed.path), dir, `filename "${evilName}" must resolve inside the destination`);
     }
-    // Nothing must have escaped into the sibling directory or above the temp root.
+    // The decorative check here used to read the unrelated sibling `outside`
+    // dir, which "../../evil.txt" never targets in the first place (it's not
+    // on the escape path from `dir` at all, so that assertion always passed
+    // regardless of whether traversal was actually blocked). Check the
+    // directory the traversal string actually resolves to instead — safely,
+    // since it's inside our own sandbox.
+    const escapeTarget = path.join(dir, '..', '..', 'evil.txt');
+    assert.equal(path.dirname(escapeTarget), sandbox, 'sanity check: the escape path must be the sandbox we control');
+    assert.ok(!fs.existsSync(escapeTarget), 'traversal filename must not have escaped above the destination');
     assert.deepEqual(fs.readdirSync(outside), []);
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(sandbox, { recursive: true, force: true });
     fs.rmSync(outside, { recursive: true, force: true });
   }
 });
@@ -425,8 +440,65 @@ test('POST /api/upload: a body over the 25 MB cap is rejected cleanly, not a cra
     const chatRes = fakeRes();
     await server.handleRequest(stillOverChat, chatRes);
     assert.equal(chatRes.code, 500); // existing behavior: oversized non-upload body still surfaces as a 500 {error}
-    assert.ok(JSON.parse(chatRes.body).error);
+    // Assert on the actual error text, not just the status code. If the
+    // default 10MB cap in readBody() were silently raised (e.g. to 200MB),
+    // this 11MB body of "aaaa…" would sail past readBody and reach
+    // JSON.parse() instead, which throws its OWN SyntaxError — also
+    // reported as a 500 {error} — so a bare `code === 500` check can't tell
+    // "the cap fired" apart from "the cap is gone and something else broke".
+    assert.match(JSON.parse(chatRes.body).error, /too large/i);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// The next two tests use a mocked `documents` collaborator instead of a real
+// DocumentService. This is deliberate: after the createBinaryFile fix,
+// #upload's own isAllowed() gate (mobile-server.js) and createBinaryFile's
+// isAllowed() gate (document-service.js) both run the exact same check on
+// the exact same string, so a black-box test against the real DocumentService
+// cannot tell the two guards apart — removing either one alone is invisible
+// from the outside. Mocking `documents` isolates #upload's gate specifically:
+// it proves the request is refused, and createBinaryFile is never even
+// reached, purely on the strength of #upload's own check.
+test('POST /api/upload: #upload refuses before ever calling createBinaryFile when documents.isAllowed() says no', async () => {
+  const calls = [];
+  const documents = {
+    isAllowed: (dest) => { calls.push(['isAllowed', dest]); return false; },
+    createBinaryFile: async (...args) => { calls.push(['createBinaryFile', ...args]); return { path: 'should-not-happen' }; }
+  };
+  const { server, key } = await pairedServer({ documents });
+  const bytes = Buffer.from('hello');
+
+  const res = fakeRes();
+  await server.handleRequest(binReq('POST', '/api/upload', bytes, {
+    authorization: `Bearer ${key}`, 'x-filename': 'a.txt', 'x-destination': 'C:\\anywhere'
+  }), res);
+
+  assert.equal(res.code, 400);
+  assert.equal(JSON.parse(res.body).ok, false);
+  assert.deepEqual(calls, [['isAllowed', 'C:\\anywhere']], 'createBinaryFile must never be reached once isAllowed() says no');
+});
+
+test('POST /api/upload: the "Missing destination" guard rejects before consulting isAllowed() or createBinaryFile at all', async () => {
+  const calls = [];
+  const documents = {
+    // Both return "everything is fine" — if the explicit missing-destination
+    // check were removed, execution would sail through to here and the
+    // request would wrongly succeed.
+    isAllowed: (dest) => { calls.push(['isAllowed', dest]); return true; },
+    createBinaryFile: async (...args) => { calls.push(['createBinaryFile', ...args]); return { path: 'should-not-happen' }; }
+  };
+  const { server, key } = await pairedServer({ documents });
+  const bytes = Buffer.from('hello');
+
+  const res = fakeRes();
+  await server.handleRequest(binReq('POST', '/api/upload', bytes, {
+    authorization: `Bearer ${key}`, 'x-filename': 'a.txt' // no x-destination header at all
+  }), res);
+
+  assert.equal(res.code, 400);
+  assert.equal(JSON.parse(res.body).ok, false);
+  assert.match(JSON.parse(res.body).error, /destination/i);
+  assert.deepEqual(calls, [], 'neither isAllowed() nor createBinaryFile() should ever be consulted for a missing destination');
 });

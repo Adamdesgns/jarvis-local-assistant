@@ -229,6 +229,92 @@ test('createBinaryFile writes a Buffer verbatim, sanitises the name, dedupes col
   }
 });
 
+test('createBinaryFile takes an already-resolved directory verbatim and must NOT label-resolve it — a subfolder must land in that exact subfolder, not the root', async () => {
+  const { DocumentService } = require('../core/document-service');
+  // Regression test for the reviewer's finding: resolveLocation() is a fuzzy
+  // label matcher built for voice commands ("my documents"). It substring
+  // matches root basenames against the whole query string, so an approved
+  // root whose basename happens to be a random mkdtemp name will match
+  // ANY path underneath it that contains that basename as a substring —
+  // including a real, already-resolved subfolder path. createBinaryFile must
+  // treat its `directory` argument as final, not run it back through that
+  // matcher.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-binfile-root-'));
+  try {
+    const sub = path.join(root, 'Invoices');
+    fs.mkdirSync(sub);
+    const docs = new DocumentService({ config: { getSettings: () => ({ searchRoots: [root], projects: {} }) }, shell: {}, emit: () => {} });
+    const buffer = Buffer.from('subfolder bytes');
+
+    const result = await docs.createBinaryFile(sub, 'invoice.pdf', buffer);
+    assert.equal(result.path, path.join(sub, 'invoice.pdf'), 'must write into the exact subfolder passed in, not the approved root');
+    assert.equal(path.dirname(result.path), sub);
+    assert.deepEqual(fs.readdirSync(root), ['Invoices'], 'nothing must have been written directly into the root');
+    assert.ok(fs.readFileSync(result.path).equals(buffer));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('createBinaryFile: the wx write flag refuses to clobber a file that already occupies the resolved target', async () => {
+  const { DocumentService } = require('../core/document-service');
+  // Dedupe normally prevents this — the target the loop settles on never
+  // pre-exists in the happy path — so wx is otherwise entirely unexercised.
+  // Simulate the loop having (for whatever reason: a TOCTOU race, a future
+  // bug in the loop) settled on a name that is in fact already occupied,
+  // and prove the write call itself — not the loop — is what refuses to
+  // overwrite it.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-binfile-wx-'));
+  try {
+    const docs = new DocumentService({ config: { getSettings: () => ({ searchRoots: [dir], projects: {} }) }, shell: {}, emit: () => {} });
+    const target = path.join(dir, 'locked.bin');
+    const original = Buffer.from('ORIGINAL-BYTES-DO-NOT-TOUCH');
+    fs.writeFileSync(target, original);
+
+    const realExistsSync = fs.existsSync;
+    fs.existsSync = (p) => (p === target ? false : realExistsSync(p)); // blind the dedupe loop to this one path
+    try {
+      await assert.rejects(
+        () => docs.createBinaryFile(dir, 'locked.bin', Buffer.from('ATTACKER-CONTROLLED-BYTES')),
+        /exist/i,
+        'the write must fail loudly (EEXIST) rather than silently overwrite'
+      );
+    } finally {
+      fs.existsSync = realExistsSync;
+    }
+    assert.ok(fs.readFileSync(target).equals(original), 'the original file must survive completely untouched');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('cleanName: slice-then-trim avoids a re-exposed trailing space, dot-only names and reserved Windows device names are rejected', () => {
+  const { cleanName } = require('../core/document-service');
+
+  // Truncation must not re-introduce a trailing space. Trim-then-slice would
+  // cut this 124-char string at 120 and land exactly on a space.
+  const withMidSpace = `${'a'.repeat(119)} ${'b'.repeat(4)}`; // no leading/trailing whitespace overall
+  const cleaned = cleanName(withMidSpace, 'fallback');
+  assert.ok(cleaned.length <= 120);
+  assert.notEqual(cleaned[cleaned.length - 1], ' ', 'slicing at the cap must not leave a trailing space');
+
+  // Dot-only names, which otherwise escape path.join and are contained only
+  // by luck via the dedupe loop, are rejected outright.
+  assert.equal(cleanName('..', 'Upload'), 'Upload');
+  assert.equal(cleanName('....', 'Upload'), 'Upload');
+  assert.equal(cleanName('.', 'Upload'), 'Upload');
+
+  // Windows reserved device names, with or without an extension, case-insensitive.
+  assert.equal(cleanName('CON', 'Upload'), 'Upload');
+  assert.equal(cleanName('con.txt', 'Upload'), 'Upload');
+  assert.equal(cleanName('COM1', 'Upload'), 'Upload');
+  assert.equal(cleanName('lpt9.log', 'Upload'), 'Upload');
+  assert.equal(cleanName('NUL', 'Upload'), 'Upload');
+  // Must not false-positive on names that merely start with a reserved prefix.
+  assert.equal(cleanName('CONSOLE.txt', 'Upload'), 'CONSOLE.txt');
+  assert.equal(cleanName('COMPANY.docx', 'Upload'), 'COMPANY.docx');
+});
+
 test('project dashboard summarizes that project only', async () => {
   const router = new CommandRouter({
     config: { getSettings: () => ({ projects: { anvil: 'C:\\Anvil', 'the bench': '' } }) },
