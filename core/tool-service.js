@@ -9,8 +9,40 @@ const SKIP_DIRECTORIES = new Set([
 const SEARCH_FILLER = new Set(['the', 'a', 'an', 'my', 'file', 'folder', 'document', 'please', 'for', 'me', 'called', 'named']);
 const EXTERNAL_OPEN_TIMEOUT_MS = 8000;
 
+// Processes JARVIS will never close, no matter what alias or casing a
+// request arrives in. explorer.exe IS the Windows shell (taskbar, Start
+// menu, desktop) — killing it takes the owner's whole desktop down, not
+// just a window. "Close File Explorer" is handled as a special case
+// (#closeExplorerWindows) that closes folder *windows* via COM, never the
+// process itself. JARVIS's own process name is added at call time in
+// closeApplication, since it depends on how JARVIS is currently running
+// (packaged exe vs. `electron .` in dev vs. under `node --test`).
+const SYSTEM_PROCESS_DENYLIST = new Set([
+  'explorer', 'csrss', 'winlogon', 'services', 'lsass', 'smss', 'wininit', 'svchost', 'system', 'registry'
+]);
+
 function normalize(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+// Pure normalisation: lowercase, trimmed, ".exe" suffix stripped. Used to
+// compare a resolved application's command (e.g. "explorer.exe") against
+// the denylist and against JARVIS's own executable name, so "Explorer",
+// "explorer.exe", and "EXPLORER" all resolve to the same "explorer".
+function normalizeProcessName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\.exe$/, '');
+}
+
+// Pure denylist decision, independent of I/O, so it can be unit tested
+// directly. `selfProcessName` is JARVIS's own current executable name
+// (also normalised here) — passing it in keeps this function pure instead
+// of reaching for `process.execPath` itself.
+function isProtectedProcess(name, selfProcessName) {
+  const normalized = normalizeProcessName(name);
+  if (!normalized) return false;
+  if (SYSTEM_PROCESS_DENYLIST.has(normalized)) return true;
+  if (selfProcessName && normalized === normalizeProcessName(selfProcessName)) return true;
+  return false;
 }
 
 function withTimeout(promise, timeoutMs, label) {
@@ -73,6 +105,135 @@ class ToolService {
     } catch (error) {
       return { ok: false, message: `I couldn't open ${application.canonical}: ${error.message}` };
     }
+  }
+
+  // Closes an approved application gracefully — never a force-kill. The app
+  // name is only ever used as data to look up a canonical entry in the
+  // approved applications registry (same resolveApplication used by
+  // openApplication); it is never interpolated into a command string that
+  // gets evaluated by a shell. System/shell processes are refused outright,
+  // except explorer.exe, which gets the special window-closing path so the
+  // shell itself is never touched. See #gracefulClose and
+  // #closeExplorerWindows for the two mechanisms.
+  async closeApplication(name) {
+    const application = this.resolveApplication(name);
+    if (!application) {
+      return { ok: false, message: `I don't have an approved app matching "${name}" to close.` };
+    }
+
+    const processName = normalizeProcessName(application.command);
+    const selfProcessName = normalizeProcessName(path.basename(process.execPath));
+
+    if (isProtectedProcess(processName, selfProcessName)) {
+      if (processName === 'explorer') return this.#closeExplorerWindows();
+      return {
+        ok: false,
+        message: `I won't close ${application.canonical}, sir. It's a core Windows process — or me — and force-quitting it could take down your desktop, or take me down with it. Refusing this one on principle.`
+      };
+    }
+
+    if (process.platform !== 'win32') {
+      return { ok: false, message: `${application.canonical} is configured for Windows and will close on your Alienware.` };
+    }
+
+    return this.#gracefulClose(application.canonical, `${processName}.exe`);
+  }
+
+  // Graceful close only: taskkill /IM without /F asks Windows to send the
+  // normal close request (WM_CLOSE) to the app's window(s), the same
+  // mechanism as clicking the X or calling CloseMainWindow() — the app gets
+  // a chance to prompt "save changes?" before it exits. We never add /F.
+  // If the app refuses to close (taskkill reports it "can only be
+  // terminated forcefully"), that is reported honestly and left alone —
+  // JARVIS does not escalate to a force kill.
+  #gracefulClose(canonicalName, imageName) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        finish({ ok: false, message: `${canonicalName} didn't confirm closing in time. It may be waiting on a prompt of its own.` });
+      }, EXTERNAL_OPEN_TIMEOUT_MS);
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      };
+      let child;
+      try {
+        child = this.launchProcess('taskkill.exe', ['/IM', imageName], { stdio: ['ignore', 'pipe', 'pipe'], shell: false, windowsHide: true });
+      } catch (error) {
+        finish({ ok: false, message: `I couldn't close ${canonicalName}: ${error.message}` });
+        return;
+      }
+      let output = '';
+      child.stdout?.on('data', (chunk) => { output += chunk; });
+      child.stderr?.on('data', (chunk) => { output += chunk; });
+      child.once('error', (error) => finish({ ok: false, message: `I couldn't close ${canonicalName}: ${error.message}` }));
+      child.once('close', (code) => {
+        const text = output.toLowerCase();
+        if (code === 0) {
+          finish({ ok: true, message: `Closed ${canonicalName}.` });
+        } else if (text.includes('forcefully')) {
+          finish({ ok: false, message: `${canonicalName} didn't close gracefully — forcing it risks losing unsaved work, so I won't. Please save and close it yourself, sir.` });
+        } else if (text.includes('not found') || text.includes('no running instance')) {
+          finish({ ok: false, message: `${canonicalName} doesn't appear to be running.` });
+        } else {
+          finish({ ok: false, message: `I couldn't close ${canonicalName} gracefully.${output.trim() ? ` ${output.trim()}` : ''}` });
+        }
+      });
+    });
+  }
+
+  // "Close File Explorer" must close the file-browser *windows*, never the
+  // explorer.exe process — that process is the Windows shell (taskbar,
+  // Start menu, desktop icons). This uses the Shell.Application COM object
+  // to enumerate open windows and calls .Quit() on each Explorer-hosted one
+  // individually — the documented way to close a folder window without
+  // touching the shell process that hosts it. The PowerShell script below
+  // is a fixed constant with no interpolated data of any kind (per the
+  // house rule against model/user-built shell strings) — it takes no
+  // arguments and enumerates purely by asking Windows what is open.
+  #closeExplorerWindows() {
+    const script = 'try { $shell = New-Object -ComObject Shell.Application; $closed = 0; '
+      + 'foreach ($w in @($shell.Windows())) { try { if ($w.FullName -and ($w.FullName -match "explorer\\.exe$")) { $w.Quit(); $closed++ } } catch {} }; '
+      + 'Write-Output ("CLOSED:" + $closed) } catch { Write-Output "CLOSED:ERROR" }';
+    return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        finish({ ok: false, message: `File Explorer didn't confirm closing in time. Your desktop and taskbar are untouched.` });
+      }, EXTERNAL_OPEN_TIMEOUT_MS);
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      };
+      let child;
+      try {
+        child = this.launchProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: ['ignore', 'pipe', 'pipe'], shell: false, windowsHide: true });
+      } catch (error) {
+        finish({ ok: false, message: `I couldn't close File Explorer windows: ${error.message}` });
+        return;
+      }
+      let output = '';
+      child.stdout?.on('data', (chunk) => { output += chunk; });
+      child.stderr?.on('data', (chunk) => { output += chunk; });
+      child.once('error', (error) => finish({ ok: false, message: `I couldn't close File Explorer windows: ${error.message}` }));
+      child.once('close', () => {
+        const match = output.match(/CLOSED:(\d+|ERROR)/);
+        if (!match || match[1] === 'ERROR') {
+          finish({ ok: false, message: `I couldn't close the File Explorer windows cleanly. Your desktop and taskbar are untouched — I never touch the explorer.exe process itself.` });
+          return;
+        }
+        const count = Number(match[1]);
+        finish({
+          ok: true,
+          message: count > 0
+            ? `Closed ${count} File Explorer window${count === 1 ? '' : 's'}. Your taskbar and desktop are untouched.`
+            : `No File Explorer windows were open to close.`
+        });
+      });
+    });
   }
 
   async openPath(targetPath) {
@@ -258,4 +419,4 @@ class ToolService {
   }
 }
 
-module.exports = { ToolService };
+module.exports = { ToolService, normalizeProcessName, isProtectedProcess, SYSTEM_PROCESS_DENYLIST };

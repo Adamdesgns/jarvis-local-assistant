@@ -8,13 +8,14 @@ const { CommandRouter } = require('../core/router');
 // silently succeeding.
 
 function fakeTools(overrides = {}) {
-  const calls = { openApplication: [], openPath: [], openFocusMode: [] };
+  const calls = { openApplication: [], openPath: [], openFocusMode: [], closeApplication: [] };
   return {
     calls,
     resolveApplication: (name) => ({ canonical: name, command: name }),
     openApplication: async (name) => { calls.openApplication.push(name); return { ok: true, message: `Opening ${name}.` }; },
     openPath: async (target) => { calls.openPath.push(target); return { ok: true, message: `Opening ${target}.`, path: target }; },
     openFocusMode: async () => { calls.openFocusMode.push(true); return { ok: true, message: 'Focus mode is active. I opened 2 approved applications.' }; },
+    closeApplication: async (name) => { calls.closeApplication.push(name); return { ok: true, message: `Closed ${name}.` }; },
     searchFiles: async () => [],
     ...overrides
   };
@@ -49,6 +50,51 @@ test('attended: "open chrome" calls tools.openApplication (proves attended behav
   const result = await router.handle('open chrome', 'general');
   assert.deepEqual(tools.calls.openApplication, ['chrome']);
   assert.equal(result.response, 'Opening chrome.');
+});
+
+// ---- (b2) close|quit|exit branch: closing an application ------------------
+// Mirrors the open|launch|start unattended guard above — a scheduled task
+// firing with nobody at the desk must never close an app out from under
+// unsaved work, so this branch is gated exactly like the open branch.
+
+test('unattended: "close chrome" does not call tools.closeApplication and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('close chrome', 'general', { unattended: true });
+  assert.equal(tools.calls.closeApplication.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "close chrome" calls tools.closeApplication (proves attended behavior unchanged)', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('close chrome', 'general');
+  assert.deepEqual(tools.calls.closeApplication, ['chrome']);
+  assert.equal(result.response, 'Closed chrome.');
+});
+
+test('unattended: "quit notepad" does not call tools.closeApplication and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('quit notepad', 'general', { unattended: true });
+  assert.equal(tools.calls.closeApplication.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('unattended: "exit file explorer" does not call tools.closeApplication and explains it needs Adam at the desk', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('exit file explorer', 'general', { unattended: true });
+  assert.equal(tools.calls.closeApplication.length, 0);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('attended: "exit file explorer" calls tools.closeApplication with the app name (proves attended behavior unchanged)', async () => {
+  const tools = fakeTools();
+  const router = baseRouter(tools);
+  const result = await router.handle('exit file explorer', 'general');
+  assert.deepEqual(tools.calls.closeApplication, ['file explorer']);
+  assert.equal(result.response, 'Closed file explorer.');
 });
 
 // ---- (c) #matchRoutine branch: launching a saved routine's apps/folders ---

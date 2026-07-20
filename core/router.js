@@ -427,6 +427,14 @@ class CommandRouter {
           }
         }
       }
+    } else if (/^(?:close|quit|exit)\s+(.+)/i.test(text)) {
+      if (stream.unattended) {
+        result = this.#result(`Closing applications needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
+      } else {
+        const target = cleanTarget(text.match(/^(?:close|quit|exit)\s+(.+)/i)[1]);
+        const action = await this.tools.closeApplication(target);
+        result = this.#result(action.message, 'windows', { success: action.ok });
+      }
     } else if (/\b(?:system status|status report|diagnostics)\b/i.test(text)) {
       result = this.#result('Local core, task manager, memory, file tools, and safety controls are responding.', 'local-core');
     } else {
