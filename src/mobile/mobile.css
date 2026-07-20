@@ -43,7 +43,9 @@
     --text: #1c1c1e;
     --text-dim: rgba(60, 60, 67, .6);
     /* darkened deliberately — #ffb350 fails contrast on white */
-    --accent: #b06f12;
+    /* Darkened until white label text clears WCAG AA (4.5:1) on the filled
+       button — #b06f12 measured 4.09:1 in the browser and failed. */
+    --accent: #96600e;
     --accent-ink: #fff;
     --danger: #d70015;
   }
