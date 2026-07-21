@@ -337,6 +337,11 @@
             <small>Everything here is off until you turn it on. Autonomy only announces — it never sends, spends, deletes, or runs anything without asking.</small>
           </section>
           <section class="wide-setting">
+            <h3>ASK CLAUDE</h3>
+            <label class="toggle-row"><span><b>ASK CLAUDE</b><small>Say "ask Claude…" to send a question to Claude on this PC.</small></span><input id="setting-claude-bridge" type="checkbox"><i></i></label>
+            <small>Answers only — Claude can read and explain, but cannot change your files or run anything. Questions leave this PC and go to Anthropic; billing follows whatever your Claude login uses, so a subscription already covers it. Every exchange is saved to the claude-chats folder in your JARVIS data folder. Scheduled tasks can never use this.</small>
+          </section>
+          <section class="wide-setting">
             <h3>SCHEDULE</h3>
             <label class="toggle-row"><span><b>SCHEDULED TASKS</b><small>Off: nothing runs on its own, ever.</small></span><input id="setting-schedules" type="checkbox"><i></i></label>
             <label>NAME<input id="schedule-name" type="text" maxlength="80" placeholder="Morning briefing"></label>

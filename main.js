@@ -23,6 +23,7 @@ const { checkForUpdate } = require('./core/update-check');
 const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
+const { ClaudeBridge, createTranscript } = require('./core/claude-bridge');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
@@ -55,6 +56,7 @@ let ollama;
 let localVoice;
 let folderWatch;
 let router;
+let claudeBridge;
 let go2rtc;
 let cameras;
 let autonomy;
@@ -864,7 +866,12 @@ app.whenReady().then(async () => {
     return described.ok ? described.text : null;
   };
   cameras.init();
-  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras });
+  claudeBridge = new ClaudeBridge({
+    config,
+    transcript: createTranscript(app.getPath('userData')),
+    log
+  });
+  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
   scheduleService = new ScheduleService({ store: scheduleStore, config, router, emit: sendEverywhere, log });
   scheduleService.start().catch((error) => {

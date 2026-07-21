@@ -49,7 +49,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -58,6 +58,7 @@ class CommandRouter {
     this.tasks = tasks;
     this.log = log;
     this.cameras = cameras || null;
+    this.claude = claude || null;
     this.pending = new Map();
   }
 
@@ -86,6 +87,29 @@ class CommandRouter {
     return this.#result(`${camera.name}: ${described.text}`, 'cameras');
   }
 
+  // Hands a question to Claude Code on this PC and speaks the answer back.
+  // Answers only — the bridge blocks every tool that could change anything.
+  async #askClaude(question, stream = {}) {
+    if (stream.unattended) {
+      return this.#result('Asking Claude needs you at the desk, sir — I\'ve left it for you.', 'claude', { success: false });
+    }
+    if (!this.config.getSettings().claudeBridgeEnabled) {
+      return this.#result('Ask Claude is switched off. You can turn it on in Settings.', 'claude', { success: false });
+    }
+    if (!this.claude) {
+      return this.#result('The Claude connection is not set up on this PC.', 'claude', { success: false });
+    }
+    if (/^(?:new conversation|new chat|start over|fresh start)$/i.test(question)) {
+      this.claude.newConversation();
+      return this.#result('Starting a fresh conversation with Claude.', 'claude');
+    }
+    if (!question) {
+      return this.#result('What would you like me to ask Claude?', 'claude', { success: false });
+    }
+    const answer = await this.claude.ask(question);
+    return this.#result(answer.text, 'claude', { success: answer.ok });
+  }
+
   async handle(rawText, project = 'general', stream = {}) {
     const text = cleanTarget(rawText);
     if (!text) return this.#result('I didn’t catch a command.', 'local-core');
@@ -111,6 +135,16 @@ class CommandRouter {
     const settings = this.config.getSettings();
     let result;
     const smallTalk = smallTalkReply(text);
+
+    // "ask Claude ..." is checked before every other branch so the question is
+    // never answered by the local brain first. Matched on a word boundary so
+    // "ask Claudia ..." stays a normal request.
+    const claudeAsk = text.match(/^(?:jarvis[,\s]*)?ask\s+claude\b[,:]?\s*(.*)$/i);
+    if (claudeAsk) {
+      const askResult = await this.#askClaude(cleanTarget(claudeAsk[1]), stream);
+      this.#log(text, askResult);
+      return askResult;
+    }
 
     const cameraLook = await this.#cameraLook(text);
     if (cameraLook) {
