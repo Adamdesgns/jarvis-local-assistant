@@ -945,10 +945,20 @@ function renderSearchRoots() {
   }
 }
 
+// The MOBILE status line. When HTTPS is ready we lead with the address the
+// phone should actually open; when it isn't, we show the reason so a
+// "won't load" is self-explaining rather than a mystery.
+function mobileStatusLine(status) {
+  if (!status.running) return status.reason || 'Off.';
+  if (status.httpsActive && status.httpsUrl) return `Phone address: ${status.httpsUrl} — HTTPS ready.`;
+  const base = `Serving at http://${status.address}:${status.port}/`;
+  return status.httpsReason ? `${base} — ${status.httpsReason}` : base;
+}
+
 async function refreshMobileSection() {
   const status = await window.jarvis.mobile.status();
   const note = $('mobile-status');
-  note.textContent = status.running ? `Serving at http://${status.address}:${status.port}/` : (status.reason || 'Off.');
+  note.textContent = mobileStatusLine(status);
   const devices = await window.jarvis.mobile.devices();
   const list = $('mobile-devices'); list.replaceChildren();
   for (const device of devices) {

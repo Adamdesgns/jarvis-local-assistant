@@ -371,8 +371,8 @@
             <label class="toggle-row"><span><b>PHONE ACCESS</b><small>Serve JARVIS to your paired phones over Tailscale. Off: no server runs.</small></span><input id="setting-mobile" type="checkbox"><i></i></label>
             <small id="mobile-status"></small>
             <label>MOBILE PORT<input id="setting-mobile-port" type="number" min="1024" max="65535"></label>
-            <label>MOBILE PUBLIC URL<input id="setting-mobile-public-url" type="text" placeholder="https://your-machine.your-tailnet.ts.net"></label>
-            <small>The HTTPS address from <code>tailscale serve</code>. Leave blank to fall back to the plain tailnet address, where the phone's microphone will not work.</small>
+            <label>MOBILE PUBLIC URL<input id="setting-mobile-public-url" type="text" placeholder="Auto-detected from Tailscale"></label>
+            <small>Filled in automatically: with PHONE ACCESS on, JARVIS runs <code>tailscale serve</code> for you and detects your private HTTPS address. Leave blank to auto-detect; type one only to override. Without HTTPS the phone can chat but its microphone will not work.</small>
             <button type="button" id="mobile-pair-btn" class="primary-action">PAIR A PHONE</button>
             <div id="mobile-pair-panel" hidden>
               <img id="mobile-qr" alt="Pairing QR">

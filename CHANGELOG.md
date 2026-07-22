@@ -1,5 +1,13 @@
 # JARVIS Changelog
 
+## Unreleased
+
+### Fixed — Phone wouldn't load: JARVIS now sets up the HTTPS address for you
+- The mobile companion needs a real `https://…ts.net` address (iPhone Safari blocks the microphone and PWA install on plain HTTP). Getting one used to be a manual chore — run `tailscale serve` by hand, copy the URL, paste it into MOBILE PUBLIC URL. Miss any step and the phone just wouldn't load.
+- Now, whenever PHONE ACCESS is on, JARVIS runs `tailscale serve` for you and auto-detects your private HTTPS address, filling MOBILE PUBLIC URL automatically (a URL you typed yourself is never overwritten). Turning PHONE ACCESS off tears the HTTPS front back down.
+- The Settings → MOBILE status line now shows the exact address the phone should open when HTTPS is ready — and, when it can't be set up (Tailscale not running/signed in, or HTTPS not enabled on the tailnet), says why and what to run, instead of leaving you staring at a page that won't load.
+- All of it is best-effort: if Tailscale isn't available the app still serves over the plain tailnet address exactly as before.
+
 ## 0.16.0 — July 20, 2026
 
 ### Added — Living-with-it fixes from real use

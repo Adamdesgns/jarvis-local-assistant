@@ -26,6 +26,7 @@ const { CommandRouter } = require('./core/router');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
+const { Tailscale } = require('./core/tailscale');
 const { ScheduleStore } = require('./core/schedule-store');
 const { ScheduleService } = require('./core/schedule-service');
 const QRCode = require('qrcode');
@@ -60,6 +61,8 @@ let cameras;
 let autonomy;
 let mobileAuth;
 let mobileServer;
+let tailscale;                                   // best-effort HTTPS front for the mobile server
+let mobileHttps = { url: '', active: false, reason: '' };
 let scheduleStore;
 let scheduleService;
 let currentSkin = 'classic';
@@ -378,8 +381,48 @@ function saveMobileDevices() { config.setSecret('mobileDevices', JSON.stringify(
 async function syncMobileServer() {
   const settings = config.getSettings();
   mobileServer.stop();
-  if (settings.mobileEnabled) await mobileServer.start();
-  sendEverywhere('mobile:status', mobileServer.status());
+  if (settings.mobileEnabled) {
+    const started = await mobileServer.start();
+    if (started.ok) await ensureMobileHttps(started.port);
+  } else {
+    mobileHttps = { url: '', active: false, reason: '' };
+    try { await tailscale.stopServe(); } catch { /* best-effort teardown */ }
+  }
+  sendEverywhere('mobile:status', mobileStatus());
+}
+
+// The server's own status plus the auto-HTTPS state, so the desktop MOBILE
+// panel can show the exact address the phone should use — and, when HTTPS
+// couldn't be set up, say why instead of leaving the user staring at a page
+// that "won't load".
+function mobileStatus() {
+  return { ...mobileServer.status(), httpsUrl: mobileHttps.url, httpsActive: mobileHttps.active, httpsReason: mobileHttps.reason };
+}
+
+// Best-effort: put a real HTTPS address in front of the loopback server via
+// `tailscale serve`, and auto-detect that address so the phone gets a working
+// https:// URL without anyone running the CLI or pasting a URL by hand. On any
+// failure we keep the plain-HTTP tailnet fallback and record why.
+async function ensureMobileHttps(port) {
+  mobileHttps = { url: '', active: false, reason: '' };
+  let url = '';
+  try { url = (await tailscale.detectHttpsUrl()) || ''; } catch { url = ''; }
+  if (!url) {
+    mobileHttps.reason = 'Could not detect a Tailscale HTTPS address (is Tailscale running and signed in?). The phone can still use the plain http address, but its microphone will not work there.';
+    return;
+  }
+  mobileHttps.url = url;
+  let serve;
+  try { serve = await tailscale.startServe(port); } catch (error) { serve = { ok: false, reason: error && error.message ? error.message : String(error) }; }
+  mobileHttps.active = !!(serve && serve.ok);
+  if (!mobileHttps.active) {
+    mobileHttps.reason = `Detected ${url}, but couldn't start the HTTPS front automatically (${serve && serve.reason ? serve.reason : 'unknown error'}). Run once in a terminal: tailscale serve --bg --https=443 http://127.0.0.1:${port}`;
+  }
+  // Fill MOBILE PUBLIC URL for the user only when they haven't set one, so the
+  // pairing QR and the phone both use the working HTTPS address. Never clobber a
+  // value they typed themselves.
+  const current = String(config.getSettings().mobilePublicUrl || '').trim();
+  if (!current) config.updateSettings({ mobilePublicUrl: url });
 }
 
 // Fan the camera alert out to every paired phone over SSE. Deliberately
@@ -432,7 +475,7 @@ function setupIpc() {
   });
   ipcMain.handle('voice:setup', () => runLocalVoiceSetup());
   ipcMain.handle('voice:restart', () => { localVoice.stop(); setTimeout(() => localVoice.start(), 1700); return { ok: true }; });
-  ipcMain.handle('mobile:status', () => mobileServer.status());
+  ipcMain.handle('mobile:status', () => mobileStatus());
   ipcMain.handle('mobile:devices', () => mobileAuth.listDevices());
   ipcMain.handle('mobile:revoke', (_event, id) => { const ok = mobileAuth.revoke(id); if (ok) saveMobileDevices(); return { ok }; });
   ipcMain.handle('mobile:pair', async () => {
@@ -891,6 +934,7 @@ app.whenReady().then(async () => {
     emit: sendEverywhere
   });
   mobileAuth = new MobileAuth({ devices: loadMobileDevices() });
+  tailscale = new Tailscale();
   mobileServer = new MobileServer({
     config, router, auth: mobileAuth, documents,
     transcribe: (buffer, mimeType) => localVoice.transcribe(buffer, mimeType),
