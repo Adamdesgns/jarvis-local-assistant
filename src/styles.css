@@ -194,7 +194,7 @@ button { cursor: pointer; }
 .voice-line span { color: var(--text-muted); font: 400 var(--text-xs)/1 var(--font) }
 
 /* ---------- module drawer ---------- */
-.module-drawer { position: fixed; z-index: 70; top: 62px; right: -390px; bottom: 0; width: 380px; padding: var(--s5); background: rgba(10, 11, 12, .92); backdrop-filter: blur(24px); border-left: 1px solid var(--line-strong); box-shadow: var(--shadow-deep); transition: right var(--dur-med) var(--ease); }
+.module-drawer { position: fixed; z-index: 70; top: 62px; right: -390px; bottom: 0; width: 380px; padding: var(--s5); background: rgba(10, 11, 12, .92); backdrop-filter: blur(24px); border-left: 1px solid var(--line-strong); box-shadow: var(--shadow-deep); transition: right var(--dur-med) var(--ease); overflow-y: auto; overscroll-behavior: contain; }
 .module-drawer.open { right: 0 }
 .module-drawer header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--line); padding-bottom: var(--s4) }
 .module-drawer header span { color: var(--accent); font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide) }
@@ -222,7 +222,11 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 .settings-modal header h2 { margin: 5px 0 0; font: 500 var(--text-lg) var(--font-display) }
 .settings-modal header button { border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); font-size: 23px }
 .settings-modal header button:hover { color: var(--text-primary); background: rgba(255, 255, 255, .07) }
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); padding: var(--s4); max-height: calc(100vh - 205px); overflow: auto }
+.settings-tabs { display: flex; gap: 6px; padding: var(--s3) var(--s5); border-bottom: 1px solid var(--line) }
+.settings-tabs button { background: none; border: 1px solid var(--line); border-radius: var(--r-pill); color: var(--text-muted); font: 500 var(--text-xs)/1 var(--font); letter-spacing: var(--track-wide); padding: 8px 14px; cursor: pointer; transition: all var(--dur-fast) var(--ease) }
+.settings-tabs button:hover { color: var(--text-primary); border-color: var(--line-strong) }
+.settings-tabs button.active { color: var(--accent); border-color: var(--line-accent); background: var(--accent-tint-06) }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); padding: var(--s4); max-height: calc(100vh - 254px); overflow: auto }
 .settings-grid section { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s4); background: rgba(255, 255, 255, .015) }
 .settings-grid h3 { margin: 0 0 var(--s3); color: var(--accent); font: 500 var(--text-sm) var(--font); letter-spacing: var(--track-wide); text-transform: uppercase }
 .settings-grid small { display: block; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.5; margin-top: var(--s2) }

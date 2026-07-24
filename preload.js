@@ -112,6 +112,8 @@ contextBridge.exposeInMainWorld('jarvis', {
   windowControl: (action) => ipcRenderer.send('window:control', action),
   reportError: (info) => ipcRenderer.send('crash:renderer-error', info),
   nightShiftStatus: () => ipcRenderer.invoke('nightshift:status'),
+  orbPrefs: () => ipcRenderer.invoke('orb:prefs'),
+  onOrbPrefs: (callback) => on('orb:prefs', callback),
   onWakeDetected: (callback) => on('wake:detected', callback),
   onWakeStatus: (callback) => on('voice:status', callback),
   onVoiceLog: (callback) => on('voice:log', callback),

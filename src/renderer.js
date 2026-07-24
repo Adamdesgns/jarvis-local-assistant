@@ -1190,6 +1190,35 @@ function updateFolderLabels() {
   }
 }
 
+// Settings tabs: every section in the dialog is tagged data-tab, and the strip
+// under the header shows one group at a time. Groups live in settings-tabs.js.
+function selectSettingsTab(id) {
+  const tabs = window.SettingsTabs;
+  const active = tabs ? tabs.normalizeTab(id) : id;
+  document.querySelectorAll('#settings-tabs button').forEach((button) => {
+    const isActive = button.dataset.tab === active;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+  document.querySelectorAll('#settings-modal .settings-grid > section').forEach((section) => {
+    section.hidden = tabs ? tabs.sectionHidden(section.dataset.tab, active) : false;
+  });
+}
+
+function initSettingsTabs() {
+  const strip = $('settings-tabs');
+  if (!strip || !window.SettingsTabs) return;
+  strip.replaceChildren(...window.SettingsTabs.TABS.map((tab) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.tab = tab.id;
+    button.setAttribute('role', 'tab');
+    button.textContent = tab.label;
+    button.addEventListener('click', () => selectSettingsTab(tab.id));
+    return button;
+  }));
+}
+
 function openSettings() {
   $('setting-ollama-model').value = state.settings.ollamaModel || 'qwen3:8b';
   const presets = ['qwen3:4b', 'qwen3:8b', 'qwen3:14b'];
@@ -1245,6 +1274,7 @@ function openSettings() {
   updateScheduleFormVisibility();
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
   if (!state.updateUrl) applyUpdateInfo({ current: state.version });
+  selectSettingsTab('general');
   $('settings-modal').showModal();
 }
 
@@ -1482,6 +1512,7 @@ function bindEvents() {
     showToast('Document summary copied.');
   });
 
+  initSettingsTabs();
   $('settings-button').addEventListener('click', openSettings);
   document.querySelectorAll('[data-close-settings]').forEach((button) => button.addEventListener('click', () => $('settings-modal').close()));
   $('settings-form').addEventListener('submit', saveSettings);

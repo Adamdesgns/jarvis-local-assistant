@@ -33,6 +33,12 @@
       return this.list()[0] || null;
     }
 
+    // No-fallback lookup: windows that don't load every skin (the floating
+    // widget skips 'original') use null to mean "keep your own default look".
+    resolveExact(name) {
+      return this.skins.has(name) ? this.skins.get(name) : null;
+    }
+
     mapStateToMood(state) {
       return MOOD_MAP[state] || { mood: 'idle', dim: false };
     }

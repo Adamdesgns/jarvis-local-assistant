@@ -23,12 +23,65 @@ if (typeof window !== 'undefined') {
 const orb = document.getElementById('orb');
 const label = document.getElementById('orb-label');
 
+// The minimize orb wears the chosen soul: the shared orb engine renders onto a
+// canvas inside the button. 'original' — or any skin this window doesn't load —
+// resolves to null, and the classic CSS ball stays. body.engine flags which
+// mode is active so the CSS can hide the ball under a live canvas.
+class WidgetOrbHost {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.state = 'ready';
+    this.skinName = null;
+    this.instance = null;
+  }
+
+  // A canvas can only ever hold one context type (2d vs WebGL), so every skin
+  // change gets a fresh canvas with the same id/class — same rule as OrbHost.
+  freshCanvas() {
+    const fresh = this.canvas.cloneNode(false);
+    this.canvas.replaceWith(fresh);
+    this.canvas = fresh;
+  }
+
+  applyPrefs(prefs = {}) {
+    const engine = window.OrbEngine;
+    const resolved = engine ? engine.resolveExact(prefs.orbSkin) : null;
+    if (!resolved) {
+      if (this.instance) {
+        if (this.instance.destroy) this.instance.destroy();
+        this.instance = null;
+        this.skinName = null;
+        this.freshCanvas(); // drop the retired skin's last frame
+      }
+      document.body.classList.remove('engine');
+      return;
+    }
+    document.body.classList.add('engine'); // before create, so the canvas has real layout to measure
+    if (resolved.name !== this.skinName) {
+      if (this.instance && this.instance.destroy) this.instance.destroy();
+      this.freshCanvas();
+      this.skinName = resolved.name;
+      this.instance = resolved.create(this.canvas);
+    }
+    if (this.instance.setPalette) this.instance.setPalette(engine.normalizePalette(prefs.orbColor));
+    this.instance.setState(this.state);
+  }
+
+  setState(state) {
+    this.state = state || 'ready';
+    if (this.instance) this.instance.setState(this.state);
+  }
+}
+
+const orbHost = new WidgetOrbHost(document.getElementById('orb-canvas'));
+
 function setState(payload = {}) {
   const state = payload.state || 'ready';
   // Keep any pop-* animation classes alive through state changes.
   const pops = [...orb.classList].filter((name) => name.startsWith('pop-'));
   orb.className = ['orb', state === 'exploding' ? 'searching' : state, ...pops].join(' ');
   label.textContent = state === 'exploding' ? 'SEARCHING' : state.toUpperCase();
+  orbHost.setState(state); // skins map raw app states to moods themselves
 }
 
 // Drag anywhere to move; a press that barely moves counts as a click and opens
@@ -119,6 +172,9 @@ window.jarvis.onWidgetPopReset?.(() => {
 });
 // Match the orb's colour to the active skin (amber Classic / cyan Command Center).
 window.jarvis.onSkin?.((skin) => { document.body.dataset.skin = skin || 'classic'; });
+// Wear the chosen orb soul, now and whenever Settings changes it.
+window.jarvis.orbPrefs?.().then((prefs) => orbHost.applyPrefs(prefs || {}));
+window.jarvis.onOrbPrefs?.((prefs) => orbHost.applyPrefs(prefs || {}));
 window.jarvis.onWakeDetected(() => setState({ state: 'listening' }));
 window.jarvis.onUIState(setState);
 window.jarvis.onFileStart(() => setState({ state: 'exploding' }));

@@ -26,6 +26,18 @@ test('resolve falls back to the first registered skin for unknown names', () => 
   assert.equal(engine.resolve(undefined).name, 'original');
 });
 
+test('resolveExact returns a skin only when registered, null otherwise — the widget uses null to keep its classic ball', () => {
+  const engine = new OrbEngine();
+  engine.register('plasma', fakeSkin('plasma'));
+  engine.register('zen', fakeSkin('zen'));
+  assert.equal(engine.resolveExact('zen').name, 'zen');
+  // 'original' lives only in the main window (hologram.js); in the widget it
+  // must NOT silently become plasma the way resolve() would.
+  assert.equal(engine.resolveExact('original'), null);
+  assert.equal(engine.resolveExact(undefined), null);
+  assert.equal(engine.resolveExact(''), null);
+});
+
 test('registering the same name twice replaces the earlier entry without duplicating', () => {
   const engine = new OrbEngine();
   engine.register('zen', fakeSkin('zen'));

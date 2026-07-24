@@ -646,10 +646,17 @@ function setupIpc() {
         log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
       });
     }
+    if (previous.orbSkin !== updated.orbSkin || previous.orbColor !== updated.orbColor) {
+      sendEverywhere('orb:prefs', { orbSkin: updated.orbSkin || 'original', orbColor: updated.orbColor || 'gold' });
+    }
     if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
       return setupNightShift(updated);
     }
     return updated;
+  });
+  ipcMain.handle('orb:prefs', () => {
+    const settings = config.getSettings();
+    return { orbSkin: settings.orbSkin || 'original', orbColor: settings.orbColor || 'gold' };
   });
   ipcMain.handle('nightshift:status', () => ({
     enabled: config.getSettings().nightShiftEnabled === true,
