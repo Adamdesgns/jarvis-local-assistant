@@ -26,6 +26,7 @@ const { CommandRouter } = require('./core/router');
 const { ClaudeBridge, createTranscript } = require('./core/claude-bridge');
 const { ScreenReader } = require('./core/screen-reader');
 const { ScreenHands } = require('./core/screen-drive-session');
+const { ScreenDriver } = require('./core/screen-driver');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
@@ -946,12 +947,12 @@ app.whenReady().then(async () => {
     log,
     onViewing: (active) => sendEverywhere('screen:viewing', { active })
   });
-  // Slice 2 of the hands: the session referee. The driving backend and the
-  // voice route arrive in their own commits — until both land, no plan can
-  // reach run() and driverFactory stays empty on purpose. Every stop path is
-  // live from this commit on.
+  // Slice 2 of the hands: the session referee, backed by one persistent
+  // drive-screen.ps1 helper per approved session. The voice route arrives in
+  // its own commit — until then no plan can reach run(). Every stop path is
+  // live already.
   hands = new ScreenHands({
-    driverFactory: null,
+    driverFactory: () => new ScreenDriver({ scriptPath: path.join(__dirname, 'scripts', 'drive-screen.ps1'), log }),
     getSettings: () => config.getSettings(),
     log,
     onEvent: (payload) => sendEverywhere('screen:drive', payload),
