@@ -22,8 +22,14 @@
     </div>
   </section>
 
+  <section id="screen-home" hidden>
+    <div id="orb-stage" class="orb-stage" role="button" tabindex="0"
+         aria-label="Tap to speak. Double-tap to open the console. Press and hold to choose your JARVIS."></div>
+    <p id="home-status" class="home-status">Tap to speak &nbsp;·&nbsp; double-tap to open</p>
+    <p id="home-reply" class="home-reply" aria-live="polite" hidden></p>
+  </section>
+
   <section id="screen-chat" hidden>
-    <div id="orb-stage" class="orb-stage" role="button" aria-label="Tap to choose your JARVIS orb"></div>
     <div id="thread" class="thread"></div>
     <div id="agent-status" class="status" hidden></div>
     <footer class="bar bar-bottom composer-bar">
@@ -90,6 +96,10 @@
   </section>
 
   <nav id="tab-bar" class="bar bar-bottom tab-bar" hidden>
+    <button id="tab-home" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-home" data-screen="home">
+      <span class="tab-glyph" aria-hidden="true">◉</span>
+      <span class="tab-label">Orb</span>
+    </button>
     <button id="tab-chat" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-chat" data-screen="chat">
       <span class="tab-glyph" aria-hidden="true">💬</span>
       <span class="tab-label">Chat</span>
