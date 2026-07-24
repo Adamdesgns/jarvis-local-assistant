@@ -127,6 +127,82 @@ function isAllowedApp(processName, allowlist = []) {
     .some((entry) => entry && (entry === name || name.includes(entry) || entry.includes(name)));
 }
 
+// ---------------------------------------------------------------------------
+// Driving (slice 2). Everything below gates the clicking slice specifically.
+// ---------------------------------------------------------------------------
+
+// The only apps v1 may ever drive. Frozen compile-time constant like
+// FINANCIAL_DENY: the settings allowlist can narrow this but never widen it —
+// no config edit, Settings toggle or voice command adds an app. Chrome waits
+// for v2 (dedicated clean profile, separate spike per PC-CONTROL-RESEARCH §2).
+// Decided by Adam on 2026-07-23.
+const V1_DRIVE_APPS = Object.freeze(['explorer', 'notepad']);
+
+function normalizeAppName(name) {
+  return String(name || '').toLowerCase().replace(/\.exe$/, '').trim();
+}
+
+// The list of apps driving may touch: the intersection of what settings allow
+// and what v1 permits. Settings can turn an app off; only shipping code can
+// turn one on.
+function effectiveDriveAllowlist(settingList = []) {
+  const wanted = new Set((settingList || []).map(normalizeAppName).filter(Boolean));
+  return V1_DRIVE_APPS.filter((app) => wanted.has(app));
+}
+
+// Exact-match allowlist check for driving. isAllowedApp's substring matching
+// is fine for read scaffolding but too loose to gate input: 'notepad++' must
+// NOT pass as 'notepad', and nothing should ride in on a name that merely
+// contains an allowed word.
+function isDriveAllowed(processName, settingList = []) {
+  const name = normalizeAppName(processName);
+  if (!name) return false;
+  return effectiveDriveAllowlist(settingList).includes(name);
+}
+
+// Element names that end a session outright — no approval card, just refusal.
+// Matched against the target element's name immediately before every action.
+const STEP_DENY = Object.freeze([
+  /permanently/i,
+  /empty\s*recycle\s*bin/i,
+  /\bformat\b/i,
+  /reset\s*this\s*pc/i,
+  /shift\s*\+\s*del/i
+]);
+
+// Element names that pause for an individual approval card even inside an
+// approved plan — anything that writes, sends, ships or destroys.
+const STEP_APPROVE = Object.freeze([
+  /\b(save|send|submit|delete|remove|download|upload|replace|overwrite|confirm|apply|yes|ok)\b/i,
+  /move\s+to/i,
+  /don'?t\s+save/i
+]);
+
+// Classify one structured plan step into an approval tier. Deterministic and
+// run on the structured step only — never on raw model output, never on text
+// read off the screen. Called twice per step: once at plan time (so the plan
+// card can mark "will ask again") and again immediately before the action with
+// the freshly resolved element merged in.
+//   free    — run without stopping (navigation, menus, selection, plain typing)
+//   approve — pause for an individual approval card
+//   deny    — refuse and end the session
+function classifyStep(step = {}) {
+  const action = String(step.action || '');
+  const name = String(step?.target?.name || step?.element?.name || '');
+  const isPassword = Boolean(step?.element?.isPassword || step?.target?.isPassword);
+
+  if (isPassword) {
+    return { tier: 'deny', reason: 'That is a password field. I will not touch those.' };
+  }
+  if (STEP_DENY.some((p) => p.test(name))) {
+    return { tier: 'deny', reason: `"${name}" permanently destroys things, so I will not press it.` };
+  }
+  if (step.kind === 'risky' || ((action === 'invoke') && STEP_APPROVE.some((p) => p.test(name)))) {
+    return { tier: 'approve', reason: `"${name || action}" changes something, so I will ask before pressing it.` };
+  }
+  return { tier: 'free', reason: '' };
+}
+
 // Strip anything that could leak a secret out of the element list before it is
 // summarised, spoken, or written to a transcript. Password fields keep their
 // label (so "Password" can be reported as present) but never any value, and no
@@ -149,7 +225,11 @@ module.exports = {
   CREDENTIAL_DENY,
   SYSTEM_DENY,
   ELEVATED_INTEGRITY,
+  V1_DRIVE_APPS,
   classifyWindow,
   isAllowedApp,
+  effectiveDriveAllowlist,
+  isDriveAllowed,
+  classifyStep,
   redactElements
 };

@@ -4,8 +4,12 @@ const assert = require('node:assert/strict');
 const guard = require('../core/screen-guard');
 const {
   FINANCIAL_DENY,
+  V1_DRIVE_APPS,
   classifyWindow,
   isAllowedApp,
+  effectiveDriveAllowlist,
+  isDriveAllowed,
+  classifyStep,
   redactElements
 } = guard;
 
@@ -84,6 +88,64 @@ test('isAllowedApp rejects an app that is not listed', () => {
   assert.equal(isAllowedApp('regedit.exe', ['explorer', 'chrome']), false);
   assert.equal(isAllowedApp('', ['explorer']), false);
   assert.equal(isAllowedApp('notepad.exe', []), false);
+});
+
+// ---------------------------------------------------------------------------
+// Driving (slice 2). These are mutation-style: each check below is a boundary,
+// and deleting the check in screen-guard must fail a test here.
+// ---------------------------------------------------------------------------
+
+test('the v1 drive-app list is frozen — settings can never widen it', () => {
+  assert.ok(Object.isFrozen(V1_DRIVE_APPS), 'V1_DRIVE_APPS must be frozen');
+  assert.throws(() => { V1_DRIVE_APPS.push('chrome'); }, TypeError);
+  assert.deepEqual([...V1_DRIVE_APPS], ['explorer', 'notepad']);
+});
+
+test('effectiveDriveAllowlist strips chrome even when settings still list it', () => {
+  assert.deepEqual(effectiveDriveAllowlist(['explorer', 'chrome']), ['explorer']);
+  assert.deepEqual(effectiveDriveAllowlist(['chrome']), []);
+  assert.deepEqual(effectiveDriveAllowlist(['explorer.exe', 'Notepad']), ['explorer', 'notepad']);
+});
+
+test('isDriveAllowed is exact-match — notepad++ must NOT ride in on "notepad"', () => {
+  assert.equal(isDriveAllowed('notepad.exe', ['notepad']), true);
+  assert.equal(isDriveAllowed('notepad++.exe', ['notepad']), false);
+  assert.equal(isDriveAllowed('explorer', ['explorer', 'notepad']), true);
+  assert.equal(isDriveAllowed('internetexplorer.exe', ['explorer']), false);
+  assert.equal(isDriveAllowed('', ['explorer']), false);
+  assert.equal(isDriveAllowed('explorer.exe', []), false);
+});
+
+test('classifyStep: destructive names are denied outright, no approval card', () => {
+  assert.equal(classifyStep({ action: 'invoke', target: { name: 'Delete permanently' } }).tier, 'deny');
+  assert.equal(classifyStep({ action: 'invoke', target: { name: 'Empty Recycle Bin' } }).tier, 'deny');
+  assert.equal(classifyStep({ action: 'invoke', target: { name: 'Format Local Disk (C:)' } }).tier, 'deny');
+  assert.equal(classifyStep({ action: 'invoke', target: { name: 'Reset this PC' } }).tier, 'deny');
+});
+
+test('classifyStep: a password field is denied for any action', () => {
+  assert.equal(classifyStep({ action: 'setValue', target: { name: 'Password' }, element: { isPassword: true } }).tier, 'deny');
+  assert.equal(classifyStep({ action: 'invoke', element: { isPassword: true } }).tier, 'deny');
+});
+
+test('classifyStep: anything that writes, sends or ships pauses for approval', () => {
+  for (const name of ['Save', 'Send', 'Submit', 'Delete', 'Download', 'Upload', 'Apply', 'Confirm', "Don't Save"]) {
+    assert.equal(classifyStep({ action: 'invoke', target: { name } }).tier, 'approve', name);
+  }
+  assert.equal(classifyStep({ action: 'invoke', target: { name: 'Move to Documents' } }).tier, 'approve');
+  assert.equal(classifyStep({ action: 'setValue', target: { name: 'File name' }, kind: 'risky' }).tier, 'approve');
+});
+
+test('classifyStep: navigation, menus and plain typing run free', () => {
+  assert.equal(classifyStep({ action: 'invoke', target: { name: 'File' } }).tier, 'free');
+  assert.equal(classifyStep({ action: 'invoke', target: { name: 'Documents' } }).tier, 'free');
+  assert.equal(classifyStep({ action: 'setValue', target: { name: 'Text editor' }, text: 'hello' }).tier, 'free');
+  assert.equal(classifyStep({ action: 'focusWindow', target: { app: 'notepad' } }).tier, 'free');
+});
+
+test('classifyStep fails closed on junk input without crashing', () => {
+  assert.equal(classifyStep().tier, 'free');
+  assert.equal(classifyStep({ element: { isPassword: true } }).tier, 'deny');
 });
 
 // ---------------------------------------------------------------------------

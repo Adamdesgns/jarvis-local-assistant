@@ -8,7 +8,7 @@ function windowsHomeFolder(name) {
 }
 
 const DEFAULT_SETTINGS = {
-  settingsVersion: 6,
+  settingsVersion: 7,
   profileName: 'User',
   assistantName: 'JARVIS',
   aiMode: 'local',
@@ -26,7 +26,8 @@ const DEFAULT_SETTINGS = {
   claudeBridgeSessionId: '',
   claudeCliPath: '',
   screenControlEnabled: false,
-  screenControlAllowlist: ['explorer', 'chrome'],
+  screenControlAllowlist: ['explorer', 'notepad'],
+  screenDriveEnabled: false,
   mobileEnabled: false,
   mobilePort: 27183,
   mobilePublicUrl: '',
