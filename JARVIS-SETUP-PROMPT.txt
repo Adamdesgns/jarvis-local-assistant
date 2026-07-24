@@ -1,0 +1,51 @@
+================================================================
+  JARVIS LOCAL ASSISTANT — CLAUDE SETUP PROMPT
+  Copy everything below this line and paste it into Claude.
+================================================================
+
+I just installed JARVIS Local Assistant on my Windows PC.
+JARVIS is an Electron desktop app that works as a local AI assistant —
+tasks, reminders, file search, document reading, and conversation.
+
+Please walk me through configuring it. I want to set up:
+
+1. OLLAMA (free local AI, no API key needed)
+   - Download from: https://ollama.com
+   - After installing Ollama, open it, then in JARVIS go to Settings > AI
+     and select Ollama as the AI provider.
+   - Recommended model for most PCs: qwen3:8b
+   - Pull a model by opening a terminal and typing: ollama pull qwen3:8b
+
+2. CLAUDE API KEY (optional, for Anthropic cloud answers)
+   - Get a key at: https://console.anthropic.com
+   - In JARVIS go to Settings > AI > Cloud Brain > Claude
+
+3. OPENAI API KEY (optional, for ChatGPT cloud answers)
+   - Get a key at: https://platform.openai.com/api-keys
+   - In JARVIS go to Settings > AI > Cloud Brain > OpenAI
+
+4. LOCAL VOICE ("Hey Jarvis" wake word + speech-to-text)
+   - A console window may still be downloading the voice models.
+     It will say "LOCAL VOICE IS READY" when done (5-15 min).
+   - Once ready, go to Settings > Voice and enable Local Voice.
+   - Say "Hey Jarvis" to test it.
+
+5. RING CAMERA (optional)
+   - In JARVIS go to Settings > Cameras > Add Camera > Ring
+   - You will need your Ring account email and password.
+
+6. NEST / GOOGLE CAMERA (optional)
+   - In JARVIS go to Settings > Cameras > Add Camera > Nest
+   - You will need your Google account credentials.
+
+7. GENERIC IP CAMERA / RTSP (optional)
+   - Works with most security cameras and NVRs.
+   - In JARVIS go to Settings > Cameras > Add Camera > RTSP/ONVIF
+   - You will need your camera's local IP address and RTSP stream URL.
+
+JARVIS is installed at:  %LOCALAPPDATA%\Programs\JARVIS
+Settings are stored at:  %APPDATA%\JARVIS
+Voice models are at:     %APPDATA%\JARVIS\voice
+
+Tell me which of the above you want to configure first, or say
+"all of them" and I will guide you through each one step by step.
