@@ -272,15 +272,16 @@
     <dialog id="settings-modal" class="settings-modal">
       <form id="settings-form">
         <header><div><span>LOCAL CONFIGURATION</span><h2>JARVIS SETTINGS</h2></div><button type="button" data-close-settings>×</button></header>
+        <nav id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Settings sections"></nav>
         <div class="settings-grid">
-          <section class="voice-setup-card">
+          <section class="voice-setup-card" data-tab="general">
             <h3>FREE LOCAL VOICE</h3>
             <div class="setup-status"><i id="local-voice-light"></i><div><b id="local-voice-title">CHECKING INSTALLATION</b><span id="local-voice-detail">No API key or credits required.</span></div></div>
             <button type="button" id="install-local-voice" class="primary-action">INSTALL / REPAIR LOCAL VOICE</button>
             <button type="button" id="open-voice-diagnostics" class="outline-action">VOICE DIAGNOSTICS</button>
             <small>This installs “Hey Jarvis” and offline speech recognition directly on your laptop.</small>
           </section>
-          <section>
+          <section data-tab="brains">
             <h3>LOCAL BRAIN</h3>
             <div class="setup-status"><i id="ollama-light"></i><div><b id="ollama-title">CHECKING OLLAMA</b><span id="ollama-detail">No API key or credits required.</span></div></div>
             <label>MODEL SIZE<select id="setting-ollama-preset">
@@ -294,7 +295,7 @@
             <button type="button" id="get-ollama" class="outline-action">INSTALL OLLAMA FOR WINDOWS</button>
             <small>File search, tasks, and commands work even without Ollama. Ollama adds basic conversation.</small>
           </section>
-          <section>
+          <section data-tab="brains">
             <h3>CLOUD BRAIN · OPTIONAL</h3>
             <div class="setup-status"><i id="cloud-light"></i><div><b id="cloud-title">NOT CONNECTED</b><span id="cloud-detail">Recommended for slower GPUs. Uses separate prepaid API credits.</span></div></div>
             <label>BRAIN MODE<select id="setting-ai-mode"><option value="local">LOCAL · OLLAMA ONLY</option><option value="cloud">CLOUD ONLY</option><option value="auto">AUTO · CLOUD WITH OLLAMA BACKUP</option></select></label>
@@ -306,7 +307,7 @@
             <button type="button" id="openai-keys" class="outline-action">CREATE API KEY</button>
             <small>Your ChatGPT subscription does not include API usage. The key is encrypted on this computer. Turn off Auto Recharge on the OpenAI billing page if you want a hard prepaid budget.</small>
           </section>
-          <section>
+          <section data-tab="brains">
             <h3>CLAUDE BRAIN · OPTIONAL</h3>
             <div class="setup-status"><i id="claude-light"></i><div><b id="claude-title">NOT CONNECTED</b><span id="claude-detail">Anthropic's Claude models. Uses separate prepaid API credits.</span></div></div>
             <label>CLAUDE MODEL<select id="setting-anthropic-model">
@@ -321,7 +322,7 @@
             <small>When both Claude and OpenAI keys are saved, the Cloud Provider choice below decides which one answers.</small>
             <label>CLOUD PROVIDER<select id="setting-cloud-provider"><option value="anthropic">CLAUDE</option><option value="openai">OPENAI</option></select></label>
           </section>
-          <section>
+          <section data-tab="general">
             <h3>BEHAVIOR</h3>
             <label>YOUR NAME<input id="setting-profile-name" value="User" maxlength="40"></label>
             <label class="toggle-row"><span><b>SPOKEN REPLIES</b><small>Use Windows system voices</small></span><input id="setting-voice" type="checkbox"><i></i></label>
@@ -339,14 +340,14 @@
             <button type="button" id="audition-voice" class="outline-action">▶ HEAR THIS VOICE</button>
             <small>For the classic JARVIS feel, install a UK English voice: Windows Settings → Time &amp; Language → Speech → Add voices → English (United Kingdom), then pick “Ryan” or “George” here.</small>
           </section>
-          <section>
+          <section data-tab="automation">
             <h3>NIGHT SHIFT</h3>
             <label class="toggle-row"><span><b>NIGHT SHIFT</b><small>Run brain jobs between midnight and 6am — drafts only, never sends</small></span><input id="setting-nightshift" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>HEARTBEAT CHECK-INS</b><small>Every 30 minutes, quietly check tasks and errors; speak only when something needs you</small></span><input id="setting-heartbeat" type="checkbox"><i></i></label>
             <label>CLOUD BUDGET PER NIGHT (USD)<input id="setting-nightshift-budget" type="number" min="0" step="1" value="0"></label>
             <small>0 means night jobs always use the free local brain. Drafts land in Documents\JARVIS Drafts.</small>
           </section>
-          <section>
+          <section data-tab="automation">
             <h3>AUTONOMY</h3>
             <label class="toggle-row"><span><b>AUTONOMY MASTER SWITCH</b><small>Off: JARVIS never speaks or acts on his own</small></span><input id="setting-autonomy" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>SPEAK THE DOORBELL</b><small>Say who is at the door out loud</small></span><input id="setting-autonomy-doorbell" type="checkbox"><i></i></label>
@@ -357,22 +358,22 @@
             <label>NIGHT ENDS<select id="setting-autonomy-night-end"></select></label>
             <small>Everything here is off until you turn it on. Autonomy only announces — it never sends, spends, deletes, or runs anything without asking.</small>
           </section>
-          <section class="wide-setting">
+          <section class="wide-setting" data-tab="abilities">
             <h3>ASK CLAUDE</h3>
             <label class="toggle-row"><span><b>ASK CLAUDE</b><small>Say "ask Claude…" to send a question to Claude on this PC.</small></span><input id="setting-claude-bridge" type="checkbox"><i></i></label>
             <small>Answers only — Claude can read and explain, but cannot change your files or run anything. Questions leave this PC and go to Anthropic; billing follows whatever your Claude login uses, so a subscription already covers it. Every exchange is saved to the claude-chats folder in your JARVIS data folder. Scheduled tasks can never use this.</small>
           </section>
-          <section class="wide-setting">
+          <section class="wide-setting" data-tab="abilities">
             <h3>SCREEN READING</h3>
             <label class="toggle-row"><span><b>READ MY SCREEN</b><small>Say "read my screen" and JARVIS tells you what window and controls are in front of you.</small></span><input id="setting-screen-control" type="checkbox"><i></i></label>
             <small>Reads only — JARVIS looks at what's on screen and describes it. It never clicks, types, or changes anything. It refuses to read financial, sign-in, or system windows, and it ignores password fields. Scheduled tasks can never use this.</small>
           </section>
-          <section class="wide-setting">
+          <section class="wide-setting" data-tab="abilities">
             <h3>SCREEN DRIVING (BETA)</h3>
             <label class="toggle-row"><span><b>LET JARVIS CLICK AND TYPE</b><small>Say "click Save", "type hello into Notepad", "open the File menu" — JARVIS presses named buttons for you.</small></span><input id="setting-screen-drive" type="checkbox"><i></i></label>
             <small>File Explorer and Notepad only for now. Every job shows you the full plan first and waits for your OK; anything that saves, sends, or deletes asks again individually. A STOP window stays on top the whole time — press it, hit Escape, or say "stop" to end everything instantly. Financial windows (banks, brokers, anything that spends money) are blocked permanently and that block cannot be turned off. Never works from the phone or on a schedule.</small>
           </section>
-          <section class="wide-setting">
+          <section class="wide-setting" data-tab="automation">
             <h3>SCHEDULE</h3>
             <label class="toggle-row"><span><b>SCHEDULED TASKS</b><small>Off: nothing runs on its own, ever.</small></span><input id="setting-schedules" type="checkbox"><i></i></label>
             <label>NAME<input id="schedule-name" type="text" maxlength="80" placeholder="Morning briefing"></label>
@@ -402,7 +403,7 @@
             <ul id="schedule-list" class="search-root-list" style="list-style:none;margin:12px 0 0;padding:0"></ul>
             <small>Scheduled items wait for their exact time. Turning the switch off stops everything immediately — nothing sends, spends, deletes, or acts without your say-so.</small>
           </section>
-          <section>
+          <section data-tab="phone">
             <h3>MOBILE</h3>
             <label class="toggle-row"><span><b>PHONE ACCESS</b><small>Serve JARVIS to your paired phones over Tailscale. Off: no server runs.</small></span><input id="setting-mobile" type="checkbox"><i></i></label>
             <small id="mobile-status"></small>
@@ -416,25 +417,25 @@
             </div>
             <div id="mobile-devices" class="search-root-list"></div>
           </section>
-          <section>
+          <section data-tab="system">
             <h3>PROJECT WORKSPACES</h3>
             <div class="folder-setting"><span><b>ANVIL</b><small id="folder-anvil">Not assigned</small></span><button type="button" data-folder="anvil">CHOOSE</button></div>
             <div class="folder-setting"><span><b>THE BENCH</b><small id="folder-the-bench">Not assigned</small></span><button type="button" data-folder="the bench">CHOOSE</button></div>
             <div class="folder-setting"><span><b>ADAMSCRAFT</b><small id="folder-adamscraft">Not assigned</small></span><button type="button" data-folder="adamscraft">CHOOSE</button></div>
           </section>
-          <section class="wide-setting">
+          <section class="wide-setting" data-tab="system">
             <h3>FOLDERS JARVIS MAY SEARCH</h3>
             <div id="search-root-list" class="search-root-list"></div>
             <button type="button" id="add-search-root" class="outline-action">＋ ADD SEARCH FOLDER</button>
           </section>
-          <section>
+          <section data-tab="system">
             <h3>ABOUT &amp; UPDATES</h3>
             <div class="setup-status"><i id="update-light"></i><div><b id="update-title">JARVIS</b><span id="update-detail">Free local assistant.</span></div></div>
             <button type="button" id="check-update" class="primary-action">CHECK FOR UPDATES</button>
             <button type="button" id="download-update" class="outline-action" style="display:none">DOWNLOAD UPDATE</button>
             <small>Checks the public release page for a newer version. Nothing is installed automatically.</small>
           </section>
-          <section>
+          <section data-tab="system">
             <h3>BACKUP &amp; RESTORE</h3>
             <button type="button" id="export-backup" class="primary-action">EXPORT MY DATA</button>
             <button type="button" id="import-backup" class="outline-action">IMPORT A BACKUP</button>
@@ -488,6 +489,7 @@
     <script src="hologram.js"></script>
     <script src="layout-engine.js"></script>
     <script src="skins.js"></script>
+    <script src="settings-tabs.js"></script>
     <script src="renderer.js"></script>
     <script src="command-center.js"></script>
     <script src="cameras-ui.js"></script>
