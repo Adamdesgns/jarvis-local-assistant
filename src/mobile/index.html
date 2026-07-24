@@ -34,8 +34,8 @@
     <div id="agent-status" class="status" hidden></div>
     <footer class="bar bar-bottom composer-bar">
       <textarea id="composer" class="field composer-field" rows="1" placeholder="Message JARVIS…"></textarea>
-      <button id="send-btn" class="btn btn-secondary btn-icon" aria-label="Send">➤</button>
-      <button id="mic-btn" class="btn btn-primary btn-icon btn-mic" aria-label="Hold to talk">🎙</button>
+      <button id="send-btn" class="btn btn-secondary btn-icon" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10.75 13.25M20.5 3.5l-6.25 17-3.5-7.75-7.75-3.5z"/></svg></button>
+      <button id="mic-btn" class="btn btn-primary btn-icon btn-mic" aria-label="Hold to talk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9.25" y="3.25" width="5.5" height="10.5" rx="2.75"/><path d="M5.75 11.25a6.25 6.25 0 0 0 12.5 0M12 17.5v3.25"/></svg></button>
     </footer>
   </section>
 
@@ -47,7 +47,7 @@
     </div>
 
     <div id="cameras-detail-view" class="stack cameras-detail" hidden>
-      <button id="cameras-back-btn" class="btn btn-secondary cameras-back-btn">← Cameras</button>
+      <button id="cameras-back-btn" class="btn btn-secondary cameras-back-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 5.75 8.25 12l6.25 6.25"/></svg>Cameras</button>
       <div class="card stack cameras-detail-card">
         <h2 id="cameras-detail-name" class="cameras-detail-name"></h2>
         <div id="cameras-shot-frame" class="cameras-shot-frame">
@@ -97,19 +97,19 @@
 
   <nav id="tab-bar" class="bar bar-bottom tab-bar" hidden>
     <button id="tab-home" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-home" data-screen="home">
-      <span class="tab-glyph" aria-hidden="true">◉</span>
+      <span class="tab-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.25"/><circle cx="12" cy="12" r="2.25" fill="currentColor" stroke="none"/></svg></span>
       <span class="tab-label">Orb</span>
     </button>
     <button id="tab-chat" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-chat" data-screen="chat">
-      <span class="tab-glyph" aria-hidden="true">💬</span>
+      <span class="tab-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.25c-4.56 0-8.25 3.02-8.25 6.75 0 1.8.86 3.44 2.26 4.65L5.2 19.5l3.9-1.45c.9.29 1.88.45 2.9.45 4.56 0 8.25-3.02 8.25-6.75S16.56 4.25 12 4.25z"/></svg></span>
       <span class="tab-label">Chat</span>
     </button>
     <button id="tab-cameras" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-cameras" data-screen="cameras">
-      <span class="tab-glyph" aria-hidden="true">📷<span id="tab-cameras-badge" class="tab-badge" hidden></span></span>
+      <span class="tab-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.4 6.75l1.5-2h4.2l1.5 2h3.15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5v-9a1.5 1.5 0 0 1 1.5-1.5z"/><circle cx="12" cy="12.5" r="3.25"/></svg><span id="tab-cameras-badge" class="tab-badge" hidden></span></span>
       <span class="tab-label">Cameras</span>
     </button>
     <button id="tab-send" class="tab-item" role="tab" aria-selected="false" aria-controls="screen-send" data-screen="send">
-      <span class="tab-glyph" aria-hidden="true">📤</span>
+      <span class="tab-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14.5V4.75M8.25 8.5 12 4.75l3.75 3.75"/><path d="M3.75 14.5v3a2 2 0 0 0 2 2h12.5a2 2 0 0 0 2-2v-3"/></svg></span>
       <span class="tab-label">Send</span>
     </button>
   </nav>
