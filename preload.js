@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   onUpdateAvailable: (callback) => on('update:available', callback),
   describeScreen: (question) => ipcRenderer.invoke('screen:describe', question),
   onScreenViewing: (callback) => on('screen:viewing', callback),
+  onScreenDrive: (callback) => on('screen:drive', callback),
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   importBackup: () => ipcRenderer.invoke('backup:import'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),

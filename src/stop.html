@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>JARVIS is driving</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #1a0e00;
+      border: 2px solid #ffb21f;
+      border-radius: 10px;
+      color: #ffd98a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .pulse {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #ffb21f;
+      box-shadow: 0 0 10px #ffb21f;
+      animation: pulse 1.1s ease-in-out infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .text { flex: 1 1 auto; min-width: 0; }
+    .title { font-size: 11px; letter-spacing: 2px; color: #ffb21f; font-weight: 600; }
+    #step {
+      font-size: 13px; margin-top: 3px; color: #ffe9c2;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #stop {
+      -webkit-app-region: no-drag;
+      flex: 0 0 auto;
+      background: #b3261e;
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 12px 20px;
+      cursor: pointer;
+    }
+    #stop:hover { background: #d3362d; }
+    #stop:active { background: #8f1d17; }
+  </style>
+</head>
+<body>
+  <div class="pulse"></div>
+  <div class="text">
+    <div class="title">JARVIS IS DRIVING</div>
+    <div id="step">Starting…</div>
+  </div>
+  <button id="stop" autofocus>STOP</button>
+  <script src="stop.js"></script>
+</body>
+</html>

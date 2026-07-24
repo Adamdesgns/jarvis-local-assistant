@@ -25,6 +25,7 @@ const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
 const { ClaudeBridge, createTranscript } = require('./core/claude-bridge');
 const { ScreenReader } = require('./core/screen-reader');
+const { ScreenHands } = require('./core/screen-drive-session');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
@@ -59,6 +60,8 @@ let folderWatch;
 let router;
 let claudeBridge;
 let screenReader;
+let hands;
+let driveStopWindow;
 let go2rtc;
 let cameras;
 let autonomy;
@@ -199,6 +202,61 @@ function persistOrbBounds() {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     try { config.updateSettings({ orbBounds: currentOrbBounds() }); } catch {}
   }, 400);
+}
+
+// --- The STOP window -------------------------------------------------------
+// A tiny always-on-top window owned by main that exists only while JARVIS is
+// driving the screen. It is one of three simultaneous signals (window, orb
+// state, audio cue) and the one that doubles as a kill switch. If its renderer
+// dies or the window vanishes while a session is live, the session aborts —
+// no visible stop button, no driving.
+function openDriveStopWindow(onStop, onLost) {
+  closeDriveStopWindow();
+  const { workArea } = screen.getPrimaryDisplay();
+  driveStopWindow = new BrowserWindow({
+    width: 380,
+    height: 76,
+    x: workArea.x + workArea.width - 396,
+    y: workArea.y + 16,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    show: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-stop.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false
+    }
+  });
+  // 'screen-saver' outranks ordinary always-on-top windows, so nothing JARVIS
+  // is driving can cover the stop button.
+  driveStopWindow.setAlwaysOnTop(true, 'screen-saver');
+  driveStopWindow.loadFile(path.join(__dirname, 'src', 'stop.html'));
+  driveStopWindow.once('ready-to-show', () => {
+    if (driveStopWindow && !driveStopWindow.isDestroyed()) driveStopWindow.showInactive();
+  });
+  driveStopWindow.webContents.on('render-process-gone', () => onLost?.());
+  driveStopWindow.on('closed', () => {
+    driveStopWindow = null;
+    onLost?.();
+  });
+}
+
+function updateDriveStopWindow(text) {
+  if (driveStopWindow && !driveStopWindow.isDestroyed()) {
+    driveStopWindow.webContents.send('drive:step', { text });
+  }
+}
+
+function closeDriveStopWindow() {
+  const window = driveStopWindow;
+  driveStopWindow = null;
+  if (window && !window.isDestroyed()) window.destroy();
 }
 
 function createWidgetWindow() {
@@ -423,7 +481,13 @@ function setupIpc() {
       onStep: (step) => sendEverywhere('agent:step', { index: step.index, tool: step.tool, summary: summarizeAgentStep(step) })
     });
   });
-  ipcMain.on('ai:cancel', () => ai.cancel());
+  // One cancel to stop everything: the brain mid-thought AND the hands
+  // mid-step. Escape, the orb stop button and a spoken "stop" all land here.
+  ipcMain.on('ai:cancel', () => {
+    ai.cancel();
+    hands?.abortActive('user-interrupt');
+  });
+  ipcMain.on('screen:drive-stop', () => hands?.abortActive('stop-button'));
   ipcMain.handle('approval:resolve', (_event, payload) => router.resolveApproval(payload.id, Boolean(payload.approved)));
   ipcMain.handle('activity:recent', (_event, limit) => log.recent(Math.min(100, Number(limit) || 20)));
   ipcMain.handle('voice:transcribe', (_event, payload) => localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType));
@@ -881,6 +945,18 @@ app.whenReady().then(async () => {
     scriptPath: path.join(__dirname, 'scripts', 'read-screen.ps1'),
     log,
     onViewing: (active) => sendEverywhere('screen:viewing', { active })
+  });
+  // Slice 2 of the hands: the session referee. The driving backend and the
+  // voice route arrive in their own commits — until both land, no plan can
+  // reach run() and driverFactory stays empty on purpose. Every stop path is
+  // live from this commit on.
+  hands = new ScreenHands({
+    driverFactory: null,
+    getSettings: () => config.getSettings(),
+    log,
+    onEvent: (payload) => sendEverywhere('screen:drive', payload),
+    requestApproval: null,
+    stopWindow: { open: openDriveStopWindow, update: updateDriveStopWindow, close: closeDriveStopWindow }
   });
   router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader });
   scheduleStore = new ScheduleStore(app.getPath('userData'));

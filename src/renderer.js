@@ -68,7 +68,7 @@ function isInterrupt(transcript) {
 }
 
 function setCoreState(coreState, kicker) {
-  const labels = { ready: 'READY', listening: 'LISTENING', processing: 'PROCESSING', speaking: 'RESPONDING', error: 'ATTENTION', exploding: 'SEARCHING' };
+  const labels = { ready: 'READY', listening: 'LISTENING', processing: 'PROCESSING', speaking: 'RESPONDING', error: 'ATTENTION', exploding: 'SEARCHING', driving: 'HANDS ON SCREEN' };
   $('core-state').textContent = labels[coreState] || coreState.toUpperCase();
   $('core-kicker').textContent = kicker || (coreState === 'ready' ? 'AWAITING DIRECTIVE' : 'LOCAL NEURAL PATH ACTIVE');
   document.body.classList.toggle('listening', coreState === 'listening');
@@ -292,6 +292,31 @@ function startSpeechWatchdog() {
       stopSpeechWatchdog();
     }
   }, 300);
+}
+
+// A short two-tone chime marking the moment JARVIS's hands go on (rising) and
+// off (falling) the screen — audible even if you aren't looking at the orb or
+// the STOP window. Synthesized so there is no audio asset to ship.
+let driveAudioContext = null;
+function playDriveCue(kind) {
+  try {
+    driveAudioContext = driveAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+    const context = driveAudioContext;
+    const tones = kind === 'start' ? [523, 784] : [784, 523];
+    tones.forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const at = context.currentTime + index * 0.14;
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.18, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.13);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(at);
+      oscillator.stop(at + 0.15);
+    });
+  } catch { /* a missing chime must never break a session */ }
 }
 
 function speak(message, retry = false) {
@@ -1517,6 +1542,29 @@ function bindEvents() {
   });
   window.jarvis.onScreenViewing(({ active }) => {
     $('screen-privacy').classList.toggle('visible', Boolean(active));
+  });
+  // Driving sessions: orb goes amber-busy, an audio cue marks the start and
+  // end, and Escape becomes a kill switch for the whole session (the main
+  // process routes ai:cancel to the hands as well as the brain).
+  window.jarvis.onScreenDrive((event) => {
+    if (!event || !event.type) return;
+    if (event.type === 'started') {
+      state.driving = true;
+      document.body.classList.add('busy', 'driving');
+      setCoreState('driving', 'DRIVING YOUR SCREEN');
+      playDriveCue('start');
+    } else if (event.type === 'step' || event.type === 'awaiting-approval') {
+      setCoreState('driving', event.text || 'DRIVING YOUR SCREEN');
+    } else if (event.type === 'ended') {
+      state.driving = false;
+      document.body.classList.remove('busy', 'driving');
+      setCoreState('ready');
+      playDriveCue('end');
+      if (event.text) {
+        setResponse(event.text);
+        speak(event.text);
+      }
+    }
   });
   $('ai-stop').addEventListener('click', () => interruptJarvis());
   document.addEventListener('keydown', (event) => {
