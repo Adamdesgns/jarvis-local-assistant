@@ -1014,6 +1014,7 @@ app.whenReady().then(async () => {
     config, router, auth: mobileAuth, documents,
     transcribe: (buffer, mimeType) => localVoice.transcribe(buffer, mimeType),
     staticDir: path.join(__dirname, 'src', 'mobile'),
+    orbsDir: path.join(__dirname, 'src', 'orbs'),
     onDevicesChanged: saveMobileDevices,
     // Lazy getter: `cameras` is constructed above (before mobileServer), but
     // this keeps the same defensive pattern used for buildToolRegistry's
