@@ -2,8 +2,9 @@ const key = () => localStorage.getItem('jarvis-mobile-key');
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${key()}` });
 
 // pairing/offline are full-screen takeovers (no tab bar); chat/cameras/send
-// are tabbed screens reachable via the bottom tab bar.
-const ALL_SCREENS = ['pairing', 'chat', 'cameras', 'send', 'offline'];
+// are tabbed screens reachable via the bottom tab bar. home is the orb —
+// immersive (no tab bar) but online; reachable via the Orb tab or double-tap.
+const ALL_SCREENS = ['pairing', 'home', 'chat', 'cameras', 'send', 'offline'];
 const TAB_SCREENS = ['chat', 'cameras', 'send'];
 let lastTab = 'chat';   // which tab to return to after a takeover (offline) clears
 
@@ -13,7 +14,7 @@ function show(screen) {
 
   document.body.className = screen;
   for (const s of ALL_SCREENS) document.getElementById(`screen-${s}`).hidden = s !== screen;
-  if (isTabbed) document.body.classList.add('online');
+  if (isTabbed || screen === 'home') document.body.classList.add('online');
 
   const tabBar = document.getElementById('tab-bar');
   tabBar.hidden = !isTabbed;
@@ -544,7 +545,7 @@ async function boot() {
     const res = await fetch('/api/last', { headers: headers() });
     if (res.status === 401) { localStorage.removeItem('jarvis-mobile-key'); return show('pairing'); }
     const out = await res.json();
-    show(lastTab);
+    show('home');
     if (out.reply && out.reply !== lastRendered) { lastRendered = out.reply; bubble('jarvis', out.reply); }
     connectEvents();
   } catch { show('offline'); }
