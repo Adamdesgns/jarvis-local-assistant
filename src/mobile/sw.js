@@ -1,8 +1,9 @@
 ﻿// sw.js â€” app-shell cache, network-first so installed phones pick up future
 // fixes instead of being stuck on whatever shipped at install time. API
 // calls always hit the network.
-const CACHE = 'jarvis-shell-v4';
+const CACHE = 'jarvis-shell-v5';
 const SHELL = ['/', '/mobile.css', '/mobile.js', '/orb-host.js', '/manifest.webmanifest', '/icon.svg', '/icon-180.png', '/icon-192.png', '/icon-512.png',
+  '/fonts/SpaceGrotesk.woff2',
   '/orbs/orb-engine.js', '/orbs/plasma.js', '/orbs/neural.js', '/orbs/classic.js', '/orbs/zen.js', '/orbs/halation.js', '/orbs/aurora.js'];
 
 self.addEventListener('install', (e) => {

@@ -417,10 +417,15 @@ function formatClockTime(at) {
   return new Date(at || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+// Static SVG strings for JS-built rows — thin-line style matching index.html.
+const ICON_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.25 15.5v-4.75a5.25 5.25 0 1 0-10.5 0v4.75l-1.9 2.25h14.3z"/><path d="M10.6 20a1.6 1.6 0 0 0 2.8 0"/></svg>';
+const ICON_CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5.75 15.75 12l-6.25 6.25"/></svg>';
+
 function renderCameraAlertBanner() {
   if (!cameraAlert) { camerasAlertBanner.hidden = true; camerasAlertBanner.textContent = ''; return; }
   camerasAlertBanner.hidden = false;
-  camerasAlertBanner.textContent = `🔔 ${cameraAlert.name} — ${cameraAlert.kind}, ${formatClockTime(cameraAlert.at)}`;
+  camerasAlertBanner.innerHTML = ICON_BELL;
+  camerasAlertBanner.append(`${cameraAlert.name} — ${cameraAlert.kind}, ${formatClockTime(cameraAlert.at)}`);
 }
 
 function renderCamerasList() {
@@ -437,7 +442,7 @@ function renderCamerasList() {
     const chevron = document.createElement('span');
     chevron.className = 'cameras-row-chevron';
     chevron.setAttribute('aria-hidden', 'true');
-    chevron.textContent = '›';
+    chevron.innerHTML = ICON_CHEVRON;
     row.append(name, chevron);
     row.addEventListener('click', () => openCameraDetail(camera.key, camera.name));
     camerasListEl.appendChild(row);
