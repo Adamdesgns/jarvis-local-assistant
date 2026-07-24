@@ -37,9 +37,9 @@ async function readBody(req, limit = 10 * 1024 * 1024) {
 const UPLOAD_BODY_LIMIT = 25 * 1024 * 1024;
 
 class MobileServer {
-  constructor({ config, router, transcribe, auth, staticDir, documents, getCameras, onDevicesChanged = () => {} }) {
+  constructor({ config, router, transcribe, auth, staticDir, orbsDir, documents, getCameras, onDevicesChanged = () => {} }) {
     this.config = config; this.router = router; this.transcribe = transcribe;
-    this.auth = auth; this.staticDir = staticDir; this.documents = documents; this.onDevicesChanged = onDevicesChanged;
+    this.auth = auth; this.staticDir = staticDir; this.orbsDir = orbsDir; this.documents = documents; this.onDevicesChanged = onDevicesChanged;
     // Lazy getter: `cameras` may not exist yet at MobileServer construction
     // time (main.js builds it after), or may never exist (no cameras set up
     // at all) — same pattern as buildToolRegistry's getCameras for look_at_camera.
@@ -89,6 +89,10 @@ class MobileServer {
           return this.#chat(res, device, transcript, transcript);
         }
         if (pathname === '/api/last') return this.json(res, 200, this.lastReply.get(device.id) || { reply: null });
+        if (pathname === '/api/orb-prefs' && req.method === 'GET') {
+          const settings = this.config.getSettings();
+          return this.json(res, 200, { orbSkin: settings.orbSkin || 'original', orbColor: settings.orbColor || 'gold' });
+        }
         if (pathname === '/api/folders' && req.method === 'GET') {
           return this.json(res, 200, { folders: this.documents.approvedRoots() });
         }
@@ -109,6 +113,12 @@ class MobileServer {
           return;
         }
         return this.json(res, 404, { error: 'Unknown endpoint.' });
+      }
+      if (pathname.startsWith('/orbs/')) {
+        // The desktop orb skins, shared with the phone. Same containment rules
+        // as #static, against the orbs directory.
+        if (!this.orbsDir) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
+        return this.#serveFrom(this.orbsDir, pathname.slice('/orbs/'.length), res);
       }
       return this.#static(pathname === '/' ? '/index.html' : pathname, res);
     } catch (error) {
@@ -206,9 +216,15 @@ class MobileServer {
   }
 
   #static(url, res) {
-    const safe = path.normalize(url).replace(/^([.][.][/\\])+/, '');
-    const file = path.join(this.staticDir, safe);
-    const rel = path.relative(this.staticDir, file);
+    return this.#serveFrom(this.staticDir, url, res);
+  }
+
+  #serveFrom(baseDir, url, res) {
+    let decoded = url;
+    try { decoded = decodeURIComponent(url); } catch {}
+    const safe = path.normalize(decoded).replace(/^([.][.][/\\])+/, '');
+    const file = path.join(baseDir, safe);
+    const rel = path.relative(baseDir, file);
     if (rel.startsWith('..') || path.isAbsolute(rel) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
       res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found');
     }

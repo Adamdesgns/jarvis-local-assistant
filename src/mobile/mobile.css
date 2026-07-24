@@ -464,3 +464,13 @@ textarea.field { resize: none; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* --- orb stage + picker sheet --- */
+.orb-stage { position: relative; height: clamp(120px, 22vh, 170px); flex: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.orb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.orb-sheet { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; background: rgba(0, 0, 0, .45); }
+.orb-sheet[hidden] { display: none; }
+.orb-sheet-card { width: 100%; margin: 0 var(--s3) calc(var(--s4) + env(safe-area-inset-bottom)); border-radius: var(--r-lg); backdrop-filter: var(--blur); }
+.chip-row { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.chip { border: 1px solid var(--border); border-radius: var(--r-pill); background: transparent; color: var(--text-dim); font: 500 14px var(--font); padding: 8px 14px; cursor: pointer; }
+.chip.active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
