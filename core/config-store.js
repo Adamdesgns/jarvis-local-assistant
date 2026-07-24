@@ -76,7 +76,13 @@ class ConfigStore {
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
       'autonomyEnabled', 'schedulesEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
-      'skin', 'voiceName', 'orbBounds', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl'
+      'skin', 'voiceName', 'orbBounds', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl',
+      // Ask-Claude bridge: these existed in defaults but were never in this
+      // allowlist, so the Settings toggle and the stored conversation id were
+      // silently dropped by updateSettings. Persist them.
+      'claudeBridgeEnabled', 'claudeBridgeSessionId', 'claudeCliPath',
+      // Screen reading (JARVIS's "hands", slice 1) — off by default.
+      'screenControlEnabled', 'screenControlAllowlist'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {

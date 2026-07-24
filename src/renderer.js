@@ -1152,6 +1152,7 @@ function openSettings() {
   $('setting-mobile-port').value = state.settings.mobilePort || 27183;
   $('setting-mobile-public-url').value = state.settings.mobilePublicUrl || '';
   $('setting-claude-bridge').checked = Boolean(state.settings.claudeBridgeEnabled);
+  $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
   $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
   updateScheduleFormVisibility();
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
@@ -1191,6 +1192,7 @@ async function saveSettings(event) {
     mobilePort: Number($('setting-mobile-port').value) || 27183,
     mobilePublicUrl: $('setting-mobile-public-url').value.trim(),
     claudeBridgeEnabled: $('setting-claude-bridge').checked,
+    screenControlEnabled: $('setting-screen-control').checked,
     schedulesEnabled: $('setting-schedules').checked,
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots

@@ -49,7 +49,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -59,6 +59,7 @@ class CommandRouter {
     this.log = log;
     this.cameras = cameras || null;
     this.claude = claude || null;
+    this.screen = screen || null;
     this.pending = new Map();
   }
 
@@ -110,6 +111,25 @@ class CommandRouter {
     return this.#result(answer.text, 'claude', { success: answer.ok });
   }
 
+  // Reads the screen through Windows UI Automation and reports what's there.
+  // Slice 1 of JARVIS's "hands": it reads only — nothing is clicked or typed.
+  // Off by default, and never runs unattended, so a scheduled task can't quietly
+  // photograph the desktop. The financial/credential/system guards live inside
+  // the reader itself, not here.
+  async #readScreen(stream = {}) {
+    if (stream.unattended) {
+      return this.#result("Reading your screen needs you at the desk, sir — I've left it for you.", 'screen', { success: false });
+    }
+    if (!this.config.getSettings().screenControlEnabled) {
+      return this.#result('Reading the screen is switched off. You can turn it on in Settings.', 'screen', { success: false });
+    }
+    if (!this.screen) {
+      return this.#result('Screen reading is not set up on this PC.', 'screen', { success: false });
+    }
+    const seen = await this.screen.read();
+    return this.#result(seen.text, 'screen', { success: seen.ok, blockedCategory: seen.blockedCategory });
+  }
+
   async handle(rawText, project = 'general', stream = {}) {
     const text = cleanTarget(rawText);
     if (!text) return this.#result('I didn’t catch a command.', 'local-core');
@@ -144,6 +164,17 @@ class CommandRouter {
       const askResult = await this.#askClaude(cleanTarget(claudeAsk[1]), stream);
       this.#log(text, askResult);
       return askResult;
+    }
+
+    // "read my screen" / "what's on my screen" / "what windows are open" — the
+    // structural screen read (distinct from the cloud-vision "look at my
+    // screen", which describes a screenshot). Checked before the camera and
+    // brain branches so the phrasing is never answered by anything else.
+    const screenAsk = /^(?:jarvis[,\s]*)?(?:can you\s+)?(?:read|check)\s+(?:my|the)\s+screen\b|^what(?:'s| is| are)\s+(?:on\s+)?(?:my|the)\s+(?:screen|display)\b|^what\s+windows?\s+(?:are|do i have)\b|^what\s+am\s+i\s+looking\s+at\b/i;
+    if (screenAsk.test(text)) {
+      const seenResult = await this.#readScreen(stream);
+      this.#log(text, seenResult);
+      return seenResult;
     }
 
     const cameraLook = await this.#cameraLook(text);

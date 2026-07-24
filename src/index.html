@@ -342,6 +342,11 @@
             <small>Answers only — Claude can read and explain, but cannot change your files or run anything. Questions leave this PC and go to Anthropic; billing follows whatever your Claude login uses, so a subscription already covers it. Every exchange is saved to the claude-chats folder in your JARVIS data folder. Scheduled tasks can never use this.</small>
           </section>
           <section class="wide-setting">
+            <h3>SCREEN READING</h3>
+            <label class="toggle-row"><span><b>READ MY SCREEN</b><small>Say "read my screen" and JARVIS tells you what window and controls are in front of you.</small></span><input id="setting-screen-control" type="checkbox"><i></i></label>
+            <small>Reads only — JARVIS looks at what's on screen and describes it. It never clicks, types, or changes anything. It refuses to read financial, sign-in, or system windows, and it ignores password fields. Scheduled tasks can never use this.</small>
+          </section>
+          <section class="wide-setting">
             <h3>SCHEDULE</h3>
             <label class="toggle-row"><span><b>SCHEDULED TASKS</b><small>Off: nothing runs on its own, ever.</small></span><input id="setting-schedules" type="checkbox"><i></i></label>
             <label>NAME<input id="schedule-name" type="text" maxlength="80" placeholder="Morning briefing"></label>

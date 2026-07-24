@@ -25,6 +25,8 @@ const DEFAULT_SETTINGS = {
   claudeBridgeEnabled: false,
   claudeBridgeSessionId: '',
   claudeCliPath: '',
+  screenControlEnabled: false,
+  screenControlAllowlist: ['explorer', 'chrome'],
   mobileEnabled: false,
   mobilePort: 27183,
   mobilePublicUrl: '',

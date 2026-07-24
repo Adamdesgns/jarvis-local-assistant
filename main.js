@@ -24,6 +24,7 @@ const updateRepo = require('./package.json').updateRepo || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
 const { ClaudeBridge, createTranscript } = require('./core/claude-bridge');
+const { ScreenReader } = require('./core/screen-reader');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
@@ -57,6 +58,7 @@ let localVoice;
 let folderWatch;
 let router;
 let claudeBridge;
+let screenReader;
 let go2rtc;
 let cameras;
 let autonomy;
@@ -871,7 +873,16 @@ app.whenReady().then(async () => {
     transcript: createTranscript(app.getPath('userData')),
     log
   });
-  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge });
+  // Slice 1 of JARVIS's "hands": reads the screen, clicks nothing. Shows the
+  // same "viewing your screen" indicator the cloud-vision feature uses, since a
+  // read is a privacy event even though it changes nothing on the PC. The
+  // helper lives in scripts/ (kept out of the asar so it runs from disk).
+  screenReader = new ScreenReader({
+    scriptPath: path.join(__dirname, 'scripts', 'read-screen.ps1'),
+    log,
+    onViewing: (active) => sendEverywhere('screen:viewing', { active })
+  });
+  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
   scheduleService = new ScheduleService({ store: scheduleStore, config, router, emit: sendEverywhere, log });
   scheduleService.start().catch((error) => {
