@@ -302,8 +302,13 @@
       const resolved = engine ? engine.resolve(skin === undefined ? this.skinName : skin) : null;
       if (resolved && resolved.name !== this.skinName) {
         if (this.instance && this.instance.destroy) this.instance.destroy();
+        // A canvas can only ever hold one context type (2d vs WebGL), so a
+        // skin swap always gets a fresh canvas with the same id/attributes.
+        const fresh = this.canvas.cloneNode(false);
+        this.canvas.replaceWith(fresh);
+        this.canvas = fresh;
         this.skinName = resolved.name;
-        this.instance = resolved.create(this.canvas);
+        this.instance = resolved.create(fresh);
       }
       if (!this.instance) return;
       if (this.instance.setPalette) this.instance.setPalette(this.palette);
