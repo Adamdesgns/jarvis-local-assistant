@@ -7,6 +7,7 @@ const REPEAT_KINDS = ['daily', 'weekdays', 'weekly', 'once'];
 const ACTION_KINDS = {
   speak: 'text',
   ask: 'prompt',
+  brainJob: 'prompt',
   briefing: null
 };
 

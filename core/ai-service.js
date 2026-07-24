@@ -581,7 +581,9 @@ class AIService {
 
   async reply(text, context = {}) {
     const settings = this.config.getSettings();
-    const mode = settings.aiMode || 'local';
+    // forceMode lets the night shift pin a job to the free local model no
+    // matter what aiMode says — cloud never runs unattended by accident.
+    const mode = context.forceMode || settings.aiMode || 'local';
     const cloudAgent = async () => {
       const provider = this.cloudProvider();
       if (provider === 'anthropic') return this.#anthropicAgent(text, context);

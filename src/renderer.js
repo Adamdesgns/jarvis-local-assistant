@@ -26,7 +26,7 @@ const RESET_LAYOUT = {
   memory: { x: 2, y: 54, w: 24, h: 36 }, activity: { x: 74, y: 62, w: 24, h: 32 },
   'quick-commands': { x: 2, y: 54, w: 22, h: 38 }, projects: { x: 74, y: 8, w: 24, h: 38 },
   'file-explorer': { x: 12, y: 6, w: 76, h: 78 }, 'document-viewer': { x: 18, y: 5, w: 64, h: 76 },
-  cameras: { x: 26, y: 8, w: 46, h: 60 }
+  cameras: { x: 26, y: 8, w: 46, h: 60 }, 'night-shift': { x: 38, y: 8, w: 24, h: 42 }
 };
 const state = {
   settings: {},
@@ -407,6 +407,32 @@ function applyModuleLayout(name) {
   module.style.width = `${layout.w}%`;
   module.style.height = `${layout.h}%`;
   module.style.zIndex = String(layout.z || 1);
+}
+
+async function renderNightShift() {
+  try {
+    const status = await window.jarvis.nightShiftStatus();
+    $('nightshift-done').textContent = String(status.doneCount);
+    const list = $('nightshift-jobs');
+    list.replaceChildren();
+    for (const job of status.jobs) {
+      const row = document.createElement('div');
+      row.className = 'nightshift-job';
+      const name = document.createElement('b');
+      name.textContent = job.name;
+      const meta = document.createElement('span');
+      const outcome = job.lastResult ? (job.lastResult.ok ? '✓ last run ok' : '✗ last run failed') : 'not run yet';
+      meta.textContent = `${job.time || '—'} nightly · ${outcome}${job.enabled ? '' : ' · off'}`;
+      row.append(name, meta);
+      list.append(row);
+    }
+    $('nightshift-hint').hidden = status.enabled && status.jobs.length > 0;
+    $('nightshift-hint').textContent = status.enabled
+      ? (status.jobs.length ? '' : 'No night jobs yet — they appear here once created.')
+      : 'Switch the night shift on in Settings to start.';
+  } catch {
+    // The module quietly keeps its last state if the status call fails.
+  }
 }
 
 function renderModuleVisibility() {
@@ -1195,6 +1221,9 @@ function openSettings() {
     orbSkinSelect.value = state.settings.orbSkin || 'original';
   }
   $('setting-orb-color').value = state.settings.orbColor || 'gold';
+  $('setting-nightshift').checked = state.settings.nightShiftEnabled === true;
+  $('setting-heartbeat').checked = state.settings.heartbeatEnabled === true;
+  $('setting-nightshift-budget').value = Number(state.settings.nightShiftCloudBudgetUsd) || 0;
   populateVoiceSelect();
   fillHourSelect($('setting-autonomy-night-start'));
   fillHourSelect($('setting-autonomy-night-end'));
@@ -1239,6 +1268,9 @@ async function saveSettings(event) {
     skin: $('setting-skin').value,
     orbSkin: $('setting-orb-skin').value || 'original',
     orbColor: $('setting-orb-color').value || 'gold',
+    nightShiftEnabled: $('setting-nightshift').checked,
+    heartbeatEnabled: $('setting-heartbeat').checked,
+    nightShiftCloudBudgetUsd: Math.max(0, Number($('setting-nightshift-budget').value) || 0),
     voiceName: $('setting-voice-name').value,
     autonomyEnabled: $('setting-autonomy').checked,
     autonomyRules: {
@@ -1571,7 +1603,7 @@ function bindEvents() {
   $('schedule-repeat').addEventListener('change', updateScheduleFormVisibility);
   $('schedule-action').addEventListener('change', updateScheduleFormVisibility);
   $('schedule-add-btn').addEventListener('click', addSchedule);
-  window.jarvis.schedule.onChanged((items) => { state.schedules = items; renderScheduleList(); });
+  window.jarvis.schedule.onChanged((items) => { state.schedules = items; renderScheduleList(); renderNightShift(); });
 
   window.jarvis.onWakeDetected(() => {
     if (diagnostics.wakeTimer) return finishWakeTest(true);
@@ -1679,7 +1711,7 @@ async function initialize() {
     state.anthropicConfigured = Boolean(bootstrap.anthropicConfigured);
     $('app-version').textContent = `VERSION ${bootstrap.version}`;
     state.version = bootstrap.version;
-    renderModuleVisibility(); renderTasks(); renderMemories(); renderActivity(); renderTelemetry(bootstrap.telemetry); renderVoiceStatus(state.voiceStatus);
+    renderModuleVisibility(); renderTasks(); renderMemories(); renderActivity(); renderTelemetry(bootstrap.telemetry); renderVoiceStatus(state.voiceStatus); renderNightShift();
     setResponse(`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${state.settings.profileName || 'User'}. Your private local assistant is online.`);
     $('system-status').textContent = 'LOCAL CORE ONLINE'; $('status-dot').style.background = '#61efb2'; setCoreState('ready');
     connectOllama();
