@@ -7,6 +7,8 @@ const {
   Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
+const { PRO_FEATURES, isPro, gateSettingsPatch, applyLicenseToSettings, featureAllowed } = require('./core/license-gate');
+const { LicenseService } = require('./core/license-service');
 const { ActivityLog } = require('./core/activity-log');
 const { CrashLog, installProcessHandlers } = require('./core/crash-log');
 const { MemoryStore } = require('./core/memory-store');
@@ -22,6 +24,7 @@ const { FolderWatchService } = require('./core/folder-watch');
 const { AutonomyService } = require('./core/autonomy-service');
 const { checkForUpdate } = require('./core/update-check');
 const updateRepo = require('./package.json').updateRepo || '';
+const proBuyUrl = require('./package.json').proBuyUrl || '';
 const { buildToolRegistry } = require('./core/tool-registry');
 const { CommandRouter } = require('./core/router');
 const { ClaudeBridge, createTranscript } = require('./core/claude-bridge');
@@ -85,6 +88,8 @@ let scheduleStore;
 let scheduleService;
 let nightShift;
 let heartbeat;
+let licenseService;
+let camerasInitialized = false;
 let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
@@ -454,11 +459,23 @@ function loadMobileDevices() {
 }
 function saveMobileDevices() { config.setSecret('mobileDevices', JSON.stringify(mobileAuth.toJSON())); }
 
-async function syncMobileServer() {
+// A read-only settings view with unlicensed Pro flags forced off. Services
+// that only consult settings get this instead of the raw config, so the
+// license gate holds even if a Pro flag survives in settings.json.
+function licensedSettings() {
   const settings = config.getSettings();
+  return applyLicenseToSettings(settings, settings.license);
+}
+
+async function syncMobileServer() {
+  const settings = licensedSettings();
   mobileServer.stop();
   if (settings.mobileEnabled) await mobileServer.start();
-  sendEverywhere('mobile:status', mobileServer.status());
+  const status = mobileServer.status();
+  if (!status.running && !settings.mobileEnabled && config.getSettings().mobileEnabled) {
+    status.reason = 'The phone companion is a JARVIS Pro feature — unlock it in Settings → PRO.';
+  }
+  sendEverywhere('mobile:status', status);
 }
 
 // Fan the camera alert out to every paired phone over SSE. Deliberately
@@ -630,7 +647,12 @@ function setupIpc() {
 
   ipcMain.handle('settings:save', async (_event, patch) => {
     const previous = config.getSettings();
-    const updated = config.updateSettings(patch);
+    // The license choke point: an unlicensed attempt to switch a Pro feature
+    // on is stripped here, before anything persists, and reported so the UI
+    // can explain instead of silently snapping the toggle back.
+    const { patch: gatedPatch, refused } = gateSettingsPatch(previous, patch || {}, previous.license);
+    if (refused.length) sendEverywhere('license:pro-refused', { refused });
+    const updated = config.updateSettings(gatedPatch);
     applyLoginSetting(updated.startWithWindows);
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.setAlwaysOnTop(Boolean(updated.orbAlwaysOnTop));
     if (previous.wakeWordEnabled !== updated.wakeWordEnabled || previous.localVoiceModel !== updated.localVoiceModel) {
@@ -669,6 +691,9 @@ function setupIpc() {
   ipcMain.handle('update:check', () => checkForUpdate(app.getVersion(), updateRepo));
   ipcMain.handle('update:open', (_event, url) => shell.openExternal(String(url || `https://github.com/${updateRepo}/releases/latest`)));
   ipcMain.handle('screen:describe', async (_event, question) => {
+    if (!isPro(config.getSettings().license)) {
+      return { ok: false, message: 'Looking at your screen is a JARVIS Pro feature. Open Settings → PRO to unlock it.' };
+    }
     if (!ai.hasCloudKey()) {
       return { ok: false, message: 'Looking at your screen needs a Cloud Brain. Add a Claude or OpenAI key in Settings — the local vision model is a future option.' };
     }
@@ -752,18 +777,66 @@ function setupIpc() {
   ipcMain.handle('external:openai-keys', () => shell.openExternal('https://platform.openai.com/api-keys'));
   ipcMain.handle('external:anthropic-keys', () => shell.openExternal('https://console.anthropic.com/settings/keys'));
 
+  // JARVIS Pro licensing. Every network call here is a button the user just
+  // pressed — never automatic (see license-service.js).
+  ipcMain.handle('license:status', () => ({
+    license: config.getSettings().license,
+    features: PRO_FEATURES.map((feature) => ({ id: feature.id, label: feature.label })),
+    buyUrl: proBuyUrl
+  }));
+  ipcMain.handle('license:activate', async (_event, key) => {
+    const result = await licenseService.activate(key);
+    if (result.ok) {
+      // Bring already-configured Pro features to life without a restart.
+      if (!camerasInitialized) {
+        cameras.init();
+        camerasInitialized = true;
+      }
+      syncMobileServer();
+      scheduleService.start().catch((error) => {
+        log.write({ type: 'schedule-error', command: 'license-activate-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
+      });
+      log.write({ type: 'license', command: 'activate', response: 'JARVIS Pro activated on this PC.', source: 'license' });
+    }
+    return { ...result, settings: config.publicSettings() };
+  });
+  ipcMain.handle('license:validate', async () => {
+    const result = await licenseService.validate();
+    return { ...result, settings: config.publicSettings() };
+  });
+  ipcMain.handle('license:deactivate', async () => {
+    const result = await licenseService.deactivate();
+    if (result.ok) {
+      syncMobileServer();
+      scheduleService.start().catch(() => {});
+      log.write({ type: 'license', command: 'deactivate', response: 'JARVIS Pro deactivated; the seat is free for another PC.', source: 'license' });
+    }
+    return { ...result, settings: config.publicSettings() };
+  });
+  ipcMain.handle('external:buy-pro', () => {
+    if (!proBuyUrl) return { ok: false, message: 'The JARVIS Pro store link is not set up yet.' };
+    shell.openExternal(proBuyUrl);
+    return { ok: true };
+  });
+
   ipcMain.handle('cameras:bootstrap', async () => ({
     accounts: cameras.listAccounts(),
     cameras: await cameras.listCameras(),
     systems: await cameras.listSystems(),
     status: cameras.getStatus()
   }));
-  ipcMain.handle('cameras:add-blink', (_event, payload) => cameras.addBlinkAccount(payload || {}));
+  // Adding a camera account is the camera module's licensed doorway. Saved
+  // accounts are never touched (see license-gate.js on cameraAccounts) — they
+  // just stay dormant until cameras.init() runs under a license.
+  const cameraRefusal = () => (featureAllowed('camera', config.getSettings(), config.getSettings().license)
+    ? null
+    : { ok: false, message: 'Cameras are a JARVIS Pro feature. Open Settings → PRO to unlock them.' });
+  ipcMain.handle('cameras:add-blink', (_event, payload) => cameraRefusal() || cameras.addBlinkAccount(payload || {}));
   ipcMain.handle('cameras:blink-pin', (_event, payload) => cameras.submitBlinkPin(String(payload?.accountId || ''), String(payload?.pin || '')));
   ipcMain.handle('cameras:systems', () => cameras.listSystems());
-  ipcMain.handle('cameras:add-ring', (_event, payload) => cameras.addRingAccount(payload || {}));
+  ipcMain.handle('cameras:add-ring', (_event, payload) => cameraRefusal() || cameras.addRingAccount(payload || {}));
   ipcMain.handle('cameras:live-answer', (_event, payload) => cameras.answerLiveView(String(payload?.key || ''), String(payload?.offerSdp || '')));
-  ipcMain.handle('cameras:add-nest', (_event, payload) => cameras.addNestAccount(payload || {}, { openExternal: (url) => shell.openExternal(url) }));
+  ipcMain.handle('cameras:add-nest', (_event, payload) => cameraRefusal() || cameras.addNestAccount(payload || {}, { openExternal: (url) => shell.openExternal(url) }));
   ipcMain.handle('external:nest-console', () => shell.openExternal('https://console.nest.google.com/device-access'));
   ipcMain.handle('cameras:describe', async (_event, key) => {
     const shot = await cameras.getSnapshot(String(key || ''), { manual: true });
@@ -777,7 +850,7 @@ function setupIpc() {
     return { ok: true, text: described.text, jpegBase64: shot.jpegBase64 };
   });
   ipcMain.handle('cameras:set-armed', (_event, payload) => cameras.setArmed(String(payload?.key || ''), Boolean(payload?.armed)));
-  ipcMain.handle('cameras:add-rtsp', (_event, payload) => cameras.addRtspAccount(payload || {}));
+  ipcMain.handle('cameras:add-rtsp', (_event, payload) => cameraRefusal() || cameras.addRtspAccount(payload || {}));
   ipcMain.handle('cameras:remove-account', (_event, accountId) => cameras.removeAccount(String(accountId || '')));
   ipcMain.handle('cameras:list', () => cameras.listCameras());
   ipcMain.handle('cameras:snapshot', (_event, payload) => cameras.getSnapshot(String(payload?.key || ''), { manual: Boolean(payload?.manual) }));
@@ -944,7 +1017,7 @@ function setupNightShift(updated) {
 async function maybeMorningReport() {
   try {
     if (!nightShift) return;
-    const settings = config.getSettings();
+    const settings = licensedSettings();
     if (settings.nightShiftEnabled !== true) return;
     const pending = nightShift.pendingReport();
     if (!pending.length) return;
@@ -986,7 +1059,11 @@ app.whenReady().then(async () => {
 
   config = new ConfigStore(app.getPath('userData'), safeStorage);
   log = new ActivityLog(app.getPath('userData'));
-  autonomy = new AutonomyService({ config, emit: sendEverywhere, log });
+  licenseService = new LicenseService({ config });
+  // Gated view: Pro flags read false until licensed. Explicit delegation, not
+  // a subclass — ConfigStore keeps its private fields and its write paths.
+  const gatedConfig = { getSettings: licensedSettings };
+  autonomy = new AutonomyService({ config: gatedConfig, emit: sendEverywhere, log });
   currentSkin = config.getSettings().skin || 'classic';
   memory = new MemoryStore(app.getPath('userData'));
   tasks = new TaskStore(app.getPath('userData'));
@@ -1027,7 +1104,12 @@ app.whenReady().then(async () => {
     const described = await ai.describeCameraFrame(jpegBase64, context.name);
     return described.ok ? described.text : null;
   };
-  cameras.init();
+  if (isPro(config.getSettings().license)) {
+    cameras.init();
+    camerasInitialized = true;
+  } else if ((config.getSettings().cameraAccounts || []).length) {
+    log.write({ type: 'license', command: 'cameras-init-skipped', response: 'Saved cameras stay dormant until JARVIS Pro is activated.', source: 'license' });
+  }
   claudeBridge = new ClaudeBridge({
     config,
     transcript: createTranscript(app.getPath('userData')),
@@ -1048,7 +1130,7 @@ app.whenReady().then(async () => {
   // live already.
   hands = new ScreenHands({
     driverFactory: () => new ScreenDriver({ scriptPath: path.join(__dirname, 'scripts', 'drive-screen.ps1'), log }),
-    getSettings: () => config.getSettings(),
+    getSettings: licensedSettings,
     log,
     onEvent: (payload) => sendEverywhere('screen:drive', payload),
     // A mid-session "will ask again" step: park a resolver in the router's
@@ -1068,10 +1150,13 @@ app.whenReady().then(async () => {
     }),
     stopWindow: { open: openDriveStopWindow, update: updateDriveStopWindow, close: closeDriveStopWindow }
   });
-  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands });
+  // The router only ever reads settings (no writes, no secrets), so it takes
+  // the gated view too: voice-routing into screen reading/driving respects
+  // the license without the router knowing licenses exist.
+  router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
-  nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config, ai, documents });
-  scheduleService = new ScheduleService({ store: scheduleStore, config, router, nightShift, emit: sendEverywhere, log });
+  nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config: gatedConfig, ai, documents });
+  scheduleService = new ScheduleService({ store: scheduleStore, config: gatedConfig, router, nightShift, emit: sendEverywhere, log });
   scheduleService.start().catch((error) => {
     log.write({ type: 'schedule-error', command: 'boot-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
   });

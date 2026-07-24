@@ -13,6 +13,7 @@ function mergeSettings(defaults, saved) {
   result.moduleLayout = { ...clone(defaults.moduleLayout), ...((saved || {}).moduleLayout || {}) };
   result.routines = { ...clone(defaults.routines || {}), ...((saved || {}).routines || {}) };
   result.autonomyRules = { ...clone(defaults.autonomyRules || {}), ...((saved || {}).autonomyRules || {}) };
+  result.license = { ...clone(defaults.license || {}), ...((saved || {}).license || {}) };
   if (Number(saved?.settingsVersion || 0) < 5) {
     result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'document-viewer'])];
   }
@@ -26,7 +27,12 @@ function mergeSettings(defaults, saved) {
     // migration just keeps settings.json honest about what is possible.
     result.screenControlAllowlist = ['explorer', 'notepad'];
   }
-  result.settingsVersion = 7;
+  // v8 introduces the JARVIS Pro license object — and deliberately flips
+  // nothing else. Pro flags a user already saved (from testing, or from a
+  // pre-Pro build) stay in the file exactly as they were; the runtime seams
+  // refuse to run them until a license is active, and the PRO settings tab
+  // explains why. Activating lights everything back up with no reconfiguring.
+  result.settingsVersion = 8;
   result.cameraAccounts = Array.isArray(result.cameraAccounts) ? result.cameraAccounts : [];
   if (!['local', 'cloud', 'auto'].includes(result.aiMode)) result.aiMode = 'local';
   // Never allow a stale V1 address to redirect the private local Ollama connection.
@@ -93,6 +99,9 @@ class ConfigStore {
       // Screen driving (slice 2) — its own switch, off by default, so reading
       // can be on while the hands stay off.
       'screenDriveEnabled'
+      // 'license' is intentionally NOT in this list: settings:save is
+      // renderer-reachable, and license state must only ever be written by
+      // the main-process LicenseService through setLicenseState below.
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {
@@ -100,6 +109,21 @@ class ConfigStore {
       }
     }
     this.data.settings = mergeSettings(DEFAULT_SETTINGS, this.data.settings);
+    this.#persist();
+    return this.publicSettings();
+  }
+
+  // The only write path for JARVIS Pro license state (see the allowlist note
+  // in updateSettings). Unknown fields are dropped so a wayward payload can
+  // never smuggle arbitrary settings through this side door.
+  setLicenseState(state) {
+    const fields = ['status', 'productName', 'customerName', 'activatedAt', 'instanceId', 'lastValidatedAt'];
+    const next = {};
+    for (const field of fields) {
+      next[field] = String(state?.[field] ?? '');
+    }
+    if (!next.status) next.status = 'none';
+    this.data.settings.license = next;
     this.#persist();
     return this.publicSettings();
   }

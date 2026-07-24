@@ -2,9 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { TABS, normalizeTab, sectionHidden } = require('../src/settings-tabs');
 
-test('TABS: six tabs, unique ids, GENERAL first, every tab labelled', () => {
-  assert.equal(TABS.length, 6);
+test('TABS: seven tabs, unique ids, GENERAL first, PRO present, every tab labelled', () => {
+  assert.equal(TABS.length, 7);
   assert.equal(TABS[0].id, 'general');
+  assert.ok(TABS.some((tab) => tab.id === 'pro'), 'the PRO tab must exist or licensing has no UI');
   const ids = TABS.map((tab) => tab.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const tab of TABS) {

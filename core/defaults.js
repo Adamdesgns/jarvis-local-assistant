@@ -8,7 +8,7 @@ function windowsHomeFolder(name) {
 }
 
 const DEFAULT_SETTINGS = {
-  settingsVersion: 7,
+  settingsVersion: 8,
   profileName: 'User',
   assistantName: 'JARVIS',
   aiMode: 'local',
@@ -62,6 +62,16 @@ const DEFAULT_SETTINGS = {
   nightShiftFolder: '',
   heartbeatEnabled: false,
   heartbeatMinutes: 30,
+  // JARVIS Pro license state. Written only by ConfigStore.setLicenseState
+  // from the main process — never through the renderer's settings:save path.
+  license: {
+    status: 'none',
+    productName: '',
+    customerName: '',
+    activatedAt: '',
+    instanceId: '',
+    lastValidatedAt: ''
+  },
   voiceName: '',
   orbBounds: null,
   moduleLayout: {

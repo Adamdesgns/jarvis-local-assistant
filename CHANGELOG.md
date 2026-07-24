@@ -1,5 +1,28 @@
 # JARVIS Changelog
 
+## 0.18.0 — July 24, 2026
+
+### Added — JARVIS Pro: a $29 one-time unlock for the bells and whistles
+- The core assistant stays **free forever**: voice, tasks, briefings, file
+  search, document Q&A, both brains, and Ask Claude.
+- **Pro** ($29 once, no subscription, up to 3 PCs) unlocks: cameras, the phone
+  companion, scheduled tasks, autonomy, screen reading, "look at my screen,"
+  screen driving, and night shift.
+- New Settings → PRO tab: paste the license key from your purchase email and
+  press ACTIVATE. CHECK LICENSE and DEACTIVATE THIS PC (frees the seat for
+  another machine) sit beside it. Gated toggles wear a small PRO badge.
+- **Privacy kept intact:** activation is one call to Lemon Squeezy when you
+  press the button — never automatic, never on a timer. Once activated,
+  JARVIS stays licensed **fully offline, forever**; a network failure can
+  never lock a paid feature. See PRIVACY.md.
+- Honest migration: if you had Pro features switched on before this version,
+  your settings are left exactly as they were — the features pause until a
+  license is activated, then come back to life with no reconfiguring.
+- Enforced in code, not politeness: the license gate lives in the main
+  process (`core/license-gate.js`, same discipline as screen-guard), the
+  renderer cannot write license state, and mutation-style tests fail if any
+  gate is deleted. 506 tests pass.
+
 ## 0.17.0 — July 23, 2026
 
 ### Added — JARVIS's hands (slice 2, BETA): he can click and type for you

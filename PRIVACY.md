@@ -34,6 +34,17 @@ To see it, press Win+R, paste `%APPDATA%\jarvis-local-assistant`, and press Ente
   passages you ask about are sent to that provider to generate a reply. Your
   files themselves are not uploaded — only the relevant text. Local mode
   (the default) sends nothing off the PC.
+- **JARVIS Pro license (optional).** The ACTIVATE, CHECK LICENSE, and
+  DEACTIVATE buttons in Settings → PRO each make one call to Lemon Squeezy
+  (the store that sells JARVIS Pro). Activation sends your license key and
+  this PC's name — nothing else — so you can tell your machines apart in
+  your purchase account. These calls happen only when you press those
+  buttons; JARVIS never re-checks on its own, and once activated it stays
+  licensed even fully offline. The key itself is stored encrypted like the
+  API keys.
+- **Update check.** On launch, JARVIS asks the public GitHub release page
+  whether a newer version exists. No account, no personal data — the same
+  request a browser makes when you visit the page. Nothing installs itself.
 - Nothing else is transmitted. JARVIS has no analytics, telemetry, or accounts.
 
 ## Deleting your data
