@@ -8,6 +8,7 @@ const {
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
 const { ActivityLog } = require('./core/activity-log');
+const { CrashLog, installProcessHandlers } = require('./core/crash-log');
 const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
 const { ToolService } = require('./core/tool-service');
@@ -43,6 +44,15 @@ const QRCode = require('qrcode');
 // disables JS timer/animation throttling and does not stop this. Must be set
 // before the app is ready.
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+
+// Last-resort safety net: an error nothing else caught is written to
+// crash.log beside the rest of the user data instead of silently killing the
+// app. Renderer windows report their escaped errors into the same log.
+const crashLog = new CrashLog(app.getPath('userData'));
+installProcessHandlers(process, crashLog);
+ipcMain.on('crash:renderer-error', (_event, info) => {
+  crashLog.record(`renderer:${(info && info.source) || 'window'}`, info);
+});
 
 let mainWindow;
 let widgetWindow;

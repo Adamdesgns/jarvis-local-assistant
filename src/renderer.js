@@ -1,3 +1,25 @@
+// Last-resort safety net: anything that escapes every try/catch in this
+// window is reported to the main-process crash log instead of vanishing.
+// Guarded like the exports below: node:test requires this file without a window.
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    window.jarvis.reportError({
+      source: 'main-window',
+      message: event.message,
+      stack: event.error ? event.error.stack : `${event.filename}:${event.lineno}:${event.colno}`
+    });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    window.jarvis.reportError({
+      source: 'main-window',
+      name: reason && reason.name,
+      message: (reason && reason.message) || String(reason),
+      stack: reason && reason.stack
+    });
+  });
+}
+
 const $ = (id) => document.getElementById(id);
 const RESET_LAYOUT = {
   tasks: { x: 74, y: 8, w: 24, h: 58 }, performance: { x: 2, y: 8, w: 22, h: 44 },
