@@ -194,7 +194,7 @@ button { cursor: pointer; }
 .voice-line span { color: var(--text-muted); font: 400 var(--text-xs)/1 var(--font) }
 
 /* ---------- module drawer ---------- */
-.module-drawer { position: fixed; z-index: 70; top: 62px; right: -390px; bottom: 0; width: 380px; padding: var(--s5); background: rgba(10, 11, 12, .92); backdrop-filter: blur(24px); border-left: 1px solid var(--line-strong); box-shadow: var(--shadow-deep); transition: right var(--dur-med) var(--ease); }
+.module-drawer { position: fixed; z-index: 70; top: 62px; right: -390px; bottom: 0; width: 380px; padding: var(--s5); background: rgba(10, 11, 12, .92); backdrop-filter: blur(24px); border-left: 1px solid var(--line-strong); box-shadow: var(--shadow-deep); transition: right var(--dur-med) var(--ease); overflow-y: auto; overscroll-behavior: contain; }
 .module-drawer.open { right: 0 }
 .module-drawer header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--line); padding-bottom: var(--s4) }
 .module-drawer header span { color: var(--accent); font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide) }
