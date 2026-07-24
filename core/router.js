@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { classifyCommand } = require('./security');
+const { isBattleRequest, buildBattlePrompt } = require('./battle-mode');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
 
 // An approved drive plan must be exactly what was shown on the card — frozen
@@ -568,6 +569,11 @@ class CommandRouter {
       }
     } else if (/\b(?:system status|status report|diagnostics)\b/i.test(text)) {
       result = this.#result('Local core, task manager, memory, file tools, and safety controls are responding.', 'local-core');
+    } else if (isBattleRequest(text)) {
+      // Words only — safe attended or unattended. The rules ride in the prompt.
+      const { topic } = isBattleRequest(text);
+      const bars = await this.ai.reply(buildBattlePrompt(topic), { onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
+      result = this.#result(bars.text, 'battle', { success: bars.ok !== false });
     } else {
       const memories = this.memory.search(text, 4);
       const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true });
