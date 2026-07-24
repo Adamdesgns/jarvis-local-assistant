@@ -394,6 +394,16 @@ body.busy .ai-stop { display: inline-block }
 .pw-toggle:hover { color: var(--accent); }
 .pw-toggle svg { width: 15px; height: 15px; }
 
+/* ---------- night shift module ---------- */
+.nightshift-counter { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s2) 0 var(--s3); border-bottom: 1px solid var(--line) }
+.nightshift-counter b { font: 300 var(--text-display)/1 var(--font-display); color: var(--accent-bright) }
+.nightshift-counter span { color: var(--text-muted); font-size: var(--text-xs) }
+.nightshift-jobs { display: grid; gap: 2px; padding-top: var(--s2) }
+.nightshift-job { padding: 8px 2px; border-bottom: 1px solid var(--line) }
+.nightshift-job b { display: block; color: var(--text-primary); font-size: var(--text-base); font-weight: 400 }
+.nightshift-job span { display: block; color: var(--text-muted); font-size: var(--text-xs); margin-top: 3px }
+.nightshift-hint { color: var(--text-muted); font-size: var(--text-sm); line-height: 1.5; padding-top: var(--s2) }
+
 /* ---------- drag + resize grips (mechanics unchanged) ---------- */
 .module .drag-handle { cursor: move; touch-action: none }
 .edge-grip { position: absolute; z-index: 5; touch-action: none }

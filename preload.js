@@ -111,6 +111,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   onWidgetPopReset: (callback) => on('widget:pop-reset', callback),
   windowControl: (action) => ipcRenderer.send('window:control', action),
   reportError: (info) => ipcRenderer.send('crash:renderer-error', info),
+  nightShiftStatus: () => ipcRenderer.invoke('nightshift:status'),
   onWakeDetected: (callback) => on('wake:detected', callback),
   onWakeStatus: (callback) => on('voice:status', callback),
   onVoiceLog: (callback) => on('voice:log', callback),

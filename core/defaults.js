@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS = {
   minimizeToOrb: true,
   orbAlwaysOnTop: true,
   motionMode: 'cinematic',
-  hiddenModules: ['performance', 'memory', 'activity', 'quick-commands', 'projects', 'file-explorer', 'document-viewer', 'cameras'],
+  hiddenModules: ['performance', 'memory', 'activity', 'quick-commands', 'projects', 'file-explorer', 'document-viewer', 'cameras', 'night-shift'],
   cameraAccounts: [],
   cameraAiDescriptions: true,
   cameraCloudVision: false,
@@ -53,6 +53,15 @@ const DEFAULT_SETTINGS = {
   skin: 'classic',
   orbSkin: 'original',
   orbColor: 'gold',
+  nightShiftEnabled: false,
+  nightShiftStart: 0,
+  nightShiftEnd: 6,
+  nightShiftMaxJobs: 10,
+  nightShiftMaxMinutes: 10,
+  nightShiftCloudBudgetUsd: 0,
+  nightShiftFolder: '',
+  heartbeatEnabled: false,
+  heartbeatMinutes: 30,
   voiceName: '',
   orbBounds: null,
   moduleLayout: {
@@ -64,7 +73,8 @@ const DEFAULT_SETTINGS = {
     projects: { x: 74, y: 8, w: 24, h: 38 },
     'file-explorer': { x: 12, y: 6, w: 76, h: 78 },
     'document-viewer': { x: 18, y: 5, w: 64, h: 76 },
-    cameras: { x: 26, y: 8, w: 46, h: 60 }
+    cameras: { x: 26, y: 8, w: 46, h: 60 },
+    'night-shift': { x: 38, y: 8, w: 24, h: 42 }
   },
   searchRoots: [
     windowsHomeFolder('Documents'),

@@ -78,6 +78,16 @@
           <i class="resize-handle"></i>
         </article>
 
+        <article class="module hidden-module" data-module="night-shift">
+          <header class="module-header drag-handle"><div><span>While you sleep</span><h2>Night shift</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content">
+            <div class="nightshift-counter"><b id="nightshift-done">0</b><span>jobs done, lifetime</span></div>
+            <div id="nightshift-jobs" class="nightshift-jobs"></div>
+            <p id="nightshift-hint" class="nightshift-hint">Switch the night shift on in Settings to start.</p>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
         <article class="module hidden-module" data-module="performance">
           <header class="module-header drag-handle"><div><span>Telemetry</span><h2>PC performance</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content performance-grid">
@@ -246,6 +256,7 @@
       <p>Add only what you need. Drag and resize modules while Edit Layout is active.</p>
       <div id="module-options" class="module-options">
         <button data-toggle-module="tasks"><i>✓</i><span><b>Today’s Tasks</b><small>Work queue and reminders</small></span></button>
+        <button data-toggle-module="night-shift"><i></i><span><b>Night Shift</b><small>Jobs JARVIS runs while you sleep</small></span></button>
         <button data-toggle-module="file-explorer"><i></i><span><b>File Explorer</b><small>Browse and watch live searches</small></span></button>
         <button data-toggle-module="performance"><i></i><span><b>PC Performance</b><small>CPU, memory, and GPU</small></span></button>
         <button data-toggle-module="memory"><i></i><span><b>Memory</b><small>Saved notes and instructions</small></span></button>
@@ -327,6 +338,13 @@
             <label>JARVIS VOICE<select id="setting-voice-name"><option value="">AUTO · BRITISH IF AVAILABLE</option></select></label>
             <button type="button" id="audition-voice" class="outline-action">▶ HEAR THIS VOICE</button>
             <small>For the classic JARVIS feel, install a UK English voice: Windows Settings → Time &amp; Language → Speech → Add voices → English (United Kingdom), then pick “Ryan” or “George” here.</small>
+          </section>
+          <section>
+            <h3>NIGHT SHIFT</h3>
+            <label class="toggle-row"><span><b>NIGHT SHIFT</b><small>Run brain jobs between midnight and 6am — drafts only, never sends</small></span><input id="setting-nightshift" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>HEARTBEAT CHECK-INS</b><small>Every 30 minutes, quietly check tasks and errors; speak only when something needs you</small></span><input id="setting-heartbeat" type="checkbox"><i></i></label>
+            <label>CLOUD BUDGET PER NIGHT (USD)<input id="setting-nightshift-budget" type="number" min="0" step="1" value="0"></label>
+            <small>0 means night jobs always use the free local brain. Drafts land in Documents\JARVIS Drafts.</small>
           </section>
           <section>
             <h3>AUTONOMY</h3>
@@ -466,6 +484,7 @@
     <script src="orbs/zen.js"></script>
     <script src="orbs/halation.js"></script>
     <script src="orbs/aurora.js"></script>
+    <script src="orbs/starfield.js"></script>
     <script src="hologram.js"></script>
     <script src="layout-engine.js"></script>
     <script src="skins.js"></script>

@@ -17,6 +17,7 @@ class ScheduleService {
     store,
     config,
     router,
+    nightShift,
     emit,
     log,
     now = () => new Date(),
@@ -26,6 +27,7 @@ class ScheduleService {
     this.store = store;
     this.config = config;
     this.router = router;
+    this.nightShift = nightShift || null;
     this.emit = emit || (() => {});
     this.log = log || { write: () => {} };
     this.now = now;
@@ -161,7 +163,7 @@ class ScheduleService {
     let text = '';
 
     try {
-      text = await this.#runAction(item);
+      text = await this.#runAction(item, { late });
     } catch (error) {
       ok = false;
       text = error && error.message ? error.message : String(error);
@@ -219,10 +221,16 @@ class ScheduleService {
     return { ok, text };
   }
 
-  async #runAction(item) {
+  async #runAction(item, { late = false } = {}) {
     const { action } = item;
     if (action.kind === 'speak') {
       return action.text;
+    }
+    if (action.kind === 'brainJob') {
+      if (!this.nightShift) throw new Error('The night shift service is not available.');
+      const result = await this.nightShift.runJob(item, { late });
+      if (!result.ok) throw new Error(result.text);
+      return result.text;
     }
     if (action.kind === 'ask') {
       const result = await this.router.handle(action.prompt, 'general', { unattended: true });

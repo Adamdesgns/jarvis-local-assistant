@@ -292,6 +292,21 @@ class DocumentService {
     return { ok: true, path: target, message: `Created ${path.basename(target)}.` };
   }
 
+  // Path-precise sibling of createTextFile, same contract as createBinaryFile
+  // below: `directory` must already be a resolved absolute path (the night
+  // shift holds one), so resolveLocation's fuzzy matching must not touch it.
+  async createTextFileAt(directory, name, content, extension = '.txt') {
+    if (!directory || !this.isAllowed(directory)) throw new Error('Choose or approve that destination folder in Settings first.');
+    const safeExtension = extension.startsWith('.') ? extension : `.${extension}`;
+    const base = cleanName(name, 'JARVIS Note').replace(/\.[^.]+$/, '');
+    let target = path.join(directory, `${base}${safeExtension}`);
+    let count = 2;
+    while (fs.existsSync(target)) target = path.join(directory, `${base} ${count++}${safeExtension}`);
+    if (path.resolve(path.dirname(target)) !== path.resolve(directory)) throw new Error('That destination is invalid.');
+    await fs.promises.writeFile(target, String(content || ''), { encoding: 'utf8', flag: 'wx' });
+    return { ok: true, path: target, message: `Created ${path.basename(target)}.` };
+  }
+
   // `directory` here must already be a resolved, absolute destination — NOT
   // a voice-command label. resolveLocation() is a fuzzy matcher built for
   // spoken phrases like "my documents"; it substring-matches project names

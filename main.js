@@ -29,10 +29,13 @@ const { ScreenReader } = require('./core/screen-reader');
 const { ScreenHands } = require('./core/screen-drive-session');
 const { ScreenDriver } = require('./core/screen-driver');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
+const { isWithinWindow } = require('./core/autonomy-rules');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
 const { ScheduleStore } = require('./core/schedule-store');
 const { ScheduleService } = require('./core/schedule-service');
+const { NightShiftService } = require('./core/night-shift');
+const { HeartbeatService, buildDefaultChecks } = require('./core/heartbeat');
 const QRCode = require('qrcode');
 
 // Chromium's native Windows window-occlusion tracker is a separate mechanism
@@ -80,6 +83,8 @@ let mobileAuth;
 let mobileServer;
 let scheduleStore;
 let scheduleService;
+let nightShift;
+let heartbeat;
 let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
@@ -167,6 +172,7 @@ function createMainWindow() {
     mainWindow.show();
     if (process.argv.includes('--dev')) mainWindow.webContents.openDevTools({ mode: 'detach' });
   });
+  mainWindow.on('focus', () => maybeMorningReport());
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url !== mainWindow.webContents.getURL()) event.preventDefault();
@@ -640,8 +646,19 @@ function setupIpc() {
         log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
       });
     }
+    if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
+      return setupNightShift(updated);
+    }
     return updated;
   });
+  ipcMain.handle('nightshift:status', () => ({
+    enabled: config.getSettings().nightShiftEnabled === true,
+    folder: config.getSettings().nightShiftFolder || '',
+    doneCount: nightShift ? nightShift.doneCount() : 0,
+    jobs: scheduleStore.list()
+      .filter((item) => item.action && item.action.kind === 'brainJob')
+      .map((item) => ({ id: item.id, name: item.name, enabled: item.enabled, time: item.when && item.when.time, lastRunAt: item.lastRunAt, lastResult: item.lastResult }))
+  }));
   ipcMain.handle('update:check', () => checkForUpdate(app.getVersion(), updateRepo));
   ipcMain.handle('update:open', (_event, url) => shell.openExternal(String(url || `https://github.com/${updateRepo}/releases/latest`)));
   ipcMain.handle('screen:describe', async (_event, question) => {
@@ -885,6 +902,67 @@ function setupIpc() {
   });
 }
 
+// First-enable setup: create the drafts folder, approve it, seed the two
+// starter jobs (once), and hand back the final settings.
+function setupNightShift(updated) {
+  const draftsDir = path.join(os.homedir(), 'Documents', 'JARVIS Drafts');
+  try { fs.mkdirSync(draftsDir, { recursive: true }); } catch {}
+  const patch = {};
+  if (!updated.nightShiftFolder) patch.nightShiftFolder = draftsDir;
+  const roots = updated.searchRoots || [];
+  const target = patch.nightShiftFolder || updated.nightShiftFolder;
+  if (!roots.some((root) => path.resolve(root) === path.resolve(target))) {
+    patch.searchRoots = [...roots, target];
+  }
+  const final = Object.keys(patch).length ? config.updateSettings(patch) : updated;
+  const hasBrainJobs = scheduleStore.list().some((item) => item.action && item.action.kind === 'brainJob');
+  if (!hasBrainJobs) {
+    scheduleStore.add({
+      name: 'Daily social draft',
+      when: { time: '02:00', repeat: 'daily' },
+      action: { kind: 'brainJob', prompt: 'Write a short, plain-spoken social media post about the JARVIS build journey, using my recent notes and activity for material. First person, blue-collar voice, no hype words. This is a draft for me to review — do not address anyone directly.' }
+    });
+    scheduleStore.add({
+      name: 'Morning briefing file',
+      when: { time: '05:30', repeat: 'daily' },
+      action: { kind: 'brainJob', prompt: 'Summarize yesterday for me in plain language: tasks completed and still open, files I worked with, and anything the cameras logged. Short and honest.' }
+    });
+    sendEverywhere('schedule:changed', scheduleStore.list());
+  }
+  return final;
+}
+
+// Morning report: once the night window has ended and unreported jobs exist,
+// say what the shift finished — spoken, carded, and saved as its own draft.
+async function maybeMorningReport() {
+  try {
+    if (!nightShift) return;
+    const settings = config.getSettings();
+    if (settings.nightShiftEnabled !== true) return;
+    const pending = nightShift.pendingReport();
+    if (!pending.length) return;
+    const start = Number.isFinite(Number(settings.nightShiftStart)) ? Number(settings.nightShiftStart) : 0;
+    const end = Number.isFinite(Number(settings.nightShiftEnd)) ? Number(settings.nightShiftEnd) : 6;
+    if (start !== end && isWithinWindow(new Date(), start, end)) return; // still night — wait
+    const done = pending.filter((entry) => entry.ok);
+    const failed = pending.filter((entry) => !entry.ok);
+    const parts = [];
+    if (done.length) parts.push(`While you slept I finished ${done.length} job${done.length > 1 ? 's' : ''}: ${done.map((entry) => entry.name).join(', ')}. The drafts are ready for your review.`);
+    if (failed.length) parts.push(`${failed.length} job${failed.length > 1 ? 's' : ''} hit trouble — details are in the shift log.`);
+    const text = parts.join(' ');
+    sendEverywhere('autonomy:event', { speak: text, card: { title: 'NIGHT SHIFT — MORNING REPORT', body: text } });
+    log.write({ type: 'night-shift', command: 'morning-report', response: text, source: 'night-shift' });
+    if (settings.nightShiftFolder) {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const body = `# Morning report — ${stamp}\n\n${pending.map((entry) => `- ${entry.ok ? '✓' : '✗'} ${entry.name} — ${entry.text}`).join('\n')}\n`;
+      await documents.createTextFileAt(settings.nightShiftFolder, `${stamp} Morning report`, body, '.md').catch(() => {});
+    }
+    nightShift.markReported();
+  } catch (error) {
+    log.write({ type: 'night-shift', command: 'morning-report-error', response: error && error.message ? error.message : String(error), source: 'night-shift' });
+  }
+}
+
 function checkTaskReminders() {
   for (const task of tasks.dueForNotification()) {
     if (Notification.isSupported()) {
@@ -985,13 +1063,22 @@ app.whenReady().then(async () => {
   });
   router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
-  scheduleService = new ScheduleService({ store: scheduleStore, config, router, emit: sendEverywhere, log });
+  nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config, ai, documents });
+  scheduleService = new ScheduleService({ store: scheduleStore, config, router, nightShift, emit: sendEverywhere, log });
   scheduleService.start().catch((error) => {
     log.write({ type: 'schedule-error', command: 'boot-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
   });
+  heartbeat = new HeartbeatService({
+    config,
+    checks: buildDefaultChecks({ tasks, crashLog, nightShift }),
+    emit: sendEverywhere,
+    log
+  });
+  heartbeat.start();
   powerMonitor.on('resume', () => {
     try {
       scheduleService.arm();
+      maybeMorningReport();
     } catch (error) {
       log.write({ type: 'schedule-error', command: 'resume-arm', response: error && error.message ? error.message : String(error), source: 'schedule' });
     }
@@ -1035,6 +1122,7 @@ app.whenReady().then(async () => {
   localVoice.start();
   folderWatch.start();
   setInterval(checkTaskReminders, 30000);
+  setTimeout(() => maybeMorningReport(), 12000);
   // Quiet update check a few seconds after launch; only speaks up if newer.
   setTimeout(async () => {
     const info = await checkForUpdate(app.getVersion(), updateRepo);
