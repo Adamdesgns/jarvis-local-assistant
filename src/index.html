@@ -347,6 +347,11 @@
             <small>Reads only — JARVIS looks at what's on screen and describes it. It never clicks, types, or changes anything. It refuses to read financial, sign-in, or system windows, and it ignores password fields. Scheduled tasks can never use this.</small>
           </section>
           <section class="wide-setting">
+            <h3>SCREEN DRIVING (BETA)</h3>
+            <label class="toggle-row"><span><b>LET JARVIS CLICK AND TYPE</b><small>Say "click Save", "type hello into Notepad", "open the File menu" — JARVIS presses named buttons for you.</small></span><input id="setting-screen-drive" type="checkbox"><i></i></label>
+            <small>File Explorer and Notepad only for now. Every job shows you the full plan first and waits for your OK; anything that saves, sends, or deletes asks again individually. A STOP window stays on top the whole time — press it, hit Escape, or say "stop" to end everything instantly. Financial windows (banks, brokers, anything that spends money) are blocked permanently and that block cannot be turned off. Never works from the phone or on a schedule.</small>
+          </section>
+          <section class="wide-setting">
             <h3>SCHEDULE</h3>
             <label class="toggle-row"><span><b>SCHEDULED TASKS</b><small>Off: nothing runs on its own, ever.</small></span><input id="setting-schedules" type="checkbox"><i></i></label>
             <label>NAME<input id="schedule-name" type="text" maxlength="80" placeholder="Morning briefing"></label>

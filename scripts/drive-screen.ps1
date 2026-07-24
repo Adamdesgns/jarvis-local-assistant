@@ -187,33 +187,63 @@ function Do-Snapshot {
     }
 }
 
-# Resolve durable properties (automationId, or name+controlType) to elements
-# inside the CURRENT foreground window only. The caller demands exactly one
-# match; we report everything we found and let it refuse on 0 or 2+.
+# Resolve durable properties (automationId, name, or a control-type list) to
+# elements inside the CURRENT foreground window only. The caller demands
+# exactly one match; we report everything we found and let it refuse on 0/2+.
+# `controlType` may be a comma list ("Edit,Document") — a name-less resolve
+# with only control types is how "the text area of Notepad" is addressed
+# without hardcoding a label that differs across Windows versions.
+function Get-ControlTypeObject([string]$name) {
+    try {
+        $field = [System.Windows.Automation.ControlType].GetField($name)
+        if ($field -ne $null) { return $field.GetValue($null) }
+    } catch { }
+    return $null
+}
+
 function Do-Resolve($target) {
     if (Test-DesktopLocked) { return @{ ok = $false; error = "desktop-locked" } }
     $fg = Get-ForegroundElement
     if ($fg -eq $null) { return @{ ok = $false; error = "not-found" } }
 
-    $conditions = New-Object System.Collections.Generic.List[object]
-    if ($target.automationId) {
-        $conditions.Add((New-Object System.Windows.Automation.PropertyCondition($auto::AutomationIdProperty, [string]$target.automationId)))
-    } elseif ($target.name) {
-        $conditions.Add((New-Object System.Windows.Automation.PropertyCondition($auto::NameProperty, [string]$target.name, [System.Windows.Automation.PropertyConditionFlags]::IgnoreCase)))
-    } else {
-        return @{ ok = $false; error = "not-found" }
+    # Keep the caller's casing for the ControlType field lookup ("MenuItem"),
+    # lowercase only for the post-filter comparison.
+    $wantedControlNames = @()
+    $wantedControls = @()
+    foreach ($piece in (("" + $target.controlType) -split ',')) {
+        $trimmed = $piece.Trim()
+        if ($trimmed) {
+            $wantedControlNames += $trimmed
+            $wantedControls += $trimmed.ToLowerInvariant()
+        }
     }
-    $condition = $conditions[0]
+
+    $condition = $null
+    if ($target.automationId) {
+        $condition = New-Object System.Windows.Automation.PropertyCondition($auto::AutomationIdProperty, [string]$target.automationId)
+    } elseif ($target.name) {
+        $condition = New-Object System.Windows.Automation.PropertyCondition($auto::NameProperty, [string]$target.name, [System.Windows.Automation.PropertyConditionFlags]::IgnoreCase)
+    } elseif ($wantedControlNames.Count -gt 0) {
+        $typeConditions = New-Object System.Collections.Generic.List[System.Windows.Automation.Condition]
+        foreach ($wanted in $wantedControlNames) {
+            $ctObject = Get-ControlTypeObject $wanted
+            if ($ctObject -ne $null) {
+                $typeConditions.Add((New-Object System.Windows.Automation.PropertyCondition($auto::ControlTypeProperty, $ctObject)))
+            }
+        }
+        if ($typeConditions.Count -eq 1) { $condition = $typeConditions[0] }
+        elseif ($typeConditions.Count -gt 1) { $condition = New-Object System.Windows.Automation.OrCondition($typeConditions.ToArray()) }
+    }
+    if ($condition -eq $null) { return @{ ok = $false; error = "not-found" } }
 
     $found = $fg.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
     $matches = New-Object System.Collections.Generic.List[object]
-    $wantedControl = ("" + $target.controlType).ToLowerInvariant()
     foreach ($element in $found) {
         if ($matches.Count -ge 8) { break }
         try {
             if ([bool]$element.Current.IsOffscreen) { continue }
             $ctype = ($element.Current.ControlType.ProgrammaticName -replace '^ControlType\.', '').ToLowerInvariant()
-            if ($wantedControl -and $ctype -ne $wantedControl) { continue }
+            if ($wantedControls.Count -gt 0 -and $wantedControls -notcontains $ctype) { continue }
             $ref = Store-Element $element
             $matches.Add((Describe-Element $element $ref))
         } catch { }

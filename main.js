@@ -956,10 +956,24 @@ app.whenReady().then(async () => {
     getSettings: () => config.getSettings(),
     log,
     onEvent: (payload) => sendEverywhere('screen:drive', payload),
-    requestApproval: null,
+    // A mid-session "will ask again" step: park a resolver in the router's
+    // pending map (so the ordinary approval:resolve IPC answers it) and show
+    // the same approval card UI the rest of the app uses.
+    requestApproval: (card) => new Promise((resolve) => {
+      // Self-cleaning: if nobody answers, the card denies itself and leaves
+      // no stale entry a later click could mistake for a live approval.
+      const settle = (approved) => {
+        router.pending.delete(card.id);
+        clearTimeout(sweeper);
+        resolve(Boolean(approved));
+      };
+      const sweeper = setTimeout(() => settle(false), 70000);
+      router.pending.set(card.id, { type: 'drive-step', resolve: settle });
+      sendEverywhere('screen:drive', { type: 'approval', approval: card });
+    }),
     stopWindow: { open: openDriveStopWindow, update: updateDriveStopWindow, close: closeDriveStopWindow }
   });
-  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader });
+  router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
   scheduleService = new ScheduleService({ store: scheduleStore, config, router, emit: sendEverywhere, log });
   scheduleService.start().catch((error) => {

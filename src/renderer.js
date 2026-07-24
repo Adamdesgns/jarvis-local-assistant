@@ -1178,6 +1178,7 @@ function openSettings() {
   $('setting-mobile-public-url').value = state.settings.mobilePublicUrl || '';
   $('setting-claude-bridge').checked = Boolean(state.settings.claudeBridgeEnabled);
   $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
+  $('setting-screen-drive').checked = Boolean(state.settings.screenDriveEnabled);
   $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
   updateScheduleFormVisibility();
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
@@ -1218,6 +1219,7 @@ async function saveSettings(event) {
     mobilePublicUrl: $('setting-mobile-public-url').value.trim(),
     claudeBridgeEnabled: $('setting-claude-bridge').checked,
     screenControlEnabled: $('setting-screen-control').checked,
+    screenDriveEnabled: $('setting-screen-drive').checked,
     schedulesEnabled: $('setting-schedules').checked,
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots
@@ -1555,6 +1557,10 @@ function bindEvents() {
       playDriveCue('start');
     } else if (event.type === 'step' || event.type === 'awaiting-approval') {
       setCoreState('driving', event.text || 'DRIVING YOUR SCREEN');
+    } else if (event.type === 'approval' && event.approval) {
+      // A mid-session "will ask again" card — same modal, answered through the
+      // same approval:resolve path as every other card.
+      showApproval(event.approval);
     } else if (event.type === 'ended') {
       state.driving = false;
       document.body.classList.remove('busy', 'driving');

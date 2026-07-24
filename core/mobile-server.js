@@ -117,7 +117,10 @@ class MobileServer {
   }
 
   async #chat(res, device, text, transcript = null) {
+    // remote: the person is on their phone, not at the desk. Capabilities
+    // that need eyes on the desktop (screen driving) refuse on this flag.
     const result = await this.router.handle(text, 'general', {
+      remote: true,
       onStep: (step) => this.pushEvent(device.id, 'agent-step', step)
     });
     let reply;

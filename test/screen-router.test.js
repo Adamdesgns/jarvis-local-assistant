@@ -12,9 +12,19 @@ function fakeScreen(overrides = {}) {
   };
 }
 
-function routerWithScreen(screen, settings = {}) {
+function fakeHands(overrides = {}) {
+  const calls = { run: [] };
+  return {
+    calls,
+    isActive: () => false,
+    run: async (plan) => { calls.run.push(plan); return { ok: true, reason: 'done', text: 'Done.' }; },
+    ...overrides
+  };
+}
+
+function routerWithScreen(screen, settings = {}, hands = null) {
   return new CommandRouter({
-    config: { getSettings: () => ({ projects: {}, routines: {}, applications: {}, screenControlEnabled: true, ...settings }) },
+    config: { getSettings: () => ({ projects: {}, routines: {}, applications: {}, screenControlEnabled: true, screenControlAllowlist: ['explorer', 'notepad'], screenDriveEnabled: true, ...settings }) },
     tools: { resolveApplication: () => null, searchFiles: async () => [] },
     documents: null,
     ai: { reply: async () => ({ text: 'brain', ok: true, source: 'ollama' }) },
@@ -23,7 +33,8 @@ function routerWithScreen(screen, settings = {}) {
     log: { write: () => {} },
     cameras: null,
     claude: null,
-    screen
+    screen,
+    hands
   });
 }
 
@@ -84,4 +95,100 @@ test('an unrelated command does not trigger a screen read', async () => {
   const router = routerWithScreen(screen);
   await router.handle('what is the capital of France');
   assert.equal(screen.calls.read, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Driving (slice 2). The gate order is mutation-tested: each refusal below
+// must happen BEFORE the hands are touched, so hands.calls.run stays empty.
+// ---------------------------------------------------------------------------
+
+test('a drive phrase produces a plan card, and approving it runs that frozen plan', async () => {
+  const hands = fakeHands();
+  const router = routerWithScreen(fakeScreen(), {}, hands);
+  const result = await router.handle('click Save');
+  assert.ok(result.approval, 'a plan approval card is offered');
+  assert.equal(result.approval.title, 'DRIVE MY SCREEN');
+  assert.match(result.approval.detail, /Press "Save"/);
+  assert.match(result.approval.detail, /ask again/i, 'a risky step is marked on the card');
+  assert.equal(hands.calls.run.length, 0, 'nothing runs before approval');
+
+  const started = await router.resolveApproval(result.approval.id, true);
+  assert.match(started.response, /STOP window/i);
+  assert.equal(hands.calls.run.length, 1);
+  assert.ok(Object.isFrozen(hands.calls.run[0]), 'the plan arrives frozen');
+  assert.ok(Object.isFrozen(hands.calls.run[0].steps));
+});
+
+test('declining the plan card runs nothing', async () => {
+  const hands = fakeHands();
+  const router = routerWithScreen(fakeScreen(), {}, hands);
+  const result = await router.handle('click Save');
+  const declined = await router.resolveApproval(result.approval.id, false);
+  assert.match(declined.response, /cancelled/i);
+  assert.equal(hands.calls.run.length, 0);
+});
+
+test('unattended: a scheduled task can never drive the screen', async () => {
+  const hands = fakeHands();
+  const router = routerWithScreen(fakeScreen(), {}, hands);
+  const result = await router.handle('click Save', 'general', { unattended: true });
+  assert.equal(hands.calls.run.length, 0);
+  assert.equal(result.approval, undefined);
+  assert.match(result.response, /at the desk/i);
+});
+
+test('remote: the phone can never drive the screen', async () => {
+  const hands = fakeHands();
+  const router = routerWithScreen(fakeScreen(), {}, hands);
+  const result = await router.handle('click Save', 'general', { remote: true });
+  assert.equal(hands.calls.run.length, 0);
+  assert.equal(result.approval, undefined);
+  assert.match(result.response, /not the phone/i);
+});
+
+test('driving is refused while its own setting is off, even with reading on', async () => {
+  const hands = fakeHands();
+  const router = routerWithScreen(fakeScreen(), { screenDriveEnabled: false }, hands);
+  const result = await router.handle('click Save');
+  assert.equal(hands.calls.run.length, 0);
+  assert.match(result.response, /settings/i);
+});
+
+test('driving gracefully reports when no hands are wired in', async () => {
+  const router = routerWithScreen(fakeScreen(), {}, null);
+  const result = await router.handle('click Save');
+  assert.match(result.response, /not set up/i);
+});
+
+test('a second job is refused while a session is active', async () => {
+  const hands = fakeHands({ isActive: () => true });
+  const router = routerWithScreen(fakeScreen(), {}, hands);
+  const result = await router.handle('click Save');
+  assert.equal(hands.calls.run.length, 0);
+  assert.match(result.response, /already driving/i);
+});
+
+test('a phrase the planner cannot shape is refused with guidance, not guessed at', async () => {
+  const hands = fakeHands();
+  const router = routerWithScreen(fakeScreen(), {}, hands);
+  const result = await router.handle('click around and figure out my taxes in explorer somehow please thanks');
+  assert.equal(result.approval, undefined);
+  assert.equal(hands.calls.run.length, 0);
+});
+
+test('a mid-session drive-step card resolves the parked promise', async () => {
+  const router = routerWithScreen(fakeScreen(), {}, fakeHands());
+  let answer = null;
+  router.pending.set('drive-1-step-0', { type: 'drive-step', resolve: (approved) => { answer = approved; } });
+  const result = await router.resolveApproval('drive-1-step-0', true);
+  assert.equal(answer, true);
+  assert.match(result.response, /carrying on/i);
+});
+
+test('an ordinary command still reaches the brain, not the planner', async () => {
+  const hands = fakeHands();
+  const router = routerWithScreen(fakeScreen(), {}, hands);
+  const result = await router.handle('what is the capital of France');
+  assert.equal(hands.calls.run.length, 0);
+  assert.equal(result.source, 'ollama');
 });
