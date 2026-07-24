@@ -51,6 +51,8 @@ const DEFAULT_SETTINGS = {
   autonomyNightStart: 21,
   autonomyNightEnd: 7,
   skin: 'classic',
+  orbSkin: 'original',
+  orbColor: 'gold',
   voiceName: '',
   orbBounds: null,
   moduleLayout: {

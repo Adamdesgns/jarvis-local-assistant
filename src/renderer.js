@@ -1184,6 +1184,17 @@ function openSettings() {
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
   $('setting-motion').value = state.settings.motionMode || 'cinematic';
   $('setting-skin').value = state.settings.skin || 'classic';
+  const orbSkinSelect = $('setting-orb-skin');
+  if (orbSkinSelect && window.OrbEngine) {
+    orbSkinSelect.replaceChildren(...window.OrbEngine.list().map((skin) => {
+      const option = document.createElement('option');
+      option.value = skin.name;
+      option.textContent = skin.label.toUpperCase();
+      return option;
+    }));
+    orbSkinSelect.value = state.settings.orbSkin || 'original';
+  }
+  $('setting-orb-color').value = state.settings.orbColor || 'gold';
   populateVoiceSelect();
   fillHourSelect($('setting-autonomy-night-start'));
   fillHourSelect($('setting-autonomy-night-end'));
@@ -1226,6 +1237,8 @@ async function saveSettings(event) {
     startWithWindows: $('setting-startup').checked,
     motionMode: $('setting-motion').value,
     skin: $('setting-skin').value,
+    orbSkin: $('setting-orb-skin').value || 'original',
+    orbColor: $('setting-orb-color').value || 'gold',
     voiceName: $('setting-voice-name').value,
     autonomyEnabled: $('setting-autonomy').checked,
     autonomyRules: {
@@ -1634,6 +1647,8 @@ function bindEvents() {
     window.JarvisCommandCenter?.setResponse?.(step.summary);
   });
   $('setting-skin').addEventListener('change', (event) => applySkin(event.target.value));
+  $('setting-orb-skin').addEventListener('change', (event) => window.jarvisHologram?.applySettings({ skin: event.target.value }));
+  $('setting-orb-color').addEventListener('change', (event) => window.jarvisHologram?.applySettings({ color: event.target.value }));
   $('audition-voice').addEventListener('click', auditionVoice);
   speechSynthesis.addEventListener?.('voiceschanged', () => { if ($('settings-modal').open) populateVoiceSelect(); });
   window.jarvis.onAutonomyEvent((action) => {
@@ -1651,6 +1666,7 @@ async function initialize() {
   try {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
+    window.jarvisHologram?.applySettings({ skin: state.settings.orbSkin, color: state.settings.orbColor });
     applySkin(state.settings.skin || 'classic');
     state.tasks = bootstrap.tasks;
     state.memories = bootstrap.memories;

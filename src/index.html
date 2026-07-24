@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src http://127.0.0.1:* ws://127.0.0.1:*;">
     <title>JARVIS · Local Assistant</title>
+    <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="command-center.css">
   </head>
@@ -16,12 +17,12 @@
     <header class="topbar">
       <div class="brand">
         <div class="mini-core"><i></i></div>
-        <div><strong>JARVIS</strong><span>PRIVATE LOCAL ASSISTANT</span></div>
+        <div><strong>JARVIS</strong><span>Private local assistant</span></div>
       </div>
       <div class="system-state"><i id="status-dot"></i><span id="system-status">LOCAL CORE STARTING</span></div>
       <div class="top-actions">
-        <button id="modules-button" class="hud-button"><b>＋</b> MODULES</button>
-        <button id="layout-button" class="hud-button"><b>⌘</b> EDIT LAYOUT</button>
+        <button id="modules-button" class="hud-button"><b>＋</b> Modules</button>
+        <button id="layout-button" class="hud-button"><b>⌘</b> Edit layout</button>
         <button id="settings-button" class="icon-button" title="Settings">⚙</button>
         <button class="window-button" data-window="minimize">—</button>
         <button class="window-button" data-window="maximize">□</button>
@@ -31,8 +32,8 @@
 
     <main id="workspace" class="workspace">
       <section class="jarvis-stage" id="jarvis-stage">
-        <div class="stage-label left"><span>OPERATING MODE</span><b>LOCAL · PRIVATE · FREE</b></div>
-        <div class="stage-label right"><span>ACTIVE PROJECT</span><b id="active-project">GENERAL</b></div>
+        <div class="stage-label left"><span>Operating mode</span><b>Local · Private</b></div>
+        <div class="stage-label right"><span>Active project</span><b id="active-project">GENERAL</b></div>
         <canvas id="hologram" aria-label="Animated JARVIS holographic sphere"></canvas>
         <div class="central-copy">
           <span id="core-kicker">AWAITING DIRECTIVE</span>
@@ -47,7 +48,7 @@
 
       <section id="module-layer" class="module-layer">
         <article class="module" data-module="tasks">
-          <header class="module-header drag-handle"><div><span>01 // WORK QUEUE</span><h2>TODAY’S TASKS</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Work queue</span><h2>Today’s tasks</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content">
             <form id="quick-task-form" class="inline-entry"><input id="quick-task-input" placeholder="Add something you need to finish…"><button>ADD</button></form>
             <div class="task-filters"><button class="active" data-task-filter="open">OPEN</button><button data-task-filter="today">TODAY</button><button data-task-filter="project">PROJECT</button><button data-task-filter="all">ALL</button><span id="task-count">0 OPEN</span></div>
@@ -57,7 +58,7 @@
         </article>
 
         <article class="module hidden-module" data-module="file-explorer">
-          <header class="module-header drag-handle"><div><span>02 // LIVE SEARCH</span><h2>JARVIS FILE EXPLORER</h2></div><div class="module-actions"><button id="file-collapse">−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Live search</span><h2>File explorer</h2></div><div class="module-actions"><button id="file-collapse">−</button><button data-hide>×</button></div></header>
           <div class="module-content explorer-content">
             <div class="explorer-toolbar">
               <button id="file-up" title="Up one folder">↑</button>
@@ -78,7 +79,7 @@
         </article>
 
         <article class="module hidden-module" data-module="performance">
-          <header class="module-header drag-handle"><div><span>03 // TELEMETRY</span><h2>PC PERFORMANCE</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Telemetry</span><h2>PC performance</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content performance-grid">
             <div class="meter" id="cpu-meter"><b id="cpu-value">0</b><span>% CPU</span></div>
             <div class="meter" id="ram-meter"><b id="ram-value">0</b><span>% MEMORY</span></div>
@@ -88,13 +89,13 @@
         </article>
 
         <article class="module hidden-module" data-module="memory">
-          <header class="module-header drag-handle"><div><span>04 // KNOWLEDGE</span><h2>MEMORY</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Knowledge</span><h2>Memory</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content"><form id="memory-form" class="inline-entry"><input id="memory-input" placeholder="Remember something…"><button>STORE</button></form><input id="memory-search" class="memory-search" placeholder="Search memories…"><div id="memory-list" class="memory-list"></div></div>
           <i class="resize-handle"></i>
         </article>
 
         <article class="module hidden-module" data-module="projects">
-          <header class="module-header drag-handle"><div><span>05 // CONTEXT</span><h2>PROJECTS</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Context</span><h2>Projects</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content project-list">
             <button data-project="general" class="active"><i></i><span>GENERAL</span><b>PERSONAL</b></button>
             <button data-project="anvil"><i></i><span>ANVIL</span><b>BUSINESS</b></button>
@@ -105,13 +106,13 @@
         </article>
 
         <article class="module hidden-module" data-module="activity">
-          <header class="module-header drag-handle"><div><span>06 // AUDIT</span><h2>RECENT ACTIVITY</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Audit</span><h2>Recent activity</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content"><div id="activity-list" class="activity-list"></div></div>
           <i class="resize-handle"></i>
         </article>
 
         <article class="module hidden-module" data-module="quick-commands">
-          <header class="module-header drag-handle"><div><span>07 // SHORTCUTS</span><h2>QUICK COMMANDS</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Shortcuts</span><h2>Quick commands</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content quick-grid">
             <button data-command="Morning briefing"><span>START</span>BRIEFING</button>
             <button data-command="Look at my screen"><span>VIEW</span>MY SCREEN</button>
@@ -126,13 +127,13 @@
         </article>
 
         <article class="module hidden-module" data-module="document-viewer">
-          <header class="module-header drag-handle"><div><span>08 // DOCUMENT INTELLIGENCE</span><h2 id="document-title">DOCUMENT SUMMARY</h2></div><div class="module-actions"><button id="copy-document-output" title="Copy summary">COPY</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Document intelligence</span><h2 id="document-title">DOCUMENT SUMMARY</h2></div><div class="module-actions"><button id="copy-document-output" title="Copy summary">COPY</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content document-content"><pre id="document-output">Ask JARVIS to read or summarize a document.</pre></div>
           <i class="resize-handle"></i>
         </article>
 
         <article class="module hidden-module" data-module="cameras">
-          <header class="module-header drag-handle"><div><span>09 // SURVEILLANCE</span><h2>CAMERAS</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Add cameras">＋ ADD</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Surveillance</span><h2>Cameras</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Add cameras">＋ ADD</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content cameras-content">
             <form id="camera-add-form" class="camera-add-form" hidden>
               <div class="camera-brand-tabs"><button type="button" class="active" data-camera-brand="rtsp">LOCAL (RTSP)</button><button type="button" data-camera-brand="blink">BLINK</button><button type="button" data-camera-brand="ring">RING</button><button type="button" data-camera-brand="nest">NEST (ADVANCED)</button></div>
@@ -321,6 +322,8 @@
             <label class="toggle-row"><span><b>START WITH WINDOWS</b><small>Launch automatically at sign-in</small></span><input id="setting-startup" type="checkbox"><i></i></label>
             <label>ANIMATION MODE<select id="setting-motion"><option value="cinematic">FULL CINEMATIC</option><option value="fast">FAST</option><option value="reduced">REDUCED MOTION</option></select></label>
             <label>SKIN<select id="setting-skin"><option value="classic">CLASSIC AMBER</option><option value="command-center">COMMAND CENTER BLUE</option></select></label>
+                <label>ORB SKIN<select id="setting-orb-skin"></select></label>
+                <label>ORB COLOR<select id="setting-orb-color"><option value="gold">GOLD</option><option value="obsidian">OBSIDIAN</option></select></label>
             <label>JARVIS VOICE<select id="setting-voice-name"><option value="">AUTO · BRITISH IF AVAILABLE</option></select></label>
             <button type="button" id="audition-voice" class="outline-action">▶ HEAR THIS VOICE</button>
             <small>For the classic JARVIS feel, install a UK English voice: Windows Settings → Time &amp; Language → Speech → Add voices → English (United Kingdom), then pick “Ryan” or “George” here.</small>
@@ -456,6 +459,13 @@
     <div id="screen-privacy" class="screen-privacy" aria-live="polite"><i></i> JARVIS IS VIEWING YOUR SCREEN</div>
     <div id="action-timeline" class="action-timeline" aria-label="Recent JARVIS actions"></div>
     <div id="toast" class="toast"></div>
+    <script src="orbs/orb-engine.js"></script>
+    <script src="orbs/plasma.js"></script>
+    <script src="orbs/neural.js"></script>
+    <script src="orbs/classic.js"></script>
+    <script src="orbs/zen.js"></script>
+    <script src="orbs/halation.js"></script>
+    <script src="orbs/aurora.js"></script>
     <script src="hologram.js"></script>
     <script src="layout-engine.js"></script>
     <script src="skins.js"></script>
