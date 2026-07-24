@@ -8,7 +8,7 @@ function windowsHomeFolder(name) {
 }
 
 const DEFAULT_SETTINGS = {
-  settingsVersion: 6,
+  settingsVersion: 7,
   profileName: 'User',
   assistantName: 'JARVIS',
   aiMode: 'local',
@@ -22,6 +22,12 @@ const DEFAULT_SETTINGS = {
   localVoiceModel: 'small.en',
   wakeWordEnabled: true,
   wakeSensitivity: 0.58,
+  claudeBridgeEnabled: false,
+  claudeBridgeSessionId: '',
+  claudeCliPath: '',
+  screenControlEnabled: false,
+  screenControlAllowlist: ['explorer', 'notepad'],
+  screenDriveEnabled: false,
   mobileEnabled: false,
   mobilePort: 27183,
   mobilePublicUrl: '',
@@ -45,6 +51,8 @@ const DEFAULT_SETTINGS = {
   autonomyNightStart: 21,
   autonomyNightEnd: 7,
   skin: 'classic',
+  orbSkin: 'original',
+  orbColor: 'gold',
   voiceName: '',
   orbBounds: null,
   moduleLayout: {

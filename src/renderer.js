@@ -1,3 +1,25 @@
+// Last-resort safety net: anything that escapes every try/catch in this
+// window is reported to the main-process crash log instead of vanishing.
+// Guarded like the exports below: node:test requires this file without a window.
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    window.jarvis.reportError({
+      source: 'main-window',
+      message: event.message,
+      stack: event.error ? event.error.stack : `${event.filename}:${event.lineno}:${event.colno}`
+    });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    window.jarvis.reportError({
+      source: 'main-window',
+      name: reason && reason.name,
+      message: (reason && reason.message) || String(reason),
+      stack: reason && reason.stack
+    });
+  });
+}
+
 const $ = (id) => document.getElementById(id);
 const RESET_LAYOUT = {
   tasks: { x: 74, y: 8, w: 24, h: 58 }, performance: { x: 2, y: 8, w: 22, h: 44 },
@@ -68,7 +90,7 @@ function isInterrupt(transcript) {
 }
 
 function setCoreState(coreState, kicker) {
-  const labels = { ready: 'READY', listening: 'LISTENING', processing: 'PROCESSING', speaking: 'RESPONDING', error: 'ATTENTION', exploding: 'SEARCHING' };
+  const labels = { ready: 'READY', listening: 'LISTENING', processing: 'PROCESSING', speaking: 'RESPONDING', error: 'ATTENTION', exploding: 'SEARCHING', driving: 'HANDS ON SCREEN' };
   $('core-state').textContent = labels[coreState] || coreState.toUpperCase();
   $('core-kicker').textContent = kicker || (coreState === 'ready' ? 'AWAITING DIRECTIVE' : 'LOCAL NEURAL PATH ACTIVE');
   document.body.classList.toggle('listening', coreState === 'listening');
@@ -292,6 +314,31 @@ function startSpeechWatchdog() {
       stopSpeechWatchdog();
     }
   }, 300);
+}
+
+// A short two-tone chime marking the moment JARVIS's hands go on (rising) and
+// off (falling) the screen — audible even if you aren't looking at the orb or
+// the STOP window. Synthesized so there is no audio asset to ship.
+let driveAudioContext = null;
+function playDriveCue(kind) {
+  try {
+    driveAudioContext = driveAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+    const context = driveAudioContext;
+    const tones = kind === 'start' ? [523, 784] : [784, 523];
+    tones.forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const at = context.currentTime + index * 0.14;
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.18, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.13);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(at);
+      oscillator.stop(at + 0.15);
+    });
+  } catch { /* a missing chime must never break a session */ }
 }
 
 function speak(message, retry = false) {
@@ -1137,6 +1184,17 @@ function openSettings() {
   $('setting-startup').checked = Boolean(state.settings.startWithWindows);
   $('setting-motion').value = state.settings.motionMode || 'cinematic';
   $('setting-skin').value = state.settings.skin || 'classic';
+  const orbSkinSelect = $('setting-orb-skin');
+  if (orbSkinSelect && window.OrbEngine) {
+    orbSkinSelect.replaceChildren(...window.OrbEngine.list().map((skin) => {
+      const option = document.createElement('option');
+      option.value = skin.name;
+      option.textContent = skin.label.toUpperCase();
+      return option;
+    }));
+    orbSkinSelect.value = state.settings.orbSkin || 'original';
+  }
+  $('setting-orb-color').value = state.settings.orbColor || 'gold';
   populateVoiceSelect();
   fillHourSelect($('setting-autonomy-night-start'));
   fillHourSelect($('setting-autonomy-night-end'));
@@ -1151,6 +1209,9 @@ function openSettings() {
   $('setting-mobile').checked = Boolean(state.settings.mobileEnabled);
   $('setting-mobile-port').value = state.settings.mobilePort || 27183;
   $('setting-mobile-public-url').value = state.settings.mobilePublicUrl || '';
+  $('setting-claude-bridge').checked = Boolean(state.settings.claudeBridgeEnabled);
+  $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
+  $('setting-screen-drive').checked = Boolean(state.settings.screenDriveEnabled);
   $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
   updateScheduleFormVisibility();
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
@@ -1176,6 +1237,8 @@ async function saveSettings(event) {
     startWithWindows: $('setting-startup').checked,
     motionMode: $('setting-motion').value,
     skin: $('setting-skin').value,
+    orbSkin: $('setting-orb-skin').value || 'original',
+    orbColor: $('setting-orb-color').value || 'gold',
     voiceName: $('setting-voice-name').value,
     autonomyEnabled: $('setting-autonomy').checked,
     autonomyRules: {
@@ -1189,6 +1252,9 @@ async function saveSettings(event) {
     mobileEnabled: $('setting-mobile').checked,
     mobilePort: Number($('setting-mobile-port').value) || 27183,
     mobilePublicUrl: $('setting-mobile-public-url').value.trim(),
+    claudeBridgeEnabled: $('setting-claude-bridge').checked,
+    screenControlEnabled: $('setting-screen-control').checked,
+    screenDriveEnabled: $('setting-screen-drive').checked,
     schedulesEnabled: $('setting-schedules').checked,
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots
@@ -1514,6 +1580,33 @@ function bindEvents() {
   window.jarvis.onScreenViewing(({ active }) => {
     $('screen-privacy').classList.toggle('visible', Boolean(active));
   });
+  // Driving sessions: orb goes amber-busy, an audio cue marks the start and
+  // end, and Escape becomes a kill switch for the whole session (the main
+  // process routes ai:cancel to the hands as well as the brain).
+  window.jarvis.onScreenDrive((event) => {
+    if (!event || !event.type) return;
+    if (event.type === 'started') {
+      state.driving = true;
+      document.body.classList.add('busy', 'driving');
+      setCoreState('driving', 'DRIVING YOUR SCREEN');
+      playDriveCue('start');
+    } else if (event.type === 'step' || event.type === 'awaiting-approval') {
+      setCoreState('driving', event.text || 'DRIVING YOUR SCREEN');
+    } else if (event.type === 'approval' && event.approval) {
+      // A mid-session "will ask again" card — same modal, answered through the
+      // same approval:resolve path as every other card.
+      showApproval(event.approval);
+    } else if (event.type === 'ended') {
+      state.driving = false;
+      document.body.classList.remove('busy', 'driving');
+      setCoreState('ready');
+      playDriveCue('end');
+      if (event.text) {
+        setResponse(event.text);
+        speak(event.text);
+      }
+    }
+  });
   $('ai-stop').addEventListener('click', () => interruptJarvis());
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
@@ -1554,6 +1647,8 @@ function bindEvents() {
     window.JarvisCommandCenter?.setResponse?.(step.summary);
   });
   $('setting-skin').addEventListener('change', (event) => applySkin(event.target.value));
+  $('setting-orb-skin').addEventListener('change', (event) => window.jarvisHologram?.applySettings({ skin: event.target.value }));
+  $('setting-orb-color').addEventListener('change', (event) => window.jarvisHologram?.applySettings({ color: event.target.value }));
   $('audition-voice').addEventListener('click', auditionVoice);
   speechSynthesis.addEventListener?.('voiceschanged', () => { if ($('settings-modal').open) populateVoiceSelect(); });
   window.jarvis.onAutonomyEvent((action) => {
@@ -1571,6 +1666,7 @@ async function initialize() {
   try {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
+    window.jarvisHologram?.applySettings({ skin: state.settings.orbSkin, color: state.settings.orbColor });
     applySkin(state.settings.skin || 'classic');
     state.tasks = bootstrap.tasks;
     state.memories = bootstrap.memories;

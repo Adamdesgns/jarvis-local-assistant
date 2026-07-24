@@ -1,3 +1,25 @@
+// Last-resort safety net: anything that escapes every try/catch in this
+// window is reported to the main-process crash log instead of vanishing.
+// Guarded like renderer.js: harmless if this file is ever required by tests.
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    window.jarvis.reportError({
+      source: 'widget',
+      message: event.message,
+      stack: event.error ? event.error.stack : `${event.filename}:${event.lineno}:${event.colno}`
+    });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    window.jarvis.reportError({
+      source: 'widget',
+      name: reason && reason.name,
+      message: (reason && reason.message) || String(reason),
+      stack: reason && reason.stack
+    });
+  });
+}
+
 const orb = document.getElementById('orb');
 const label = document.getElementById('orb-label');
 

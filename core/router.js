@@ -1,5 +1,17 @@
 const crypto = require('node:crypto');
 const { classifyCommand } = require('./security');
+const { buildDrivePlan, describePlan } = require('./screen-planner');
+
+// An approved drive plan must be exactly what was shown on the card — frozen
+// all the way down before it is stored, so nothing between approval and
+// execution can add or alter a step.
+function deepFreezePlan(value) {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Object.keys(value)) deepFreezePlan(value[key]);
+  }
+  return value;
+}
 
 function cleanTarget(value) {
   return String(value || '')
@@ -49,7 +61,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -58,6 +70,9 @@ class CommandRouter {
     this.tasks = tasks;
     this.log = log;
     this.cameras = cameras || null;
+    this.claude = claude || null;
+    this.screen = screen || null;
+    this.hands = hands || null;
     this.pending = new Map();
   }
 
@@ -86,6 +101,85 @@ class CommandRouter {
     return this.#result(`${camera.name}: ${described.text}`, 'cameras');
   }
 
+  // Hands a question to Claude Code on this PC and speaks the answer back.
+  // Answers only — the bridge blocks every tool that could change anything.
+  async #askClaude(question, stream = {}) {
+    if (stream.unattended) {
+      return this.#result('Asking Claude needs you at the desk, sir — I\'ve left it for you.', 'claude', { success: false });
+    }
+    if (!this.config.getSettings().claudeBridgeEnabled) {
+      return this.#result('Ask Claude is switched off. You can turn it on in Settings.', 'claude', { success: false });
+    }
+    if (!this.claude) {
+      return this.#result('The Claude connection is not set up on this PC.', 'claude', { success: false });
+    }
+    if (/^(?:new conversation|new chat|start over|fresh start)$/i.test(question)) {
+      this.claude.newConversation();
+      return this.#result('Starting a fresh conversation with Claude.', 'claude');
+    }
+    if (!question) {
+      return this.#result('What would you like me to ask Claude?', 'claude', { success: false });
+    }
+    const answer = await this.claude.ask(question);
+    return this.#result(answer.text, 'claude', { success: answer.ok });
+  }
+
+  // Reads the screen through Windows UI Automation and reports what's there.
+  // Slice 1 of JARVIS's "hands": it reads only — nothing is clicked or typed.
+  // Off by default, and never runs unattended, so a scheduled task can't quietly
+  // photograph the desktop. The financial/credential/system guards live inside
+  // the reader itself, not here.
+  async #readScreen(stream = {}) {
+    if (stream.unattended) {
+      return this.#result("Reading your screen needs you at the desk, sir — I've left it for you.", 'screen', { success: false });
+    }
+    if (!this.config.getSettings().screenControlEnabled) {
+      return this.#result('Reading the screen is switched off. You can turn it on in Settings.', 'screen', { success: false });
+    }
+    if (!this.screen) {
+      return this.#result('Screen reading is not set up on this PC.', 'screen', { success: false });
+    }
+    const seen = await this.screen.read();
+    return this.#result(seen.text, 'screen', { success: seen.ok, blockedCategory: seen.blockedCategory });
+  }
+
+  // Slice 2 of JARVIS's "hands": clicking and typing, behind an approval
+  // card. The gate order matters and is mutation-tested: unattended, remote
+  // (a phone can't see the STOP window), the setting, the service — only then
+  // is a plan even built. The plan is deep-frozen before the card is shown;
+  // approving runs exactly that object and nothing else.
+  #driveScreen(text, stream = {}) {
+    if (stream.unattended) {
+      return this.#result("Driving your screen needs you at the desk, sir — I've left it for you.", 'screen', { success: false });
+    }
+    if (stream.remote) {
+      return this.#result('Driving the screen only works from the desk, not the phone — you need to be able to see the STOP button.', 'screen', { success: false });
+    }
+    const settings = this.config.getSettings();
+    if (!settings.screenDriveEnabled) {
+      return this.#result('Driving the screen is switched off. You can turn it on in Settings under SCREEN DRIVING.', 'screen', { success: false });
+    }
+    if (!this.hands) {
+      return this.#result('Screen driving is not set up on this PC.', 'screen', { success: false });
+    }
+    if (this.hands.isActive?.()) {
+      return this.#result("I'm already driving — one thing at a time. Say stop to take over.", 'screen', { success: false });
+    }
+    const planned = buildDrivePlan(text, settings);
+    if (!planned.ok) {
+      return this.#result(planned.text, 'screen', { success: false });
+    }
+    deepFreezePlan(planned.plan);
+    const id = crypto.randomUUID();
+    this.pending.set(id, { type: 'drive-plan', plan: planned.plan });
+    const stepCount = planned.plan.steps.length;
+    return this.#result(
+      `Here's the plan — ${stepCount} step${stepCount === 1 ? '' : 's'}. A STOP window stays on screen the whole time, and Escape or saying stop ends it instantly.`,
+      'screen',
+      { approval: { id, title: 'DRIVE MY SCREEN', detail: describePlan(planned.plan), risk: 'HIGH' } }
+    );
+  }
+
   async handle(rawText, project = 'general', stream = {}) {
     const text = cleanTarget(rawText);
     if (!text) return this.#result('I didn’t catch a command.', 'local-core');
@@ -111,6 +205,43 @@ class CommandRouter {
     const settings = this.config.getSettings();
     let result;
     const smallTalk = smallTalkReply(text);
+
+    // "ask Claude ..." is checked before every other branch so the question is
+    // never answered by the local brain first. Matched on a word boundary so
+    // "ask Claudia ..." stays a normal request.
+    const claudeAsk = text.match(/^(?:jarvis[,\s]*)?ask\s+claude\b[,:]?\s*(.*)$/i);
+    if (claudeAsk) {
+      const askResult = await this.#askClaude(cleanTarget(claudeAsk[1]), stream);
+      this.#log(text, askResult);
+      return askResult;
+    }
+
+    // "read my screen" / "what's on my screen" / "what windows are open" — the
+    // structural screen read (distinct from the cloud-vision "look at my
+    // screen", which describes a screenshot). Checked before the camera and
+    // brain branches so the phrasing is never answered by anything else.
+    const screenAsk = /^(?:jarvis[,\s]*)?(?:can you\s+)?(?:read|check)\s+(?:my|the)\s+screen\b|^what(?:'s| is| are)\s+(?:on\s+)?(?:my|the)\s+(?:screen|display)\b|^what\s+windows?\s+(?:are|do i have)\b|^what\s+am\s+i\s+looking\s+at\b/i;
+    if (screenAsk.test(text)) {
+      const seenResult = await this.#readScreen(stream);
+      this.#log(text, seenResult);
+      return seenResult;
+    }
+
+    // Driving phrases — deliberately narrow shapes ("click X", "press X",
+    // "type X into notepad", "open the X menu", "select X in explorer",
+    // "switch to notepad") so ordinary requests never wander into a drive
+    // plan. Checked before the camera and brain branches; classifyCommand has
+    // already hard-blocked buy/pay/password phrasings above.
+    const driveAsk = /^(?:jarvis[,\s]*)?(?:click|press)\s+/i.test(text)
+      || /^(?:jarvis[,\s]*)?type\s+.+\s+in(?:to)?\s+notepad$/i.test(text)
+      || /^(?:jarvis[,\s]*)?open\s+the\s+.+?\s+menu\b/i.test(text)
+      || /^(?:jarvis[,\s]*)?select\s+.+\s+in\s+(?:file\s+)?explorer$/i.test(text)
+      || /^(?:jarvis[,\s]*)?switch\s+to\s+(?:notepad|(?:file\s+)?explorer|files)$/i.test(text);
+    if (driveAsk) {
+      const driveResult = this.#driveScreen(text, stream);
+      this.#log(text, driveResult);
+      return driveResult;
+    }
 
     const cameraLook = await this.#cameraLook(text);
     if (cameraLook) {
@@ -460,6 +591,19 @@ class CommandRouter {
     if (action.type === 'power') {
       const executed = await this.tools.executePowerAction(action.action);
       return this.#result(executed.message, 'windows', { success: executed.ok });
+    }
+    if (action.type === 'drive-plan') {
+      if (!this.hands) return this.#result('Screen driving is not set up on this PC.', 'screen', { success: false });
+      // Fire and forget: the session narrates itself through screen:drive
+      // events and speaks its own ending. The plan object is the frozen one.
+      this.hands.run(action.plan);
+      return this.#result('Starting. The STOP window is up — press it, hit Escape, or say stop at any time.', 'screen', { success: true });
+    }
+    if (action.type === 'drive-step') {
+      // A mid-session "will ask again" card: hand the answer back to the
+      // waiting session.
+      try { action.resolve(Boolean(approved)); } catch { /* session may have timed out */ }
+      return this.#result(approved ? 'Approved — carrying on.' : "Understood — I didn't do it, and I've stopped.", 'screen', { success: true });
     }
     // File work runs immediately now (see #runFileAction) and never queues a
     // pending approval, so there is intentionally no 'file' case here any

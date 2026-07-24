@@ -3,3 +3,4 @@ node_modules/
 dist/
 *.log
 JARVIS-ROADMAP-AND-CLAUDE-HANDOFF.md
+_git_lock_quarantine/

@@ -19,7 +19,14 @@ function mergeSettings(defaults, saved) {
   if (Number(saved?.settingsVersion || 0) < 6) {
     result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'cameras'])];
   }
-  result.settingsVersion = 6;
+  if (Number(saved?.settingsVersion || 0) < 7) {
+    // v1 of screen driving: Explorer + Notepad only. Installs that saved the
+    // old ['explorer', 'chrome'] default get pulled back — Chrome waits for
+    // v2. screen-guard's V1_DRIVE_APPS clamps this in code as well; this
+    // migration just keeps settings.json honest about what is possible.
+    result.screenControlAllowlist = ['explorer', 'notepad'];
+  }
+  result.settingsVersion = 7;
   result.cameraAccounts = Array.isArray(result.cameraAccounts) ? result.cameraAccounts : [];
   if (!['local', 'cloud', 'auto'].includes(result.aiMode)) result.aiMode = 'local';
   // Never allow a stale V1 address to redirect the private local Ollama connection.
@@ -76,7 +83,16 @@ class ConfigStore {
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
       'autonomyEnabled', 'schedulesEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
-      'skin', 'voiceName', 'orbBounds', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl'
+      'skin', 'voiceName', 'orbBounds', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl',
+      // Ask-Claude bridge: these existed in defaults but were never in this
+      // allowlist, so the Settings toggle and the stored conversation id were
+      // silently dropped by updateSettings. Persist them.
+      'claudeBridgeEnabled', 'claudeBridgeSessionId', 'claudeCliPath',
+      // Screen reading (JARVIS's "hands", slice 1) — off by default.
+      'screenControlEnabled', 'screenControlAllowlist',
+      // Screen driving (slice 2) — its own switch, off by default, so reading
+      // can be on while the hands stay off.
+      'screenDriveEnabled'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {

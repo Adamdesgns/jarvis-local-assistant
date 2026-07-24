@@ -219,6 +219,15 @@
       if (!this._paused && !this._running) { this._running = true; requestAnimationFrame((time) => this.draw(time)); }
     }
 
+    // Orb-skin contract: the original is amber by design; palette is accepted
+    // for interface parity and ignored.
+    setPalette() {}
+
+    destroy() {
+      this._paused = true;
+      this.resizeObserver.disconnect();
+    }
+
     draw(time) {
       if (this._paused) { this._running = false; return; }
       this._running = true;
@@ -265,7 +274,66 @@
     }
   }
 
+  // The original amber hologram is skin #1 of the orb engine.
+  if (window.OrbEngine) {
+    window.OrbEngine.register('original', {
+      label: 'Original',
+      create: (canvas) => new JarvisHologram(canvas)
+    });
+  }
+
+  // OrbHost: same public surface renderer.js always used (setState,
+  // setAudioLevel, setPaused), plus applySettings to swap skin/color live.
+  class OrbHost {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.state = 'ready';
+      this.audioLevel = 0;
+      this.paused = false;
+      this.palette = 'gold';
+      this.skinName = null;
+      this.instance = null;
+      this.applySettings({ skin: 'original', color: 'gold' });
+    }
+
+    applySettings({ skin, color } = {}) {
+      const engine = window.OrbEngine;
+      if (color !== undefined) this.palette = engine ? engine.normalizePalette(color) : 'gold';
+      const resolved = engine ? engine.resolve(skin === undefined ? this.skinName : skin) : null;
+      if (resolved && resolved.name !== this.skinName) {
+        if (this.instance && this.instance.destroy) this.instance.destroy();
+        // A canvas can only ever hold one context type (2d vs WebGL), so a
+        // skin swap always gets a fresh canvas with the same id/attributes.
+        const fresh = this.canvas.cloneNode(false);
+        this.canvas.replaceWith(fresh);
+        this.canvas = fresh;
+        this.skinName = resolved.name;
+        this.instance = resolved.create(fresh);
+      }
+      if (!this.instance) return;
+      if (this.instance.setPalette) this.instance.setPalette(this.palette);
+      this.instance.setState(this.state);
+      if (this.instance.setAudioLevel) this.instance.setAudioLevel(this.audioLevel);
+      this.instance.setPaused(this.paused);
+    }
+
+    setState(state) {
+      this.state = state || 'ready';
+      if (this.instance) this.instance.setState(this.state);
+    }
+
+    setAudioLevel(level) {
+      this.audioLevel = level;
+      if (this.instance && this.instance.setAudioLevel) this.instance.setAudioLevel(level);
+    }
+
+    setPaused(paused) {
+      this.paused = Boolean(paused);
+      if (this.instance) this.instance.setPaused(this.paused);
+    }
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
-    window.jarvisHologram = new JarvisHologram(document.getElementById('hologram'));
+    window.jarvisHologram = new OrbHost(document.getElementById('hologram'));
   });
 })();

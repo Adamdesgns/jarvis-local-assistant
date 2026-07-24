@@ -707,6 +707,36 @@ test('settings merge preserves nested defaults', () => {
   assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).schedulesEnabled, false);
 });
 
+test('v7 migration pulls chrome out of the drive allowlist saved by older installs', () => {
+  const migrated = mergeSettings(DEFAULT_SETTINGS, {
+    settingsVersion: 6,
+    screenControlAllowlist: ['explorer', 'chrome']
+  });
+  assert.deepEqual(migrated.screenControlAllowlist, ['explorer', 'notepad']);
+  assert.equal(migrated.settingsVersion, 7);
+  // A current install's list is left alone.
+  const current = mergeSettings(DEFAULT_SETTINGS, {
+    settingsVersion: 7,
+    screenControlAllowlist: ['notepad']
+  });
+  assert.deepEqual(current.screenControlAllowlist, ['notepad']);
+});
+
+test('screenDriveEnabled defaults off and survives updateSettings', () => {
+  assert.equal(mergeSettings(DEFAULT_SETTINGS, {}).screenDriveEnabled, false);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-config-'));
+  try {
+    const store = new ConfigStore(dir);
+    assert.equal(store.getSettings().screenDriveEnabled, false);
+    const updated = store.updateSettings({ screenDriveEnabled: true });
+    assert.equal(updated.screenDriveEnabled, true);
+    const reloaded = new ConfigStore(dir);
+    assert.equal(reloaded.getSettings().screenDriveEnabled, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('config store persists mobile settings through updateSettings', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-config-'));
   try {

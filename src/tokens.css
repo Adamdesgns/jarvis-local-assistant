@@ -1,0 +1,101 @@
+/* ============================================================
+   JARVIS design tokens — the single source of truth.
+   Every surface (classic skin, command center, widget, future
+   mobile parity) reads from here. One gold. One type system.
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  /* The one gold ramp — every amber in the app derives from these. */
+  --gold-50: #fff7e6;
+  --gold-100: #ffe7b8;
+  --gold-200: #ffd48a;
+  --gold-300: #ffc355;
+  --gold-400: #ffb21f;   /* anchor — THE JARVIS gold */
+  --gold-500: #e79a12;
+  --gold-600: #c07c0d;
+  --gold-800: #6e4405;
+
+  /* Accent slots (gold by default; future accent packs override these). */
+  --accent: var(--gold-400);
+  --accent-bright: var(--gold-200);
+  --accent-deep: var(--gold-600);
+  --accent-tint-06: rgba(255, 178, 31, .06);
+  --accent-tint-10: rgba(255, 178, 31, .10);
+  --accent-tint-20: rgba(255, 178, 31, .20);
+  --accent-tint-35: rgba(255, 178, 31, .35);
+
+  /* Neutrals — deep warm black, glass surfaces, hairlines. */
+  --bg: #050607;
+  --bg-raise: #0b0c0d;
+  --surface-glass: rgba(16, 15, 13, .72);
+  --surface-solid: #0d0e10;
+  --surface-input: rgba(0, 0, 0, .35);
+  --line: rgba(255, 255, 255, .09);
+  --line-strong: rgba(255, 255, 255, .16);
+  --line-accent: rgba(255, 178, 31, .28);
+
+  /* Text — warm neutrals, readable floor of 11px. */
+  --text-primary: #ece7db;
+  --text-secondary: #a8a195;
+  --text-muted: #6f6a61;
+  --danger: #ff665c;
+  --danger-tint: rgba(255, 102, 92, .1);
+  --success: #61efb2;
+  --success-tint: rgba(97, 239, 178, .1);
+
+  /* Type — one family, two voices. Bahnschrift is retired. */
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --tech: var(--font-display); /* legacy alias — old rules keep working */
+  --ui: var(--font);           /* fixes the never-defined --ui fallback bug */
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 19px;
+  --text-display: 27px;
+  --track-wide: .08em;  /* the ONLY letter-spacing for kickers/labels */
+  --track-tight: .02em;
+
+  /* Space + shape. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* Depth — soft and layered, never a hard 1px glow. */
+  --shadow-soft: 0 16px 40px -12px rgba(0, 0, 0, .6);
+  --shadow-deep: 0 30px 80px -20px rgba(0, 0, 0, .75);
+  --inset-highlight: inset 0 1px 1px rgba(255, 255, 255, .07);
+  --glow-accent: 0 0 24px rgba(255, 178, 31, .18);
+
+  /* Motion. */
+  --ease: cubic-bezier(.32, .72, 0, 1);
+  --dur-fast: 180ms;
+  --dur-med: 350ms;
+  --dur-slow: 650ms;
+}
+
+/* Keyboard focus is visible everywhere, never stripped. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

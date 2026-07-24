@@ -98,13 +98,13 @@ const { mergeSettings: mergeS } = require('../core/config-store');
 const { DEFAULT_SETTINGS: DEFAULTS } = require('../core/defaults');
 
 test('settings v6: camera module hidden by default and migrated for old saves', () => {
-  assert.equal(DEFAULTS.settingsVersion, 6);
+  assert.ok(DEFAULTS.settingsVersion >= 6, 'camera migration shipped in v6');
   assert.deepEqual(DEFAULTS.cameraAccounts, []);
   assert.ok(DEFAULTS.hiddenModules.includes('cameras'));
   assert.ok(DEFAULTS.moduleLayout.cameras);
   const migrated = mergeS(DEFAULTS, { settingsVersion: 5, hiddenModules: [] });
   assert.ok(migrated.hiddenModules.includes('cameras'));
-  assert.equal(migrated.settingsVersion, 6);
+  assert.equal(migrated.settingsVersion, DEFAULTS.settingsVersion);
   // Old saves must not lose camera accounts on merge.
   const kept = mergeS(DEFAULTS, { settingsVersion: 6, cameraAccounts: [{ id: 'a1', brand: 'rtsp', name: 'Home' }] });
   assert.equal(kept.cameraAccounts.length, 1);

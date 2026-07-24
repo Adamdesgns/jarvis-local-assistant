@@ -1,5 +1,16 @@
 # JARVIS Changelog
 
+## 0.17.0 — July 23, 2026
+
+### Added — JARVIS's hands (slice 2, BETA): he can click and type for you
+- Say **"click Save"**, **"type hello world into Notepad"**, **"open the File menu and click Save"**, **"select budget.xlsx in Explorer"**, or **"switch to Notepad"**. Off by default — Settings → SCREEN DRIVING (BETA).
+- **File Explorer and Notepad only** in this first version. Chrome comes later, behind its own dedicated clean profile.
+- **You see the plan first.** Every job shows a numbered plan card and waits for your OK. Steps that save, send, delete, download or overwrite pause again individually mid-job.
+- **A STOP window stays on top the whole time** showing the current step in plain English. Press it, hit Escape, or say "stop" — everything ends instantly. The orb turns to a fast "HANDS ON SCREEN" state and a chime marks start and end.
+- **Named buttons, never blind clicks.** JARVIS presses controls by their accessibility name through Windows UI Automation. If a control isn't there, or two share a name, he stops and asks — he never guesses at screen coordinates.
+- **Hard walls, enforced in code, re-checked before every single press:** financial windows (banks, brokers, anything that spends) are blocked permanently with no off switch; sign-in and password surfaces refused; password fields never typed into; system/admin windows refused; a Windows permission prompt (UAC) ends the job and hands you the machine. Never runs unattended, on a schedule, or from the phone.
+- **Honest logging**: every action is logged with what was pressed and where; anything typed is recorded as a fingerprint (hash) and length — never the text itself.
+
 ## 0.16.0 — July 20, 2026
 
 ### Added — Living-with-it fixes from real use
