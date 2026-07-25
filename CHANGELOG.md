@@ -1,5 +1,22 @@
 # JARVIS Changelog
 
+## Unreleased
+
+### Added — THE TERMINAL (stage 1): watch him think
+- A new **Terminal** module. Turn it on from Modules. Matrix rain falls behind
+  it in **whichever colour your orb is wearing** — gold sphere, gold rain;
+  obsidian sphere, mint rain.
+- It's a console onto JARVIS: what you asked, what he answered, the steps he
+  took, new activity, and what the night shift got up to — each line stamped
+  with the time and tagged with where it came from.
+- **Type in it and it talks to JARVIS**, exactly as the command bar does. Voice,
+  command bar and console all land in the same place.
+- **No raw Windows commands yet** — that's stage 2. Type `npm install` or `dir`
+  and it tells you so plainly rather than pretending to understand. Plain
+  English like "type hello into notepad" still works normally.
+- The rain only runs while the module is on screen, and stops completely under
+  REDUCED MOTION or Windows' own "reduce motion" setting.
+
 ## 0.18.0 — July 24, 2026
 
 ### Added — JARVIS Pro: a $29 one-time unlock for the bells and whistles
