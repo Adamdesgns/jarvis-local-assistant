@@ -226,7 +226,7 @@
 
       <div class="workspace">
         <aside class="column">
-          <section class="panel"><div class="panel-head"><div><span>01 / SYSTEM</span><h2>PERFORMANCE</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><div class="meter-row"><div class="meter" id="cc-meter-cpu" style="--value:0deg"><strong id="cc-cpu"><small>%</small></strong><span>CPU</span></div><div class="meter" id="cc-meter-ram" style="--value:0deg"><strong id="cc-ram"><small>%</small></strong><span>RAM</span></div><div class="meter" id="cc-meter-gpu" style="--value:0deg"><strong id="cc-gpu"><small>%</small></strong><span>GPU</span></div></div><div class="telemetry"><span>GPU <b id="cc-gpu-name">—</b></span><span>UPTIME <b id="cc-uptime">—</b></span></div></div></section>
+          <section class="panel"><div class="panel-head"><div><span>01 / SYSTEM</span><h2>PERFORMANCE</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body"><div class="meter-row"><div class="meter" id="cc-meter-cpu"><strong id="cc-cpu"><small>%</small></strong><span>CPU</span></div><div class="meter" id="cc-meter-ram"><strong id="cc-ram"><small>%</small></strong><span>RAM</span></div><div class="meter" id="cc-meter-gpu"><strong id="cc-gpu"><small>%</small></strong><span>GPU</span></div></div><div class="telemetry"><span>GPU <b id="cc-gpu-name">—</b></span><span>UPTIME <b id="cc-uptime">—</b></span></div></div></section>
           <section class="panel"><div class="panel-head"><div><span>02 / PROJECTS</span><h2>ACTIVE WORKSPACES</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body" id="cc-projects"></div></section>
           <section class="panel"><div class="panel-head"><div><span>03 / MEMORY</span><h2>TODAY'S TASKS</h2></div><div class="panel-dots"><i></i><i></i><i></i></div></div><div class="panel-body" id="cc-tasks"></div></section>
         </aside>
@@ -400,7 +400,7 @@
             </select></label>
             <div id="schedule-text-row"><label><span id="schedule-text-label">SAY THIS</span><input id="schedule-text" type="text" maxlength="500" placeholder="Good morning, sir."></label></div>
             <button type="button" id="schedule-add-btn" class="primary-action">ADD</button>
-            <ul id="schedule-list" class="search-root-list" style="list-style:none;margin:12px 0 0;padding:0"></ul>
+            <ul id="schedule-list" class="search-root-list"></ul>
             <small>Scheduled items wait for their exact time. Turning the switch off stops everything immediately — nothing sends, spends, deletes, or acts without your say-so.</small>
           </section>
           <section data-tab="phone">
@@ -432,7 +432,7 @@
             <h3>ABOUT &amp; UPDATES</h3>
             <div class="setup-status"><i id="update-light"></i><div><b id="update-title">JARVIS</b><span id="update-detail">Free local assistant.</span></div></div>
             <button type="button" id="check-update" class="primary-action">CHECK FOR UPDATES</button>
-            <button type="button" id="download-update" class="outline-action" style="display:none">DOWNLOAD UPDATE</button>
+            <button type="button" id="download-update" class="outline-action" hidden>DOWNLOAD UPDATE</button>
             <small>Checks the public release page for a newer version. Nothing is installed automatically.</small>
           </section>
           <section data-tab="system">
