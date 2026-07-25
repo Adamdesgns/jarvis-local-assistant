@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { classifyCommand } = require('./security');
 const { isBattleRequest, buildBattlePrompt } = require('./battle-mode');
+const { isDefenseRequest, isStandDown } = require('./defense-mode');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
 
 // An approved drive plan must be exactly what was shown on the card — frozen
@@ -62,7 +63,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -74,6 +75,7 @@ class CommandRouter {
     this.claude = claude || null;
     this.screen = screen || null;
     this.hands = hands || null;
+    this.defense = defense || null;
     this.pending = new Map();
   }
 
@@ -569,6 +571,24 @@ class CommandRouter {
       }
     } else if (/\b(?:system status|status report|diagnostics)\b/i.test(text)) {
       result = this.#result('Local core, task manager, memory, file tools, and safety controls are responding.', 'local-core');
+    } else if (isDefenseRequest(text)) {
+      // HARD RAIL: unattended runs (night shift, schedules) can never take
+      // over the screen. The service owns the Pro gate and the entry itself;
+      // the router only ever asks.
+      if (stream.unattended) {
+        result = this.#result(`Defense mode needs you at the desk, sir — I've left it for you.`, 'defense', { success: false });
+      } else if (!this.defense) {
+        result = this.#result('Defense mode is not set up on this PC.', 'defense', { success: false });
+      } else {
+        const entry = await this.defense.requestEnter({ kind: 'manual' });
+        result = entry.ok
+          ? this.#result(entry.message, 'defense', { defense: 'enter' })
+          : this.#result(entry.message, 'defense', { success: false });
+      }
+    } else if (isStandDown(text)) {
+      // Exit is never gated — "stand down" must always work, from anyone.
+      if (this.defense) this.defense.exit();
+      result = this.#result('Standing down. Back to the desk.', 'defense', { defense: 'exit' });
     } else if (isBattleRequest(text)) {
       // Words only — safe attended or unattended. The rules ride in the prompt.
       const { topic } = isBattleRequest(text);
