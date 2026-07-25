@@ -81,6 +81,14 @@ contextBridge.exposeInMainWorld('jarvis', {
     list: (directory) => ipcRenderer.invoke('files:list', directory),
     open: (target) => ipcRenderer.invoke('path:open', target)
   },
+  license: {
+    status: () => ipcRenderer.invoke('license:status'),
+    activate: (key) => ipcRenderer.invoke('license:activate', key),
+    validate: () => ipcRenderer.invoke('license:validate'),
+    deactivate: () => ipcRenderer.invoke('license:deactivate'),
+    buy: () => ipcRenderer.invoke('external:buy-pro'),
+    onProRefused: (callback) => on('license:pro-refused', callback)
+  },
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   openUpdate: (url) => ipcRenderer.invoke('update:open', url),
   onUpdateAvailable: (callback) => on('update:available', callback),

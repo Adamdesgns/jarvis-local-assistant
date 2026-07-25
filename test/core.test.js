@@ -713,7 +713,7 @@ test('v7 migration pulls chrome out of the drive allowlist saved by older instal
     screenControlAllowlist: ['explorer', 'chrome']
   });
   assert.deepEqual(migrated.screenControlAllowlist, ['explorer', 'notepad']);
-  assert.equal(migrated.settingsVersion, 7);
+  assert.equal(migrated.settingsVersion, 8);
   // A current install's list is left alone.
   const current = mergeSettings(DEFAULT_SETTINGS, {
     settingsVersion: 7,
@@ -753,6 +753,59 @@ test('config store persists mobile settings through updateSettings', () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Mutation guard: adding 'license' to the updateSettings allowlist makes this
+// fail. settings:save is renderer-reachable; license state must only ever be
+// written through setLicenseState by the main-process LicenseService.
+test('updateSettings ignores a forged license patch', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-config-'));
+  try {
+    const store = new ConfigStore(dir);
+    const updated = store.updateSettings({ license: { status: 'active' }, profileName: 'Adam' });
+    assert.equal(updated.license.status, 'none', 'a renderer patch must never activate a license');
+    assert.equal(updated.profileName, 'Adam');
+    assert.equal(new ConfigStore(dir).getSettings().license.status, 'none');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('setLicenseState is the one write path and whitelists its fields', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-config-'));
+  try {
+    const store = new ConfigStore(dir);
+    const updated = store.setLicenseState({ status: 'active', customerName: 'Adam', instanceId: 'inst-1', smuggled: 'nope' });
+    assert.equal(updated.license.status, 'active');
+    assert.equal(updated.license.customerName, 'Adam');
+    assert.equal(updated.license.smuggled, undefined, 'unknown fields must be dropped');
+    const reloaded = new ConfigStore(dir);
+    assert.equal(reloaded.getSettings().license.status, 'active');
+    assert.equal(reloaded.getSettings().license.instanceId, 'inst-1');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('v8 merge adds the license object and leaves saved Pro flags untouched', () => {
+  const migrated = mergeSettings(DEFAULT_SETTINGS, {
+    settingsVersion: 7,
+    mobileEnabled: true,
+    schedulesEnabled: true,
+    autonomyEnabled: true
+  });
+  assert.equal(migrated.settingsVersion, 8);
+  assert.equal(migrated.license.status, 'none');
+  // The migration promise: nothing the user configured is erased. The runtime
+  // seams are what refuse to run these until a license is active.
+  assert.equal(migrated.mobileEnabled, true);
+  assert.equal(migrated.schedulesEnabled, true);
+  assert.equal(migrated.autonomyEnabled, true);
+  // A saved license survives the merge.
+  const licensed = mergeSettings(DEFAULT_SETTINGS, { license: { status: 'active', customerName: 'Adam' } });
+  assert.equal(licensed.license.status, 'active');
+  assert.equal(licensed.license.customerName, 'Adam');
+  assert.equal(licensed.license.instanceId, '', 'missing fields fill from defaults');
 });
 
 test('config store persists mobilePublicUrl through updateSettings (whitelist regression guard)', () => {

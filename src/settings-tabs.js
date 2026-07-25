@@ -9,6 +9,7 @@
     { id: 'automation', label: 'AUTOMATION' },
     { id: 'abilities', label: 'ABILITIES' },
     { id: 'phone', label: 'PHONE' },
+    { id: 'pro', label: 'PRO' },
     { id: 'system', label: 'SYSTEM' }
   ];
 

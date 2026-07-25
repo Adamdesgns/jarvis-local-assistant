@@ -1,12 +1,13 @@
 {
   "name": "jarvis-local-assistant",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "A free, private, local Windows assistant for tasks, memory, and file finding.",
   "main": "main.js",
   "author": "Adam",
   "license": "MIT",
   "private": true,
   "updateRepo": "Adamdesgns/jarvis-local-assistant",
+  "proBuyUrl": "",
   "dependencies": {
     "adm-zip": "^0.5.16",
     "fast-xml-parser": "^5.7.0",

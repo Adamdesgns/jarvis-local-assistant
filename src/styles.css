@@ -511,3 +511,21 @@ body.busy .ai-stop { display: inline-block }
 .edge-grip.edge-sw { bottom: -4px; left: -4px; width: 14px; height: 14px; cursor: nesw-resize }
 .edge-grip.edge-nw { top: -4px; left: -4px; width: 14px; height: 14px; cursor: nwse-resize }
 .edge-grip.edge-se { bottom: -4px; right: -4px; width: 14px; height: 14px; cursor: nwse-resize }
+
+/* ---------- JARVIS Pro licensing ---------- */
+.pro-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 6px 0;
+  font-size: 9px; letter-spacing: .14em; vertical-align: 1px;
+  color: var(--gold-400); border: 1px solid var(--accent-tint-35);
+  border-radius: 3px; background: var(--accent-tint-10);
+}
+.pro-badge.locked { color: var(--gold-600); border-color: var(--accent-tint-20); background: transparent; opacity: .75 }
+.license-banner {
+  margin: 8px 0; padding: 10px 12px; font-size: 12px; line-height: 1.5;
+  color: var(--gold-100); border: 1px solid var(--accent-tint-35);
+  border-left: 3px solid var(--gold-400); background: var(--accent-tint-06);
+}
+.pro-feature-table { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0 4px }
+.pro-feature-table > div { padding: 10px 12px; border: 1px solid var(--accent-tint-20); background: var(--accent-tint-06) }
+.pro-feature-table b { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: .12em; color: var(--gold-300) }
+.pro-feature-table ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.7; opacity: .85 }
