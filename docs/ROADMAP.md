@@ -58,6 +58,19 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
 
 ## LATER
 
+- [ ] **DEFENSE MODE** *(Adam, 2026-07-24)* — a posture, not a panel. Something is wrong, so
+      the whole window becomes a situation board: **every camera live at once (the camera
+      module BECOMES the defense view)**, plus current local news about the specific reason
+      it fired, with a banner naming the trigger and the time. Exit always one key away.
+      Triggers: manual first; then opt-in automatic (NWS alert for the user's county, or a
+      person on camera at night while armed) — every auto entry announces and can be waved off.
+      News sourcing v1: NWS/NOAA public alerts (free, official, no key), user-configured RSS
+      headlines, and later a saved live-stream URL via the Browser module. Local brain reads
+      the situation aloud; cloud only if a key already exists.
+      **HARD RAILS: watches and tells, never acts.** No calls, never dials emergency services,
+      no arm/disarm, no locks, no unattended entry, network only to configured sources.
+      Phases: (1) layout + manual trigger + cameras big; (2) NWS + county setting + auto-trigger;
+      (3) RSS + spoken read; (4) live video — depends on the Browser above.
 - [ ] **THE BROWSER, stage 3: JARVIS surfs for you** — folded into the Hands v2
       track: plan cards, STOP window, hard blocks on banking/sign-in pages.
 - [ ] **Hands v2** — Chrome behind a dedicated clean profile (CDP), wider app allowlist.

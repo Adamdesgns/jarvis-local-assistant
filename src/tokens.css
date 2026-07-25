@@ -25,10 +25,13 @@
   --accent-tint-20: rgba(255, 178, 31, .20);
   --accent-tint-35: rgba(255, 178, 31, .35);
 
-  /* Neutrals — deep warm black, glass surfaces, hairlines. */
-  --bg: #050607;
+  /* Neutrals — pitch black, glass surfaces, hairlines.
+     The background is true #000 so the orb has somewhere to glow from.
+     --surface-glass and --surface-bar are re-set per glass level below. */
+  --bg: #000000;
   --bg-raise: #0b0c0d;
-  --surface-glass: rgba(16, 15, 13, .72);
+  --surface-glass: rgba(8, 8, 9, .42);
+  --surface-bar: rgba(0, 0, 0, .46);
   --surface-solid: #0d0e10;
   --surface-input: rgba(0, 0, 0, .35);
   --line: rgba(255, 255, 255, .09);
@@ -84,6 +87,12 @@
   --dur-med: 350ms;
   --dur-slow: 650ms;
 }
+
+/* How much of JARVIS shows through the windows. Set by the WINDOW GLASS
+   setting; 'glass' is the default and what :root already carries. */
+body[data-glass="solid"] { --surface-glass: rgba(16, 15, 13, .72); --surface-bar: rgba(0, 0, 0, .82) }
+body[data-glass="glass"] { --surface-glass: rgba(8, 8, 9, .42); --surface-bar: rgba(0, 0, 0, .46) }
+body[data-glass="ghost"] { --surface-glass: rgba(8, 8, 9, .26); --surface-bar: rgba(0, 0, 0, .30) }
 
 /* Keyboard focus is visible everywhere, never stripped. */
 :focus-visible {
