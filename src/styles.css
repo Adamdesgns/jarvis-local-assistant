@@ -588,3 +588,83 @@ body.busy .ai-stop { display: inline-block }
   border-radius: 3px; padding: 2px 6px; cursor: pointer;
 }
 .term-clear:hover { color: var(--term-accent); border-color: var(--line-accent) }
+
+/* ============================== DEFENSE MODE ==============================
+   A posture, not a panel. body.defense hides the normal desk; the board is a
+   fixed fullscreen layer. The REAL #camera-grid is reparented into the wall,
+   so its tiles keep their own styling and live streams. */
+
+body.defense #module-layer,
+body.defense .jarvis-stage,
+body.defense .response-dock,
+body.defense #autonomy-cards { display: none; }
+
+.defense-board {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+  background: #000;
+}
+.defense-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px;
+  background: var(--danger-tint);
+  border-bottom: 1px solid var(--danger);
+}
+.defense-banner span {
+  font-family: var(--font-display); font-size: 14px; letter-spacing: .18em;
+  color: var(--danger);
+  animation: defense-pulse 2.4s ease-in-out infinite;
+}
+@keyframes defense-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .55 } }
+.defense-banner button {
+  font-family: var(--font-display); font-size: 10px; letter-spacing: .14em;
+  color: var(--text-primary); background: transparent;
+  border: 1px solid var(--danger); border-radius: 4px; padding: 6px 12px; cursor: pointer;
+}
+.defense-banner button:hover { background: var(--danger); color: #000 }
+.defense-body { flex: 1; display: flex; gap: 12px; padding: 12px; min-height: 0; }
+.defense-wall { flex: 1; min-width: 0; overflow-y: auto; }
+.defense-wall .camera-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 12px; height: 100%; align-content: start;
+}
+.defense-rail {
+  width: 300px; flex-shrink: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.defense-rail-block {
+  border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+  background: rgba(0, 0, 0, .55);
+}
+.defense-rail-block h3 {
+  margin: 0 0 8px; font-family: var(--font-display); font-size: 10px;
+  letter-spacing: .16em; color: var(--danger);
+}
+.defense-rail-block p { margin: 0 0 6px; font-size: 12px; line-height: 1.5; color: var(--text-primary); }
+#defense-alert-instruction { color: var(--text-muted); font-size: 11px; }
+#defense-headlines { margin: 0; padding: 0; list-style: none; }
+#defense-headlines li {
+  padding: 6px 0; font-size: 12px; line-height: 1.4; color: var(--text-primary);
+  border-bottom: 1px solid var(--line);
+}
+#defense-headlines li:last-child { border-bottom: 0 }
+#defense-headlines li time { display: block; font-size: 10px; color: var(--text-muted); }
+#defense-headlines .defense-none { color: var(--text-muted) }
+
+/* The announce-and-wave-off card. Sits above everything, including the board. */
+.defense-pending {
+  position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 70;
+  display: flex; align-items: center; gap: 14px; padding: 12px 18px;
+  background: rgba(0, 0, 0, .92); border: 1px solid var(--danger); border-radius: 8px;
+}
+.defense-pending strong {
+  font-family: var(--font-display); font-size: 11px; letter-spacing: .1em;
+  color: var(--text-primary); max-width: 420px;
+}
+.defense-pending span {
+  font-family: var(--font-display); font-size: 18px; color: var(--danger); min-width: 26px; text-align: center;
+}
+.defense-pending button {
+  font-family: var(--font-display); font-size: 10px; letter-spacing: .14em;
+  color: #000; background: var(--danger); border: 0; border-radius: 4px;
+  padding: 8px 14px; cursor: pointer;
+}

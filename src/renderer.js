@@ -1188,7 +1188,10 @@ async function executeCommand(command) {
     // Safety net: any command can change tasks through the brain's tools, so
     // reconcile the list from the store even if the result did not carry it.
     if (!result.tasks) renderTasks(await window.jarvis.tasks.list());
-    if (!result.approval && !state.searchActive) speak(result.response);
+    // Defense entries speak their own situation read from the defense:enter
+    // event — speaking the short ack here would cancel it mid-sentence.
+    if (result.defense === 'enter') { /* the read has the floor */ }
+    else if (!result.approval && !state.searchActive) speak(result.response);
     else if (!result.approval && result.openedFile) speak(result.response);
   } catch (error) {
     const message = friendlyError(error); setResponse(message); showToast(message); setCoreState('error', 'LOCAL COMMAND FAILED');
