@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Added — DEFENSE MODE: when something is wrong, the whole window is the situation board
+- Say **"defense mode"** (or press the new ⛨ button in the bar) and the desk
+  drops away: **every camera goes live at once** on a fullscreen wall, with a
+  red banner naming exactly what fired and when. **Esc always exits** — so does
+  "stand down."
+- A side rail shows the **active National Weather Service alert** for your
+  county — straight from the source, free, no account — plus **local headlines**
+  from RSS feeds you pick in Settings → CAMERAS.
+- JARVIS **reads the situation aloud once** on entry: what fired, what the
+  official alert says to do, what the headlines say. Local brain by default,
+  cloud only if you already set a key.
+- **Opt-in automatic triggers, both OFF by default:** a severe-weather
+  *warning* for your county (never a watch), or camera motion at night while a
+  system is armed. Every automatic entry **announces itself with a 15-second
+  wave-off** — no silent takeovers, ever.
+- **Hard rails, welded in and tested:** defense mode watches and tells — it
+  never calls anyone, never dials emergency services, never arms or disarms
+  anything. It talks only to the weather service and the feeds you saved, and
+  scheduled/overnight runs can never enter it. Cameras are Pro, so defense mode
+  rides the same license.
+
 ### Added — THE TERMINAL (stage 1): watch him think
 - A new **Terminal** module. Turn it on from Modules. Matrix rain falls behind
   it in **whichever colour your orb is wearing** — gold sphere, gold rain;
