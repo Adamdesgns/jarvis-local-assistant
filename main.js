@@ -21,6 +21,7 @@ const { LocalVoiceService } = require('./core/local-voice-service');
 const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
 const { CameraService } = require('./core/camera/camera-service');
 const { DefenseService } = require('./core/defense-service');
+const { BROWSER_PARTITION, sanitizeWebviewParams, isNavigationAllowed, decidePermission, shouldBlockDownload } = require('./core/browser-guard');
 const { FolderWatchService } = require('./core/folder-watch');
 const { AutonomyService } = require('./core/autonomy-service');
 const { checkForUpdate } = require('./core/update-check');
@@ -170,8 +171,32 @@ function createMainWindow() {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: false,
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      // THE BROWSER module's <webview>. Every attach is rewritten by
+      // core/browser-guard.js below — no preload, forced stranger partition,
+      // no node — so enabling the tag does not widen what a page can reach.
+      webviewTag: true
     }
+  });
+  // The browser wall, seam 1: whatever webview params the renderer asked
+  // for, the guard decides what actually attaches.
+  mainWindow.webContents.on('will-attach-webview', (_event, webPreferences, params) => {
+    sanitizeWebviewParams(webPreferences);
+    sanitizeWebviewParams(params);
+  });
+  // Seam 2: guests never open OS windows (links become tabs), and never
+  // leave the web (file:, chrome:, javascript: refused at navigation).
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    guest.setWindowOpenHandler(({ url }) => {
+      if (isNavigationAllowed(url)) sendEverywhere('browser:open-tab', { url });
+      return { action: 'deny' };
+    });
+    guest.on('will-navigate', (event, url) => {
+      if (!isNavigationAllowed(url)) {
+        event.preventDefault();
+        sendEverywhere('browser:notice', { message: 'That address is not a web page, so I left it alone.' });
+      }
+    });
   });
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   attachEditingShortcuts(mainWindow);
@@ -1166,6 +1191,20 @@ app.whenReady().then(async () => {
   // The router only ever reads settings (no writes, no secrets), so it takes
   // the gated view too: voice-routing into screen reading/driving respects
   // the license without the router knowing licenses exist.
+  // The browser wall, seam 3: the stranger partition itself. Permissions are
+  // refused unconditionally and downloads are cancelled before a byte lands —
+  // both with an honest toast so the page's silence isn't mistaken for JARVIS's.
+  const strangerSession = session.fromPartition(BROWSER_PARTITION);
+  strangerSession.setPermissionRequestHandler((_webContents, kind, callback) => {
+    callback(decidePermission());
+    sendEverywhere('browser:notice', { message: `The page asked for ${kind} — refused, as designed.` });
+  });
+  strangerSession.on('will-download', (event) => {
+    if (!shouldBlockDownload()) return;
+    event.preventDefault();
+    sendEverywhere('browser:notice', { message: "Downloads are switched off in JARVIS's browser for now." });
+  });
+
   // Defense mode: the camera module's fullscreen posture. Same gated config
   // discipline as the router — the service checks the Pro license itself at
   // its single entry seam, and every fetch it makes is allowlist-checked.

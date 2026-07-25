@@ -68,6 +68,8 @@ contextBridge.exposeInMainWorld('jarvis', {
   onDefensePending: (callback) => on('defense:pending', callback),
   onDefensePendingCancelled: (callback) => on('defense:pending-cancelled', callback),
   onDefenseUpdate: (callback) => on('defense:update', callback),
+  onBrowserOpenTab: (callback) => on('browser:open-tab', callback),
+  onBrowserNotice: (callback) => on('browser:notice', callback),
   onCamerasAlert: (callback) => on('cameras:alert', callback),
   onCamerasChanged: (callback) => on('cameras:changed', callback),
   onCamerasStatus: (callback) => on('cameras:status', callback),
