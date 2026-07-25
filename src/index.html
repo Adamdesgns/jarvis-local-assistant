@@ -122,6 +122,19 @@
           <i class="resize-handle"></i>
         </article>
 
+        <article class="module hidden-module" data-module="terminal">
+          <header class="module-header drag-handle"><div><span>Console</span><h2>Terminal</h2></div><div class="module-actions"><button type="button" id="terminal-clear" class="term-clear" title="Clear the console">CLR</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content term-body">
+            <canvas id="terminal-rain" class="term-rain" aria-hidden="true"></canvas>
+            <div id="terminal-log" class="term-log" role="log" aria-live="polite" aria-label="JARVIS console"></div>
+            <form id="terminal-form" class="term-input-row" autocomplete="off">
+              <span class="term-prompt" aria-hidden="true">&gt;_</span>
+              <input id="terminal-input" class="term-input" type="text" placeholder="Talk to JARVIS…" aria-label="Console command" />
+            </form>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
         <article class="module hidden-module" data-module="quick-commands">
           <header class="module-header drag-handle"><div><span>Shortcuts</span><h2>Quick commands</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content quick-grid">
@@ -228,6 +241,7 @@
         <button data-toggle-module="activity"><i></i><span><b>Activity</b><small>Recent completed commands</small></span></button>
         <button data-toggle-module="quick-commands"><i></i><span><b>Quick Commands</b><small>One-click actions</small></span></button>
         <button data-toggle-module="document-viewer"><i></i><span><b>Document Viewer</b><small>Full summaries and document analysis</small></span></button>
+        <button data-toggle-module="terminal"><i></i><span><b>Terminal</b><small>Watch JARVIS think, and type to him</small></span></button>
         <button data-toggle-module="cameras"><i></i><span><b>Cameras <span class="pro-badge">PRO</span></b><small>Live view and snapshots from your security cameras</small></span></button>
         <button data-toggle-module="command"><i></i><span><b>Command Bar</b><small>Type to JARVIS. Close it and just speak to him instead</small></span></button>
       </div>
@@ -533,6 +547,8 @@
     <script src="skins.js"></script>
     <script src="settings-tabs.js"></script>
     <script src="glass.js"></script>
+    <script src="terminal-log.js"></script>
+    <script src="terminal-ui.js"></script>
     <script src="renderer.js"></script>
     <script src="command-center.js"></script>
     <script src="cameras-ui.js"></script>

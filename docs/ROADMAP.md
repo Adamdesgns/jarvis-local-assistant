@@ -19,11 +19,16 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
 
 ## NOW
 
-- [ ] **THE TERMINAL, stage 1: the module** — an in-app terminal panel, matrix-rain
+- [x] **THE TERMINAL, stage 1: the module** — an in-app terminal panel, matrix-rain
       styled, themed to the active skin AND the chosen orb accent (gold/obsidian —
       read `orbSkin`/`orbColor` settings). Stage 1 is a JARVIS console: live feed of
       agent steps, activity, night-shift log, with command input routed to JARVIS
       itself (same pipeline as the command bar). NO raw shell in stage 1.
+      **Done 2026-07-25** on branch `terminal`, merged. `src/terminal-log.js` (pure,
+      14 tests) + `src/terminal-ui.js` (rain + append-only view) + a `terminal`
+      module in the renderer. Rig at `test/rigs/terminal.html` — serve the repo
+      root and open it; `rain.renderOnce()` paints a frame without rAF so the
+      canvas can be checked in a background tab.
 - [ ] **THE TERMINAL, stage 2: real commands** — user-typed Windows commands run in
       the terminal (user-driven only; the AI still never gets arbitrary shell).
       Confirm-card before anything destructive. Display-only for AI output.

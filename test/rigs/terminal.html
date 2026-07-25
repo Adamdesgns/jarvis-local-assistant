@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RIG · THE TERMINAL (stage 1)</title>
+<!--
+  Standalone rig for the terminal module. Loads the REAL tokens, the REAL
+  stylesheet and the REAL terminal modules — only the surrounding app is faked.
+  Serve the repo root and open /test/rigs/terminal.html.
+
+      npx --yes serve . -l 5190
+
+  Keep rigs in the repo. The last one lived in a scratchpad and had to be
+  rebuilt from scratch the next session.
+-->
+<link rel="stylesheet" href="../../src/tokens.css" />
+<link rel="stylesheet" href="../../src/styles.css" />
+<style>
+  body { margin: 0; background: #000; font-family: var(--font); }
+  .rig-bar { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
+  .rig-bar button {
+    font-size: 11px; letter-spacing: .1em; padding: 6px 10px; cursor: pointer;
+    color: var(--text-secondary); background: transparent;
+    border: 1px solid var(--line); border-radius: 4px;
+  }
+  .rig-stage { padding: 24px; }
+  /* The rig shows the module inline instead of absolutely positioned. */
+  .module { position: relative !important; width: 620px; height: 380px; display: flex; flex-direction: column; }
+  .module-content { flex: 1; min-height: 0; }
+</style>
+</head>
+<body>
+  <div class="rig-bar">
+    <button id="rig-gold">GOLD</button>
+    <button id="rig-obsidian">OBSIDIAN</button>
+    <button id="rig-fill">FILL 40 LINES</button>
+    <button id="rig-shell">TRY "npm install"</button>
+    <button id="rig-clear">CLEAR</button>
+  </div>
+
+  <div class="rig-stage">
+    <article class="module" data-module="terminal">
+      <header class="module-header drag-handle">
+        <div><span>Console</span><h2>Terminal</h2></div>
+        <div class="module-actions"><button type="button" class="term-clear">CLR</button></div>
+      </header>
+      <div class="module-content term-body">
+        <canvas id="terminal-rain" class="term-rain" aria-hidden="true"></canvas>
+        <div id="terminal-log" class="term-log" role="log" aria-live="polite"></div>
+        <form id="terminal-form" class="term-input-row" autocomplete="off">
+          <span class="term-prompt" aria-hidden="true">&gt;_</span>
+          <input id="terminal-input" class="term-input" type="text" placeholder="Talk to JARVIS…" />
+        </form>
+      </div>
+    </article>
+  </div>
+
+<script src="../../src/terminal-log.js"></script>
+<script src="../../src/terminal-ui.js"></script>
+<script>
+  const T = window.JarvisTerminal;
+  const UI = window.JarvisTerminalUI;
+  const moduleEl = document.querySelector('[data-module="terminal"]');
+  const log = T.createLog();
+  const rain = UI.createRain(document.getElementById('terminal-rain'));
+  const view = UI.createView(document.getElementById('terminal-log'));
+
+  function push(stream, text) { log.push(stream, text); view.render(log.lines()); }
+  function accent(color) {
+    const hex = T.accentFor(color);
+    moduleEl.style.setProperty('--term-accent', hex);
+    rain.setAccent(hex);
+  }
+
+  accent('gold');
+  rain.start();
+  push('system', 'JARVIS console · stage 1 · type below to talk to him');
+  push('you', 'good morning');
+  push('jarvis', 'Good morning. Three tasks due today, one overdue.');
+  push('agent', 'search_files · query "invoice" · 4 matches');
+  push('activity', 'Find the March invoice · voice');
+  push('night', 'Night Shift wrote 2 drafts, spent $0.00');
+
+  document.getElementById('rig-gold').onclick = () => accent('gold');
+  document.getElementById('rig-obsidian').onclick = () => accent('obsidian');
+  document.getElementById('rig-fill').onclick = () => {
+    for (let i = 1; i <= 40; i += 1) push('activity', `filler line ${i}`);
+  };
+  document.getElementById('rig-shell').onclick = () => {
+    const v = 'npm install';
+    push('you', v);
+    const hint = T.shellHint(v);
+    if (hint) push('system', hint);
+  };
+  document.getElementById('rig-clear').onclick = () => { log.clear(); view.reset(); push('system', 'Console cleared.'); };
+
+  document.getElementById('terminal-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = document.getElementById('terminal-input');
+    const v = input.value.trim();
+    if (!v) return;
+    input.value = '';
+    push('you', v);
+    const hint = T.shellHint(v);
+    push(hint ? 'system' : 'jarvis', hint || `(rig) would route "${v}" to executeCommand`);
+  });
+
+  // Handy for automated checks.
+  window.rig = { log, rain, view, push, accent };
+</script>
+</body>
+</html>

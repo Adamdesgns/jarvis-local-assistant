@@ -104,6 +104,11 @@ function setResponse(message) {
   $('jarvis-response').textContent = message;
   window.JarvisCommandCenter?.setResponse?.(message);
   showOrbReply(message);
+  // Everything JARVIS says also scrolls past in the console. Lines that start
+  // with "› " are the echo of what you just asked, not his answer.
+  const text = String(message || '');
+  if (text.startsWith('› ')) terminal.heard(text.slice(2));
+  else terminal.say(text);
 }
 
 // With the command bar closed there is nowhere for JARVIS's words to land, so
@@ -540,7 +545,112 @@ function renderModuleVisibility() {
     button.classList.toggle('enabled', enabled);
     button.querySelector('i').textContent = enabled ? '✓' : '';
   });
+  terminal.sync();
 }
+
+// ── THE TERMINAL (stage 1) ──────────────────────────────────────────────
+// A console view onto JARVIS: what you asked, what he answered, what he did,
+// and what the night shift got up to. Typing here goes down exactly the same
+// pipeline as the command bar — there is NO raw shell in stage 1, and the
+// model still never gets one. Stage 2 adds user-typed Windows commands.
+const terminal = (() => {
+  let log = null;
+  let rain = null;
+  let view = null;
+  let ready = false;
+  let seenActivity = null; // null until the first render, so boot isn't replayed
+
+  function el() { return document.querySelector('[data-module="terminal"]'); }
+
+  function init() {
+    if (ready) return;
+    if (!window.JarvisTerminal || !window.JarvisTerminalUI) return;
+    const canvas = $('terminal-rain');
+    const list = $('terminal-log');
+    if (!canvas || !list) return;
+    log = window.JarvisTerminal.createLog();
+    rain = window.JarvisTerminalUI.createRain(canvas);
+    view = window.JarvisTerminalUI.createView(list);
+    ready = true;
+    push('system', 'JARVIS console · stage 1 · type below to talk to him');
+    applyAccent();
+  }
+
+  function push(stream, text) {
+    if (!ready || !text) return;
+    log.push(stream, text);
+    if (isVisible()) view.render(log.lines());
+  }
+
+  function isVisible() {
+    const node = el();
+    return Boolean(node) && !node.classList.contains('hidden-module');
+  }
+
+  // The console wears the orb's colourway — gold sphere, gold rain.
+  function applyAccent() {
+    if (!ready) return;
+    const hex = window.JarvisTerminal.accentFor(state.settings.orbColor);
+    el()?.style.setProperty('--term-accent', hex);
+    rain.setAccent(hex);
+  }
+
+  function motionAllowsRain() {
+    if (state.settings.motionMode === 'reduced') return false;
+    return !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  }
+
+  // Rain burns frames, so it only runs while the module is actually on screen.
+  function sync() {
+    if (!ready) return;
+    if (isVisible()) {
+      view.render(log.lines());
+      if (motionAllowsRain()) rain.start(); else rain.stop();
+    } else {
+      rain.stop();
+    }
+  }
+
+  // Activity arrives newest-first and gets re-fetched whole, so diff it rather
+  // than replaying twenty rows every refresh.
+  function noteActivity(items) {
+    if (!ready || !Array.isArray(items)) return;
+    const key = (item) => `${item.timestamp || ''}|${item.command || item.type || ''}`;
+    if (seenActivity === null) { seenActivity = new Set(items.map(key)); return; }
+    for (const item of items.slice().reverse()) {
+      const k = key(item);
+      if (seenActivity.has(k)) continue;
+      seenActivity.add(k);
+      push('activity', `${item.command || item.type} · ${item.source || 'local'}`);
+    }
+  }
+
+  function submit(text) {
+    const value = String(text || '').trim();
+    if (!value) return;
+    $('terminal-input').value = '';
+    // Stage 1 has no shell. Say so plainly instead of letting the router
+    // flounder at "npm install" as though it were English.
+    const hint = window.JarvisTerminal.shellHint(value);
+    if (hint) { push('you', value); push('system', hint); return; }
+    // executeCommand echoes the 'you' line itself, so every route into
+    // JARVIS — command bar, voice, or here — shows up in the console once.
+    executeCommand(value);
+  }
+
+  return {
+    init,
+    sync,
+    submit,
+    noteActivity,
+    applyAccent,
+    say: (text) => push('jarvis', text),
+    heard: (text) => push('you', text),
+    note: (text) => push('system', text),
+    night: (text) => push('night', text),
+    clear: () => { if (ready) { log.clear(); view.reset(); push('system', 'Console cleared.'); } },
+  };
+})();
 
 function scheduleLayoutSave() {
   clearTimeout(state.saveTimer);
@@ -687,6 +797,7 @@ function renderMemories(memories = state.memories) {
 
 function renderActivity(items = state.activity) {
   state.activity = items;
+  terminal.noteActivity(items);
   const list = $('activity-list'); list.replaceChildren();
   if (!items.length) { list.innerHTML = '<div class="empty-state">NO COMMANDS LOGGED</div>'; return; }
   for (const item of items.slice(0, 20)) {
@@ -1569,6 +1680,12 @@ function openVoiceDiagnostics() {
 function bindEvents() {
   document.querySelectorAll('[data-window]').forEach((button) => button.addEventListener('click', () => window.jarvis.windowControl(button.dataset.window)));
   $('command-form').addEventListener('submit', (event) => { event.preventDefault(); executeCommand($('command-input').value); });
+
+  $('terminal-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    terminal.submit($('terminal-input').value);
+  });
+  $('terminal-clear').addEventListener('click', () => terminal.clear());
   $('mic-button').addEventListener('click', () => startRecording('manual'));
   $('quick-task-form').addEventListener('submit', async (event) => {
     event.preventDefault(); const title = $('quick-task-input').value.trim(); if (!title) return;
@@ -1851,7 +1968,12 @@ function bindEvents() {
   });
   $('setting-skin').addEventListener('change', (event) => applySkin(event.target.value));
   $('setting-orb-skin').addEventListener('change', (event) => window.jarvisHologram?.applySettings({ skin: event.target.value }));
-  $('setting-orb-color').addEventListener('change', (event) => window.jarvisHologram?.applySettings({ color: event.target.value }));
+  $('setting-orb-color').addEventListener('change', (event) => {
+    window.jarvisHologram?.applySettings({ color: event.target.value });
+    // Preview the console in the new colourway straight away, like the orb.
+    state.settings.orbColor = event.target.value;
+    terminal.applyAccent();
+  });
   $('audition-voice').addEventListener('click', auditionVoice);
   speechSynthesis.addEventListener?.('voiceschanged', () => { if ($('settings-modal').open) populateVoiceSelect(); });
   window.jarvis.onAutonomyEvent((action) => {
@@ -1872,6 +1994,8 @@ async function initialize() {
     window.jarvisHologram?.applySettings({ skin: state.settings.orbSkin, color: state.settings.orbColor });
     applyGlass(state.settings.windowGlass);
     applySkin(state.settings.skin || 'classic');
+    // Must come before renderModuleVisibility — that's what starts the rain.
+    terminal.init();
     state.tasks = bootstrap.tasks;
     state.memories = bootstrap.memories;
     state.activity = bootstrap.recentActivity;
