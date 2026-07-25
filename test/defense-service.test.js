@@ -218,6 +218,18 @@ test('exit while a proposal is pending wave-offs instead', async () => {
   assert.equal(emitted.find((e) => e.channel === 'defense:exit'), undefined, 'no exit event when never entered');
 });
 
+// --- Settings merge: an old settings.json must gain the defense defaults ---
+
+test('mergeSettings fills defense defaults for pre-defense settings files and keeps saved keys', () => {
+  const { mergeSettings } = require('../core/config-store');
+  const { DEFAULT_SETTINGS } = require('../core/defaults');
+  const old = mergeSettings(DEFAULT_SETTINGS, { profileName: 'Adam' });
+  assert.deepEqual(old.defense, { countyZone: '', countyName: '', countyState: '', autoWeather: false, autoCamera: false, rssFeeds: [] });
+  const partial = mergeSettings(DEFAULT_SETTINGS, { defense: { countyZone: 'MSC047' } });
+  assert.equal(partial.defense.countyZone, 'MSC047');
+  assert.equal(partial.defense.autoWeather, false, 'sibling defaults survive a partial save');
+});
+
 // --- Zones lookup ---
 
 test('listCountyZones asks the NWS for the state and maps id/name', async () => {

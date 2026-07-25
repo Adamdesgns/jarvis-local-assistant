@@ -56,6 +56,18 @@ contextBridge.exposeInMainWorld('jarvis', {
     addNest: (payload) => ipcRenderer.invoke('cameras:add-nest', payload),
     openNestConsole: () => ipcRenderer.invoke('external:nest-console')
   },
+  defense: {
+    status: () => ipcRenderer.invoke('defense:status'),
+    enter: () => ipcRenderer.invoke('defense:enter'),
+    exit: () => ipcRenderer.invoke('defense:exit'),
+    waveOff: () => ipcRenderer.invoke('defense:wave-off'),
+    zones: (stateCode) => ipcRenderer.invoke('defense:zones', stateCode)
+  },
+  onDefenseEnter: (callback) => on('defense:enter', callback),
+  onDefenseExit: (callback) => on('defense:exit', callback),
+  onDefensePending: (callback) => on('defense:pending', callback),
+  onDefensePendingCancelled: (callback) => on('defense:pending-cancelled', callback),
+  onDefenseUpdate: (callback) => on('defense:update', callback),
   onCamerasAlert: (callback) => on('cameras:alert', callback),
   onCamerasChanged: (callback) => on('cameras:changed', callback),
   onCamerasStatus: (callback) => on('cameras:status', callback),
