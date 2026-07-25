@@ -20,6 +20,7 @@ const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService } = require('./core/local-voice-service');
 const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
 const { CameraService } = require('./core/camera/camera-service');
+const { DefenseService } = require('./core/defense-service');
 const { FolderWatchService } = require('./core/folder-watch');
 const { AutonomyService } = require('./core/autonomy-service');
 const { checkForUpdate } = require('./core/update-check');
@@ -81,6 +82,7 @@ let hands;
 let driveStopWindow;
 let go2rtc;
 let cameras;
+let defense;
 let autonomy;
 let mobileAuth;
 let mobileServer;
@@ -861,6 +863,14 @@ function setupIpc() {
     return discoverCameras({});
   });
 
+  // Defense mode. Enter is Pro-gated inside the service; exit and wave-off
+  // are deliberately ungated — standing down must always work.
+  ipcMain.handle('defense:status', () => defense.status());
+  ipcMain.handle('defense:enter', () => defense.requestEnter({ kind: 'manual' }));
+  ipcMain.handle('defense:exit', () => { defense.exit(); return { ok: true }; });
+  ipcMain.handle('defense:wave-off', () => ({ ok: defense.waveOff() }));
+  ipcMain.handle('defense:zones', (_event, stateCode) => defense.listCountyZones(String(stateCode || '')));
+
   ipcMain.on('widget:show', showOrb);
   ipcMain.on('widget:restore', restoreMainWindow);
   // Orb drag: the widget reports gesture start/move/end; main reads the global
@@ -1090,6 +1100,9 @@ app.whenReady().then(async () => {
       if (channel === 'cameras:alert') {
         autonomy.handleCameraAlert(payload);
         pushCameraAlertToPhones(payload);
+        // Defense mode listens where the alert is born too. The service does
+        // its own opt-in/armed/night checks and always announces before entry.
+        if (defense) defense.handleCameraAlert(payload);
       }
     },
     notify: (title, body) => {
@@ -1153,7 +1166,12 @@ app.whenReady().then(async () => {
   // The router only ever reads settings (no writes, no secrets), so it takes
   // the gated view too: voice-routing into screen reading/driving respects
   // the license without the router knowing licenses exist.
-  router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands });
+  // Defense mode: the camera module's fullscreen posture. Same gated config
+  // discipline as the router — the service checks the Pro license itself at
+  // its single entry seam, and every fetch it makes is allowlist-checked.
+  defense = new DefenseService({ config, ai, cameras, emit: sendEverywhere, log });
+  defense.start();
+  router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands, defense });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
   nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config: gatedConfig, ai, documents });
   scheduleService = new ScheduleService({ store: scheduleStore, config: gatedConfig, router, nightShift, emit: sendEverywhere, log });

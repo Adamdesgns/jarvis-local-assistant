@@ -40,6 +40,16 @@ const DEFAULT_SETTINGS = {
   cameraAiDescriptions: true,
   cameraCloudVision: false,
   cameraVisionModel: 'gemma3:4b',
+  // Defense mode: the situation-board posture. Auto-triggers are opt-in and
+  // OFF by default — the mode never takes the screen without prior consent.
+  defense: {
+    countyZone: '',
+    countyName: '',
+    countyState: '',
+    autoWeather: false,
+    autoCamera: false,
+    rssFeeds: []
+  },
   autonomyEnabled: false,
   schedulesEnabled: false,
   autonomyRules: {

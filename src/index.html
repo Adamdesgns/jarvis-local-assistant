@@ -22,6 +22,7 @@
       <div class="system-state"><i id="status-dot"></i><span id="system-status">LOCAL CORE STARTING</span></div>
       <div class="top-actions">
         <button id="modules-button" class="hud-button"><b>＋</b> Modules</button>
+        <button id="defense-button" class="hud-button" title="Defense mode — every camera live, one key to exit"><b>⛨</b> Defense</button>
         <button id="layout-button" class="hud-button"><b>⌘</b> Edit layout</button>
         <button id="settings-button" class="icon-button" title="Settings">⚙</button>
         <button class="window-button" data-window="minimize">—</button>
@@ -182,6 +183,38 @@
         <div class="voice-line"><i id="voice-dot"></i><span id="voice-status">CHECKING LOCAL VOICE</span></div>
       </section>
     </main>
+
+    <!-- DEFENSE MODE: the situation board. Not a module — a posture. The real
+         #camera-grid node is moved into the wall on entry and moved home on
+         exit, so there is exactly one set of camera streams. -->
+    <section id="defense-board" class="defense-board" hidden>
+      <header class="defense-banner">
+        <span class="defense-orb-slot"><canvas id="defense-orb" aria-label="JARVIS — defense sentinel"></canvas></span>
+        <span id="defense-banner-label">DEFENSE MODE</span>
+        <button id="defense-exit" type="button" title="Exit defense mode">ESC TO EXIT</button>
+      </header>
+      <div class="defense-body">
+        <div id="defense-wall" class="defense-wall"></div>
+        <aside class="defense-rail">
+          <div class="defense-rail-block">
+            <h3>ACTIVE ALERT</h3>
+            <p id="defense-alert">No active weather alert.</p>
+            <p id="defense-alert-instruction" hidden></p>
+          </div>
+          <div class="defense-rail-block">
+            <h3>LOCAL HEADLINES</h3>
+            <ul id="defense-headlines"><li class="defense-none">No headlines configured. Add RSS feeds in Settings → CAMERAS.</li></ul>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- The announce-and-wave-off card for automatic entries. -->
+    <div id="defense-pending" class="defense-pending" hidden>
+      <strong id="defense-pending-reason">Entering defense mode</strong>
+      <span id="defense-pending-count">15</span>
+      <button id="defense-wave-off" type="button">WAVE OFF</button>
+    </div>
     </div><!-- /#classic-root -->
 
     <div id="cc-root">
@@ -344,6 +377,23 @@
               <p id="camera-add-status" class="camera-status" role="status"></p>
             </div>
             <small>Connected cameras show up in the Cameras module on the main screen — that is where you watch them, take pictures, and arm or disarm. This tab is only for linking them.</small>
+          </section>
+          <section class="wide-setting" data-tab="cameras">
+            <h3>DEFENSE MODE</h3>
+            <p class="camera-hint">When something is wrong, the whole window becomes a situation board: every camera live, the active weather alert, and local headlines. Say “defense mode” or press the ⛨ button. Esc always exits. It watches and tells — it never calls anyone or takes any action.</p>
+            <label>STATE<select id="setting-defense-state"><option value="">CHOOSE A STATE</option></select></label>
+            <label>COUNTY (FOR WEATHER ALERTS)<select id="setting-defense-county"><option value="">CHOOSE A STATE FIRST</option></select></label>
+            <label class="toggle-row"><span><b>ENTER ON SEVERE WEATHER</b><small>A Tornado, Hurricane, Severe Thunderstorm, Flash Flood, or Extreme Wind WARNING for your county proposes defense mode — always announced, 15 seconds to wave off</small></span><input id="setting-defense-weather" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>ENTER ON CAMERA MOTION AT NIGHT WHILE ARMED</b><small>Motion on an armed system during night hours proposes defense mode — same announcement, same wave-off</small></span><input id="setting-defense-camera" type="checkbox"><i></i></label>
+            <div class="defense-feeds">
+              <b class="defense-feeds-title">LOCAL NEWS FEEDS (RSS)</b>
+              <div id="defense-feed-list" class="defense-feed-list"></div>
+              <div class="camera-add-actions">
+                <input id="defense-feed-url" placeholder="https://www.wlox.com/rss (your local station's RSS link)" autocomplete="off">
+                <button type="button" id="defense-feed-add">ADD FEED</button>
+              </div>
+            </div>
+            <small>Weather alerts come straight from the National Weather Service — free, official, no account. Defense mode only ever talks to the weather service and the feeds you add here.</small>
           </section>
           <section data-tab="general">
             <h3>BEHAVIOR</h3>
@@ -552,5 +602,6 @@
     <script src="renderer.js"></script>
     <script src="command-center.js"></script>
     <script src="cameras-ui.js"></script>
+    <script src="defense-ui.js"></script>
   </body>
 </html>

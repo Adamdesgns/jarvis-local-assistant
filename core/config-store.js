@@ -14,6 +14,7 @@ function mergeSettings(defaults, saved) {
   result.routines = { ...clone(defaults.routines || {}), ...((saved || {}).routines || {}) };
   result.autonomyRules = { ...clone(defaults.autonomyRules || {}), ...((saved || {}).autonomyRules || {}) };
   result.license = { ...clone(defaults.license || {}), ...((saved || {}).license || {}) };
+  result.defense = { ...clone(defaults.defense || {}), ...((saved || {}).defense || {}) };
   if (Number(saved?.settingsVersion || 0) < 5) {
     result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'document-viewer'])];
   }
