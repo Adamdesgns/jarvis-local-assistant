@@ -97,6 +97,7 @@ function setCoreState(coreState, kicker) {
   document.body.classList.toggle('recording', coreState === 'listening');
   window.jarvisHologram?.setState(coreState);
   window.JarvisCommandCenter?.setJarvisState?.(coreState);
+  window.JarvisDefense?.setOrbState?.(coreState);
   window.jarvis.setUIState(coreState, kicker || labels[coreState]);
 }
 
@@ -967,6 +968,7 @@ async function startRecording(trigger = 'manual') {
       const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
       state.recording = null;
       window.jarvisHologram?.setAudioLevel(0);
+      window.JarvisDefense?.setOrbAudioLevel?.(0);
       if (blob.size < 800) { setCoreState('ready'); return; }
       setCoreState('processing', 'LOCAL SPEECH RECOGNITION');
       try {
@@ -987,6 +989,7 @@ async function startRecording(trigger = 'manual') {
       for (const sample of samples) { const value = (sample - 128) / 128; total += value * value; }
       const rms = Math.sqrt(total / samples.length);
       window.jarvisHologram?.setAudioLevel(Math.min(1, rms * 9));
+      window.JarvisDefense?.setOrbAudioLevel?.(Math.min(1, rms * 9));
       if (rms > .027) { heardSpeech = true; lastSpeech = performance.now(); }
       const elapsed = performance.now() - started;
       if ((heardSpeech && elapsed > 900 && performance.now() - lastSpeech > 1350) || elapsed > 15000) return stopRecording();

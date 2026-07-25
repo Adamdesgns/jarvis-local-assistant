@@ -48,6 +48,7 @@
     <button id="rig-pending">PENDING CARD</button>
     <button id="rig-update">UPDATE RAIL</button>
     <button id="rig-exit">EXIT</button>
+    <select id="rig-skin" title="Orb soul for the sentinel"></select>
   </div>
 
   <div class="rig-stage">
@@ -63,6 +64,7 @@
 
   <section id="defense-board" class="defense-board" hidden>
     <header class="defense-banner">
+      <span class="defense-orb-slot"><canvas id="defense-orb" aria-label="JARVIS — defense sentinel"></canvas></span>
       <span id="defense-banner-label">DEFENSE MODE</span>
       <button id="defense-exit" type="button" title="Exit defense mode">ESC TO EXIT</button>
     </header>
@@ -89,10 +91,23 @@
   </div>
   <button id="defense-button" hidden></button>
 
+<script src="../../src/orbs/orb-engine.js"></script>
+<script src="../../src/orbs/plasma.js"></script>
+<script src="../../src/orbs/neural.js"></script>
+<script src="../../src/orbs/classic.js"></script>
+<script src="../../src/orbs/zen.js"></script>
+<script src="../../src/orbs/halation.js"></script>
+<script src="../../src/orbs/aurora.js"></script>
+<script src="../../src/orbs/starfield.js"></script>
+<!-- NO hologram.js here: its DOMContentLoaded boot needs the app's #hologram
+     canvas and would crash. The stub below stands in for it. -->
 <script>
   // Fake preload bridge: capture the event subscriptions so the rig buttons
   // can fire them, and turn IPC calls into the events the service would emit.
   const handlers = {};
+  // Stub of the main orb host: the sentinel reads skinName/palette from it,
+  // and the rig's skin dropdown writes it.
+  window.jarvisHologram = { skinName: 'plasma', palette: 'gold', paused: false, setPaused(value) { this.paused = Boolean(value); } };
   window.jarvis = {
     defense: {
       enter: async () => { fire('enter', manualPayload()); return { ok: true }; },
@@ -155,6 +170,15 @@
   document.getElementById('rig-pending').addEventListener('click', () => fire('pending', { reason: tornado.reason, seconds: 15, spoken: '' }));
   document.getElementById('rig-update').addEventListener('click', () => fire('update', { alert: tornado.alert, headlines: [...tornado.headlines, { title: 'UPDATE: power out for 3,000 homes in Biloxi', date: 'Fri, 25 Jul 2026 21:20:00 GMT' }] }));
   document.getElementById('rig-exit').addEventListener('click', () => fire('exit', {}));
+
+  const skinSelect = document.getElementById('rig-skin');
+  for (const skin of window.OrbEngine.list()) {
+    const option = document.createElement('option');
+    option.value = skin.name;
+    option.textContent = skin.label.toUpperCase();
+    skinSelect.append(option);
+  }
+  skinSelect.addEventListener('change', () => { window.jarvisHologram.skinName = skinSelect.value; });
 </script>
 <script src="../../src/defense-ui.js"></script>
 </body>

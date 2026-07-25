@@ -1,16 +1,16 @@
-/* Classic skin — modernized 2026-07-24. All values flow from tokens.css.
+﻿/* Classic skin â€” modernized 2026-07-24. All values flow from tokens.css.
    Same selectors and layout mechanics as before; only the finish changed:
    glass + soft depth instead of scanlines and hard glows, readable type
    (11px floor) instead of 6-8px tracked microtext. */
 
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text-primary); font-family: var(--font); }
-/* Pitch black, no ambient washes — the only light in the room is JARVIS. */
+/* Pitch black, no ambient washes â€” the only light in the room is JARVIS. */
 body { background: var(--bg); }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 
-/* Retired 2015-era overlays — kept as selectors so old markup stays inert. */
+/* Retired 2015-era overlays â€” kept as selectors so old markup stays inert. */
 .ambient-grid, .scanlines { display: none; }
 
 /* ---------- top bar ---------- */
@@ -100,7 +100,7 @@ button { cursor: pointer; }
 .task-check { width: 18px; height: 18px; border: 1.5px solid var(--text-muted); background: transparent; border-radius: 6px; padding: 0; transition: all var(--dur-fast) var(--ease) }
 .task-check:hover, .task-item.done .task-check { border-color: var(--accent); background: var(--accent-tint-10) }
 .task-item.done .task-check { background: var(--accent); }
-.task-item.done .task-check::after { content: "✓"; color: #241703; font-size: 11px }
+.task-item.done .task-check::after { content: "âœ“"; color: #241703; font-size: 11px }
 .task-copy { min-width: 0 }
 .task-copy b, .task-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .task-copy b { color: var(--text-primary); font-size: var(--text-base); font-weight: 400 }
@@ -173,7 +173,7 @@ button { cursor: pointer; }
 
 /* ---------- response dock ---------- */
 .response-dock { position: absolute; z-index: 40; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(850px, calc(100vw - 80px)); height: 112px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-glass); box-shadow: var(--shadow-deep), var(--inset-highlight); backdrop-filter: blur(20px); overflow: hidden; }
-/* The command bar is a module you can close — you only need to speak to him. */
+/* The command bar is a module you can close â€” you only need to speak to him. */
 .response-dock.hidden-module { display: none }
 .dock-close { position: absolute; z-index: 2; top: 6px; right: 8px; width: 24px; height: 24px; display: grid; place-content: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); font-size: 17px; line-height: 1; cursor: pointer; opacity: 0; transition: all var(--dur-fast) var(--ease) }
 .response-dock:hover .dock-close, .dock-close:focus-visible { opacity: 1 }
@@ -264,7 +264,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 .folder-setting small { margin: 3px 0 0; font-size: var(--text-xs) }
 .folder-setting button { border: 1px solid var(--line-accent); border-radius: var(--r-sm); background: transparent; color: var(--accent); font: 500 var(--text-xs) var(--font); padding: 7px 10px }
 .wide-setting { grid-column: 1/-1 }
-/* Was an inline style attribute, which the page's CSP blocks — bullets and
+/* Was an inline style attribute, which the page's CSP blocks â€” bullets and
    default list padding leaked through. Lives in CSS now. */
 #schedule-list { list-style: none; margin: 12px 0 0; padding: 0 }
 .search-root { height: 32px; display: grid; grid-template-columns: 1fr 24px; align-items: center; border-bottom: 1px solid var(--line); color: var(--text-secondary); font-size: var(--text-sm) }
@@ -367,7 +367,7 @@ body.busy .ai-stop { display: inline-block }
 .camera-add-form { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s3) }
 .camera-hint { font: 400 var(--text-sm)/1.5 var(--ui); color: var(--text-secondary); margin: 0 }
 .camera-add-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px }
-/* These were raw browser buttons before — grey boxes in an amber app. */
+/* These were raw browser buttons before â€” grey boxes in an amber app. */
 .camera-add-actions button { height: 36px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--text-secondary); font: 500 var(--text-sm) var(--font); padding: 0 var(--s3); transition: all var(--dur-fast) var(--ease) }
 .camera-add-actions button:hover { border-color: var(--line-strong); color: var(--text-primary) }
 #camera-add-save, #blink-signin, #blink-verify, #ring-signin, #ring-verify, #nest-signin { border-color: var(--line-accent); background: var(--accent-tint-10); color: var(--accent-bright) }
@@ -376,9 +376,9 @@ body.busy .ai-stop { display: inline-block }
 .camera-status { font: 400 var(--text-sm)/1.4 var(--ui); color: var(--accent); margin: 0; min-height: 14px }
 /* ---------- camera tiles: the picture IS the tile ----------
    Name, time, source and controls ride on the image behind gradient
-   scrims, so nothing competes with the view for width — the old toolbar
-   row squeezed "Front Door" down to "Fr…". */
-/* align-items:start — otherwise a tile with an AI read stretches its
+   scrims, so nothing competes with the view for width â€” the old toolbar
+   row squeezed "Front Door" down to "Frâ€¦". */
+/* align-items:start â€” otherwise a tile with an AI read stretches its
    neighbours to match and they end in a slab of dead black. */
 .camera-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s3); align-items: start }
 .camera-empty { font: 400 var(--text-sm)/1.6 var(--ui); color: var(--text-secondary); opacity: .8 }
@@ -425,14 +425,14 @@ body.busy .ai-stop { display: inline-block }
 .camera-name { min-width: 0; color: #fff; font: 500 var(--text-md)/1.2 var(--font-display); letter-spacing: var(--track-tight); text-shadow: 0 1px 6px rgba(0,0,0,.8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .camera-time { flex: none; color: rgba(255,255,255,.62); font: 400 var(--text-xs)/1 var(--ui); font-variant-numeric: tabular-nums; letter-spacing: var(--track-tight) }
 
-/* Disconnect hides here, and asks twice — it drops the whole account. */
+/* Disconnect hides here, and asks twice â€” it drops the whole account. */
 .camera-menu { position: absolute; z-index: 3; top: 46px; right: var(--s2); max-width: calc(100% - var(--s4)); border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: rgba(10,9,8,.94); backdrop-filter: blur(12px); box-shadow: var(--shadow-deep); padding: 4px }
 .camera-menu[hidden] { display: none }
 .camera-remove { display: block; width: 100%; text-align: left; border: 0; border-radius: 6px; background: transparent; color: var(--danger); font: 500 var(--text-xs)/1.4 var(--ui); padding: 8px 10px; cursor: pointer }
 .camera-remove:hover { background: var(--danger-tint) }
 .camera-remove.confirming { background: var(--danger-tint); color: #ffb3ad }
 
-/* What JARVIS says gets its own band and its own voice — a motion alert
+/* What JARVIS says gets its own band and its own voice â€” a motion alert
    must never look like a timestamp, and an error must never look calm. */
 .camera-read { display: grid; grid-template-columns: 14px 1fr; gap: var(--s2); align-items: start; padding: 10px var(--s3) 12px; background: var(--accent-tint-06); border-top: 1px solid var(--line-accent) }
 .camera-read[hidden] { display: none }
@@ -454,7 +454,7 @@ body.busy .ai-stop { display: inline-block }
 .camera-brand-tabs button.active { color: var(--accent); border-color: var(--line-accent); background: var(--accent-tint-06) }
 .camera-pane { display: flex; flex-direction: column; gap: 6px }
 /* A class-level `display:flex` beats the browser's own [hidden] rule, so every
-   brand pane and every conditional row rendered at once — all four sign-ins
+   brand pane and every conditional row rendered at once â€” all four sign-ins
    stacked on top of each other. These put the hidden attribute back in charge. */
 .camera-pane[hidden], .camera-add-actions[hidden] { display: none }
 /* A reading and a button must not look like the same thing: state is a
@@ -530,7 +530,7 @@ body.busy .ai-stop { display: inline-block }
 .pro-feature-table b { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: .12em; color: var(--gold-300) }
 .pro-feature-table ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.7; opacity: .85 }
 
-/* ── THE TERMINAL (stage 1) ─────────────────────────────────────────────
+/* â”€â”€ THE TERMINAL (stage 1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    A JARVIS console, not a shell. --term-accent is written by the renderer
    from the chosen orb colour, so the rain and the text wear the same
    colourway as the sphere. */
@@ -694,3 +694,19 @@ body.defense #autonomy-cards { display: none; }
 /* The class rules above set display, which would beat the [hidden] attribute
    exactly like the camera sign-in bug of 2026-07-24. Never again: */
 .defense-board[hidden], .defense-pending[hidden] { display: none; }
+
+/* The red sentinel: JARVIS himself in the defense banner. The filter turns
+   whatever soul/colorway the user runs into a uniform menacing red - the
+   grayscale step normalizes gold AND obsidian before the sepia+rotate remap,
+   and it composites over WebGL (plasma) and canvas-2D skins alike. The id
+   survives cloneNode(false), so the filter survives every skin swap. */
+.defense-orb-slot { width: 64px; height: 64px; position: relative; flex-shrink: 0; }
+#defense-orb {
+  width: 100%; height: 100%; display: block;
+  filter: grayscale(1) sepia(1) saturate(5.5) hue-rotate(-46deg) brightness(1.12) contrast(1.28) drop-shadow(0 0 20px rgba(255, 30, 30, .5));
+}
+/* Three children now: orb, label, exit. Keep the label riding next to the
+   orb and push only the exit button to the far edge. */
+.defense-banner { justify-content: flex-start; }
+.defense-banner button { margin-left: auto; }
+

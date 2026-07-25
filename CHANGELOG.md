@@ -7,6 +7,9 @@
   drops away: **every camera goes live at once** on a fullscreen wall, with a
   red banner naming exactly what fired and when. **Esc always exits** — so does
   "stand down."
+- **JARVIS rides the banner as a red sentinel** — whichever orb soul you run
+  goes crimson while the mode is up, and he still reacts: listening, thinking,
+  speaking. Your normal gold or obsidian comes back the moment you stand down.
 - A side rail shows the **active National Weather Service alert** for your
   county — straight from the source, free, no account — plus **local headlines**
   from RSS feeds you pick in Settings → CAMERAS.

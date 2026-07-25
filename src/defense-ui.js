@@ -21,6 +21,45 @@
   let active = false;
   let startedLiveKeys = [];
   let countdownTimer = null;
+  let lastCoreState = 'ready';
+  let mainOrbWasPaused = false;
+
+  // The red sentinel: a second engine instance wearing the user's chosen
+  // soul, created on entry and destroyed on exit (widget.js mold — a canvas
+  // only ever holds one context type, so every create gets a fresh node).
+  // The red comes from CSS on #defense-orb, never from the skins.
+  const orbHost = {
+    canvas: document.getElementById('defense-orb'),
+    instance: null,
+    create() {
+      const engine = window.OrbEngine;
+      if (!engine || !this.canvas || this.instance) return;
+      const main = window.jarvisHologram; // live skin/color, incl. unsaved preview
+      const resolved = engine.resolveExact(main && main.skinName) || engine.resolve('original');
+      if (!resolved) return;
+      const fresh = this.canvas.cloneNode(false);
+      this.canvas.replaceWith(fresh);
+      this.canvas = fresh;
+      this.instance = resolved.create(fresh);
+      if (this.instance.setPalette) this.instance.setPalette(engine.normalizePalette(main && main.palette));
+      this.instance.setState(lastCoreState);
+    },
+    destroy() {
+      if (!this.instance) return;
+      if (this.instance.destroy) this.instance.destroy();
+      this.instance = null;
+      const fresh = this.canvas.cloneNode(false); // drop the retired skin's last frame
+      this.canvas.replaceWith(fresh);
+      this.canvas = fresh;
+    },
+    setState(state) {
+      lastCoreState = state || 'ready';
+      if (this.instance) this.instance.setState(lastCoreState);
+    },
+    setAudioLevel(level) {
+      if (this.instance && this.instance.setAudioLevel) this.instance.setAudioLevel(level);
+    }
+  };
 
   function renderRail(alert, headlines) {
     const properties = alert && alert.properties;
@@ -79,6 +118,12 @@
     wall.append(grid);
     document.body.classList.add('defense');
     board.hidden = false;
+    // The stage is hidden while defense is up — pause the main orb (restore
+    // its PRIOR value on exit: the Command Center skin keeps it paused on
+    // purpose). The sentinel is created after unhide so it measures real px.
+    mainOrbWasPaused = Boolean(window.jarvisHologram && window.jarvisHologram.paused);
+    window.jarvisHologram?.setPaused?.(true);
+    orbHost.create();
     hidePending();
     goLiveEverywhere();
     if (payload.read && typeof speak === 'function') speak(payload.read);
@@ -88,6 +133,8 @@
     if (!active) return;
     active = false;
     stopWhatWeStarted();
+    orbHost.destroy();
+    window.jarvisHologram?.setPaused?.(mainOrbWasPaused); // restore, never blanket-false
     gridHome.append(grid);
     board.hidden = true;
     document.body.classList.remove('defense');
@@ -135,5 +182,11 @@
   window.jarvis.onDefensePendingCancelled(() => hidePending());
   window.jarvis.onDefenseUpdate((payload) => { if (active) renderRail(payload.alert, payload.headlines); });
 
-  window.JarvisDefense = { enter, exit, isActive: () => active };
+  window.JarvisDefense = {
+    enter,
+    exit,
+    isActive: () => active,
+    setOrbState: (state) => orbHost.setState(state),
+    setOrbAudioLevel: (level) => orbHost.setAudioLevel(level)
+  };
 })();
