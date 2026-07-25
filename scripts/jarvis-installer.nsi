@@ -1,4 +1,11 @@
 Unicode True
+
+; Keep in step with "version" in package.json. test/installer-version.test.js
+; fails the build if these two ever drift apart again — they were 0.11.2 vs
+; 0.18.0 for seven releases, so Windows reported the wrong version in
+; "Installed apps" the whole time.
+!define JARVIS_VERSION "0.18.0"
+
 Name "JARVIS Local Assistant"
 OutFile "..\dist\JARVIS-FREE-SETUP.exe"
 InstallDir "$LOCALAPPDATA\Programs\JARVIS"
@@ -32,7 +39,7 @@ Section "Install JARVIS"
   WriteUninstaller "$INSTDIR\Uninstall JARVIS.exe"
   WriteRegStr HKCU "Software\JARVIS" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\JARVIS" "DisplayName" "JARVIS Local Assistant"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\JARVIS" "DisplayVersion" "0.11.2"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\JARVIS" "DisplayVersion" "${JARVIS_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\JARVIS" "Publisher" "Adam"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\JARVIS" "UninstallString" '"$INSTDIR\Uninstall JARVIS.exe"'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\JARVIS" "NoModify" 1

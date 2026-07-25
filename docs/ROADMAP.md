@@ -27,8 +27,12 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
 - [ ] **THE TERMINAL, stage 2: real commands** — user-typed Windows commands run in
       the terminal (user-driven only; the AI still never gets arbitrary shell).
       Confirm-card before anything destructive. Display-only for AI output.
-- [ ] **0.18.0 release stamp** — version bump + CHANGELOG entry covering the merged
+- [x] **0.18.0 release stamp** — version bump + CHANGELOG entry covering the merged
       pile (orb souls everywhere, tabbed settings, Night Shift, battle mode).
+      Done 2026-07-24: package.json was already 0.18.0 via the Pro merge; the
+      CHANGELOG now covers the whole pile, and the NSIS installer's hardcoded
+      0.11.2 was replaced with a single `JARVIS_VERSION` define guarded by
+      `test/installer-version.test.js`.
 
 ## NEXT
 

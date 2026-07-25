@@ -21,7 +21,70 @@
 - Enforced in code, not politeness: the license gate lives in the main
   process (`core/license-gate.js`, same discipline as screen-guard), the
   renderer cannot write license state, and mutation-style tests fail if any
-  gate is deleted. 506 tests pass.
+  gate is deleted.
+
+### Added — Choose your JARVIS: eight orb souls
+- The sphere is no longer one look. Pick from **Classic, Plasma, Neural, Zen,
+  Halation, Aurora, Starfield** or the **Original** ball, in **gold** or
+  **obsidian** — Settings → GENERAL, with a live preview.
+- Your choice follows you everywhere: the main window, the floating
+  minimize-orb on your desktop, and the phone companion (which can also just
+  say "match the desktop").
+- Shape and colour are separate choices, so any soul works in either colourway.
+
+### Added — Night Shift: he works while you sleep
+- Turn it on in Settings → NIGHT SHIFT and JARVIS runs jobs between midnight
+  and 6am, leaving **drafts** for you to read in the morning.
+- **It cannot send and cannot delete** — drafts only, by design. There are caps
+  on jobs per night and minutes of work, and the **cloud spending limit starts
+  at $0** until you deliberately raise it.
+- A quiet **heartbeat** checks in periodically during the day and speaks only
+  when something genuinely needs you — card-only during quiet hours, and it
+  mentions a finding once instead of nagging.
+
+### Added — Battle mode
+- Say **"battle me"**, "rap battle" or "spit some bars" and JARVIS trades
+  verses with you. Keeps it PG-13.
+
+### Changed — A new look, top to bottom
+- One **design-token system** now drives every colour, size and animation
+  curve in the app, so nothing drifts out of step again.
+- The window went **pitch black with glass panels**. The old hacker-console
+  scanlines, corner notches and 6px micro-text are gone.
+- The **command bar can be closed** now — shut it and just talk to him.
+- Animation is yours to pick: FULL CINEMATIC, FAST, or REDUCED MOTION (and
+  the system "reduce motion" setting is respected automatically).
+
+### Changed — Settings split into eight tabs
+- The one long scroll is now **GENERAL · BRAINS · CAMERAS · AUTOMATION ·
+  ABILITIES · PHONE · PRO · SYSTEM**. Everything saves exactly as before.
+
+### Changed — Cameras: the picture is the tile
+- The camera grid shows the picture itself as the tile instead of a label with
+  a thumbnail bolted on.
+- **Signing cameras in now lives in Settings → CAMERAS**, not in the camera
+  module. The module is for watching; Settings is for linking. The module's
+  ADD button takes you straight there.
+
+### Fixed
+- **The installer reported the wrong version.** It hardcoded 0.11.2 while the
+  app had moved on to 0.18.0, so Windows "Installed apps" showed a version
+  seven releases old. There is now one version string and a test that fails the
+  build if it ever drifts from package.json again.
+- **Camera sign-in forms all painted at once.** A `display:flex` rule outranked
+  the browser's own "hidden" rule, so switching brand tabs never actually hid
+  anything and all four forms stacked on top of each other.
+- **The Modules drawer clipped with no way to scroll** — the overhaul had
+  dropped its scrolling rule.
+- **Long toggle descriptions ran into the next setting's title** (Night Shift's
+  text collided with HEARTBEAT). Rows can grow now instead of being pinned to a
+  fixed height.
+- **The schedule list rendered with stray bullets and wrong indentation**, and
+  DOWNLOAD UPDATE could appear on boot when there was no update. Both were the
+  app's own security policy silently blocking inline styles — the renderer
+  console is completely clean now, so real errors can't hide in the noise.
+
+510 tests pass.
 
 ## 0.17.0 — July 23, 2026
 
