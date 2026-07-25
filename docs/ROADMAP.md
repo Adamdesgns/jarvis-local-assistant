@@ -43,6 +43,13 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
       Command Center blue: Retro (the old scanline/CRT look, it's in git history),
       Matrix (pairs with the terminal), obsidian mono. `body[data-skin]` already
       supports this; each skin is mostly CSS + a settings option.
+- [ ] **EVERY ORB GETS ITS OWN PERSONALITY** *(Adam, 2026-07-24)* — the eight souls are
+      looks only today. The chosen soul should also decide who JARVIS *is*: voice pick,
+      phrasing, how clipped or chatty, greeting and wake response. Picking Starfield vs
+      Plasma should feel like a different character, not different wallpaper. Design
+      first (one dial vs a written character per soul; system prompt vs voice vs both).
+      HARD RAIL: personality changes tone only — never permissions, never the wording of
+      approval/safety cards, never what unattended runs may do.
 - [ ] **Cinematic orb souls, round 2** — volumetric nebula w/ god rays, liquid-metal
       ferrofluid, glass caustics, storm core w/ lightning, galaxy spiral.
       (Electron offscreen rendering: NO bufferless gl_VertexID draws — a prior

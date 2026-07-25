@@ -83,44 +83,113 @@
     if (result.ok) { nameInput.value = ''; urlInput.value = ''; render(); }
   });
 
-  function tile(camera) {
+  // One icon language: 1.6px stroke, currentColor, 24-box. No emoji.
+  const ICON = {
+    refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>',
+    look: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/><path d="M11 8.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" fill="currentColor" stroke="none"/>',
+    more: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+    play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
+    stop: '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>',
+    spark: '<path d="M12 3l1.9 5.2 5.2 1.9-5.2 1.9L12 17.2l-1.9-5.2L4.9 10l5.2-1.9z"/>'
+  };
+  const svg = (paths, size = 15) =>
+    `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${paths}</svg>`;
+
+  // Every message the tile shows lands in one band under the picture, with a
+  // tone so a motion alert never looks like a calm description or an error.
+  function say(article, text, tone = 'read') {
+    const band = article.querySelector('.camera-read');
+    const stamp = article.querySelector('.camera-stamp');
+    stamp.textContent = text || '';
+    band.dataset.tone = tone;
+    band.hidden = !text;
+  }
+
+  function tile(camera, siblingCount) {
     const article = document.createElement('div');
     article.className = 'camera-tile';
     article.dataset.key = camera.key;
     article.innerHTML = `
-      <div class="camera-view"><img alt="" hidden><video muted autoplay playsinline hidden></video><span class="camera-view-empty">NO PICTURE YET</span></div>
-      <div class="camera-tile-bar">
-        <span class="camera-name"></span><b class="camera-brand"></b>
-        <button class="camera-refresh" title="Take a fresh picture">↻</button>
-        <button class="camera-describe" title="Ask the AI what it sees">🔎 AI</button>
-        <button class="camera-live" title="Live view">▶ LIVE</button>
-        <button class="camera-remove" title="Remove this camera's account">×</button>
+      <div class="camera-view">
+        <img alt="" hidden><video muted autoplay playsinline hidden></video>
+        <span class="camera-view-empty">NO PICTURE YET</span>
+        <div class="camera-top">
+          <span class="camera-source"><i class="camera-dot"></i><b class="camera-brand"></b></span>
+          <span class="camera-acts">
+            <button class="camera-icon camera-refresh" title="Take a fresh picture" aria-label="Take a fresh picture">${svg(ICON.refresh)}</button>
+            <button class="camera-icon camera-describe" title="Ask JARVIS what he sees" aria-label="Ask JARVIS what he sees">${svg(ICON.look)}</button>
+            <button class="camera-icon camera-more" title="More" aria-label="More options" aria-expanded="false">${svg(ICON.more)}</button>
+          </span>
+        </div>
+        <button class="camera-live" title="Watch live" aria-label="Watch live">
+          <span class="camera-live-play">${svg(ICON.play, 20)}</span>
+          <span class="camera-live-stop">${svg(ICON.stop, 18)}</span>
+          <span class="camera-live-wait"></span>
+        </button>
+        <div class="camera-caption"><span class="camera-name"></span><span class="camera-time"></span></div>
+        <div class="camera-menu" hidden><button class="camera-remove" type="button"></button></div>
       </div>
-      <span class="camera-stamp"></span>`;
+      <div class="camera-read" hidden>${svg(ICON.spark, 14)}<p class="camera-stamp"></p></div>`;
     article.querySelector('.camera-name').textContent = camera.name;
     article.querySelector('.camera-brand').textContent = camera.brand.toUpperCase();
-    article.querySelector('img').alt = camera.name;
+    article.querySelector('img').alt = `Latest picture from ${camera.name}`;
+
+    // Say out loud what removal really does — it drops the whole account.
+    const remove = article.querySelector('.camera-remove');
+    const removeLabel = siblingCount > 1
+      ? `Disconnect ${camera.brand.toUpperCase()} — removes all ${siblingCount} cameras`
+      : `Disconnect ${camera.brand.toUpperCase()} — removes this camera`;
+    remove.textContent = removeLabel;
+
     if (camera.liveOnly) {
       // Nest: no snapshot API — the tile is live-view only.
       article.querySelector('.camera-refresh').hidden = true;
       article.querySelector('.camera-describe').hidden = true;
       article.querySelector('.camera-view-empty').textContent = 'LIVE VIEW ONLY';
     }
+
     article.querySelector('.camera-refresh').addEventListener('click', () => refresh(article, camera, true));
     article.querySelector('.camera-describe').addEventListener('click', async () => {
-      const stamp = article.querySelector('.camera-stamp');
-      stamp.textContent = 'Looking…';
+      article.dataset.thinking = 'on';
+      say(article, 'Looking at the picture…', 'thinking');
       const described = await window.jarvis.cameras.describe(camera.key);
+      article.dataset.thinking = '';
       if (described.ok && described.jpegBase64) {
         const img = article.querySelector('img');
         img.src = `data:image/jpeg;base64,${described.jpegBase64}`;
         img.hidden = false;
         article.querySelector('.camera-view-empty').hidden = true;
       }
-      stamp.textContent = described.ok ? described.text : (described.message || 'Could not describe the picture.');
+      if (described.ok) say(article, described.text, 'read');
+      else say(article, described.message || 'Could not describe the picture.', 'error');
     });
     article.querySelector('.camera-live').addEventListener('click', () => toggleLive(article, camera));
-    article.querySelector('.camera-remove').addEventListener('click', async () => {
+
+    // The destructive action hides behind the ⋯ menu and asks twice.
+    const menu = article.querySelector('.camera-menu');
+    const more = article.querySelector('.camera-more');
+    more.addEventListener('click', () => {
+      const opening = menu.hidden;
+      menu.hidden = !opening;
+      more.setAttribute('aria-expanded', String(opening));
+      remove.classList.remove('confirming');
+      remove.textContent = removeLabel;
+    });
+    let removeTimer = null;
+    remove.addEventListener('click', async () => {
+      if (!remove.classList.contains('confirming')) {
+        remove.classList.add('confirming');
+        remove.textContent = 'Tap again to disconnect';
+        // The armed state expires, same as arm/disarm — walking away must
+        // never leave a one-click account deletion sitting there.
+        removeTimer = setTimeout(() => {
+          remove.classList.remove('confirming');
+          remove.textContent = removeLabel;
+          removeTimer = null;
+        }, 5000);
+        return;
+      }
+      if (removeTimer) { clearTimeout(removeTimer); removeTimer = null; }
       await window.jarvis.cameras.removeAccount(camera.accountId);
       render();
     });
@@ -128,16 +197,19 @@
   }
 
   async function refresh(article, camera, manual) {
+    if (manual) article.dataset.loading = 'on';
     const shot = await window.jarvis.cameras.snapshot(camera.key, manual);
+    article.dataset.loading = '';
     const img = article.querySelector('img');
-    const stamp = article.querySelector('.camera-stamp');
     if (shot.ok) {
       img.src = `data:image/jpeg;base64,${shot.jpegBase64}`;
       img.hidden = false;
       article.querySelector('.camera-view-empty').hidden = true;
-      stamp.textContent = `PICTURE · ${new Date(shot.takenAt).toLocaleTimeString()}`;
+      // The clock belongs on the picture; the band is for what JARVIS says.
+      article.querySelector('.camera-time').textContent =
+        new Date(shot.takenAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     } else if (manual) {
-      stamp.textContent = shot.message || 'Could not get a picture.';
+      say(article, shot.message || 'Could not get a picture.', 'error');
     }
   }
 
@@ -146,9 +218,16 @@
     const img = article.querySelector('img');
     const button = article.querySelector('.camera-live');
     if (livePeers.has(camera.key)) { stopLive(camera.key, article); return; }
-    button.textContent = '… CONNECTING';
+    // State drives the icon now, so the label never has to be rewritten.
+    article.dataset.live = 'connecting';
+    button.setAttribute('aria-label', 'Connecting to the live view');
     const live = await window.jarvis.cameras.liveStart(camera.key);
-    if (!live.ok) { button.textContent = '▶ LIVE'; article.querySelector('.camera-stamp').textContent = live.message; return; }
+    if (!live.ok) {
+      article.dataset.live = '';
+      button.setAttribute('aria-label', 'Watch live');
+      say(article, live.message || 'Live view is not available.', 'error');
+      return;
+    }
     try {
       const peer = new RTCPeerConnection();
       livePeers.set(camera.key, peer);
@@ -178,11 +257,12 @@
       await peer.setRemoteDescription({ type: 'answer', sdp: answerSdp });
       video.hidden = false; img.hidden = true;
       article.querySelector('.camera-view-empty').hidden = true;
-      button.textContent = '■ STOP';
-      article.querySelector('.camera-stamp').textContent = 'LIVE';
+      article.dataset.live = 'on';
+      button.setAttribute('aria-label', 'Stop the live view');
+      article.querySelector('.camera-time').textContent = 'LIVE';
     } catch (error) {
       stopLive(camera.key, article);
-      article.querySelector('.camera-stamp').textContent = `Live view failed: ${error.message}`;
+      say(article, `Live view failed: ${error.message}`, 'error');
     }
   }
 
@@ -193,10 +273,11 @@
     if (article) {
       const video = article.querySelector('video');
       video.srcObject = null; video.hidden = true;
-      article.querySelector('.camera-live').textContent = '▶ LIVE';
+      article.dataset.live = '';
+      article.querySelector('.camera-live').setAttribute('aria-label', 'Watch live');
       const img = article.querySelector('img');
       if (img.src) img.hidden = false;
-      article.querySelector('.camera-stamp').textContent = '';
+      article.querySelector('.camera-time').textContent = '';
     }
   }
 
@@ -305,11 +386,23 @@
     const cameras = await window.jarvis.cameras.list();
     grid.innerHTML = '';
     if (!cameras.length) {
-      grid.innerHTML = '<p class="camera-empty">No cameras yet. Select ＋ ADD to connect one.</p>';
+      grid.innerHTML = `
+        <div class="camera-none">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M3.5 7.5h12a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-12a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2z"/><path d="M17.5 11l4-2.5v7l-4-2.5z"/></svg>
+          <b>No cameras connected</b>
+          <p>Ring, Blink, Nest and local cameras all link from Settings. Once one is on, its picture and JARVIS's read of it show up here.</p>
+          <button type="button" class="camera-none-cta">CONNECT A CAMERA</button>
+        </div>`;
+      grid.querySelector('.camera-none-cta').addEventListener('click', () => addToggle.click());
       return;
     }
+    // How many cameras ride on each account, so "disconnect" can say so.
+    const perAccount = cameras.reduce((count, cam) => {
+      count[cam.accountId] = (count[cam.accountId] || 0) + 1;
+      return count;
+    }, {});
     for (const camera of cameras) {
-      const article = tile(camera);
+      const article = tile(camera, perAccount[camera.accountId]);
       grid.appendChild(article);
       if (!camera.liveOnly) refresh(article, camera, false);
     }
@@ -325,7 +418,7 @@
       img.hidden = false;
       article.querySelector('.camera-view-empty').hidden = true;
     }
-    article.querySelector('.camera-stamp').textContent = `⚠ ${alert.body}`;
+    say(article, alert.body, 'alert');
   });
 
   window.jarvis.onCamerasChanged(() => render());
