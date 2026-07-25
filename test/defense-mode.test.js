@@ -6,7 +6,8 @@ const {
   pickTriggerAlert,
   buildBannerLabel,
   createEntryGate,
-  parseRss
+  parseRss,
+  buildSituationReadPrompt
 } = require('../core/defense-mode');
 
 test('isDefenseRequest recognizes defense phrasings', () => {
@@ -90,6 +91,36 @@ test('buildBannerLabel formats a camera trigger', () => {
     buildBannerLabel({ kind: 'camera', cameraName: 'Front Door' }, nineFortyThree),
     'DEFENSE MODE · MOTION AT FRONT DOOR · 21:43'
   );
+});
+
+// --- Spoken-read prompt ---
+
+test('buildSituationReadPrompt carries the trigger, the alert instruction, and the headlines', () => {
+  const prompt = buildSituationReadPrompt(
+    { kind: 'weather', event: 'Tornado Warning', area: 'Harrison County' },
+    { properties: { event: 'Tornado Warning', headline: 'Tornado Warning until 10 PM', instruction: 'Take shelter now in a basement or interior room.' } },
+    [{ title: 'Tornado confirmed near Gulfport' }, { title: 'Shelters open across Harrison County' }]
+  );
+  assert.match(prompt, /Tornado Warning/);
+  assert.match(prompt, /Take shelter now/);
+  assert.match(prompt, /Tornado confirmed near Gulfport/);
+  assert.match(prompt, /Shelters open across Harrison County/);
+  assert.match(prompt, /120 words/);
+  assert.match(prompt, /JARVIS/);
+});
+
+test('buildSituationReadPrompt is honest when the night is quiet', () => {
+  const prompt = buildSituationReadPrompt({ kind: 'manual' }, null, []);
+  assert.match(prompt, /no active (?:weather )?alert/i);
+  assert.match(prompt, /no headlines/i);
+  assert.match(prompt, /manual/i);
+});
+
+test('buildSituationReadPrompt welds in the report-only rail', () => {
+  const prompt = buildSituationReadPrompt({ kind: 'camera', cameraName: 'Front Door' }, null, []);
+  assert.match(prompt, /report/i);
+  assert.match(prompt, /never (?:tell|advise|instruct).*(?:call|dial|arm|confront)/is);
+  assert.match(prompt, /Front Door/);
 });
 
 // --- RSS parser ---

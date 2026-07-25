@@ -145,4 +145,39 @@ function parseRss(xml, max = 10) {
   return out;
 }
 
-module.exports = { isDefenseRequest, isStandDown, pickTriggerAlert, buildBannerLabel, createEntryGate, parseRss, WARNING_TIER };
+// The spoken read: JARVIS tells the user what is happening, once, on entry.
+// The report-only rail rides IN the prompt and is asserted by tests — the
+// mode watches and tells, it never directs anyone to act.
+function describeReason(reason) {
+  if (reason?.kind === 'weather') return `an automatic weather trigger: ${reason.event}${reason.area ? ` for ${reason.area}` : ''}`;
+  if (reason?.kind === 'camera') return `an automatic camera trigger: motion at ${reason.cameraName || 'a camera'} while the system is armed`;
+  return 'a manual request';
+}
+
+function buildSituationReadPrompt(reason, alert, headlines) {
+  const alertBlock = alert?.properties
+    ? [
+        `ACTIVE ALERT: ${alert.properties.headline || alert.properties.event || 'unnamed alert'}`,
+        alert.properties.instruction ? `OFFICIAL INSTRUCTION TEXT: ${alert.properties.instruction}` : ''
+      ].filter(Boolean).join('\n')
+    : 'ACTIVE ALERT: none — there is no active weather alert right now.';
+  const headlineBlock = Array.isArray(headlines) && headlines.length
+    ? `LOCAL HEADLINES:\n${headlines.map((item) => `- ${item.title}`).join('\n')}`
+    : 'LOCAL HEADLINES: none — no headlines are available.';
+  return [
+    'You are JARVIS — the composed British AI butler. Defense mode has just come up on screen and you are reading the situation aloud, once, calmly.',
+    '',
+    `WHY IT FIRED: ${describeReason(reason)}.`,
+    alertBlock,
+    headlineBlock,
+    '',
+    'HARD RULES — these outrank everything:',
+    '- At most 120 words, spoken prose, no lists, no markdown.',
+    '- Report only: say what fired, what the official alert text says to do (quote its substance, do not invent safety advice), and what the headlines say.',
+    '- If there is no alert or no headlines, say so plainly — never pad, never speculate.',
+    '- You never tell the user to call, dial, arm, or confront anyone or anything. You watch and you tell; decisions are theirs.',
+    '- No greeting, no sign-off — straight into the read.'
+  ].join('\n');
+}
+
+module.exports = { isDefenseRequest, isStandDown, pickTriggerAlert, buildBannerLabel, createEntryGate, parseRss, buildSituationReadPrompt, WARNING_TIER };
