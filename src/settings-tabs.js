@@ -5,6 +5,7 @@
   const TABS = [
     { id: 'general', label: 'GENERAL' },
     { id: 'brains', label: 'BRAINS' },
+    { id: 'cameras', label: 'CAMERAS' },
     { id: 'automation', label: 'AUTOMATION' },
     { id: 'abilities', label: 'ABILITIES' },
     { id: 'phone', label: 'PHONE' },

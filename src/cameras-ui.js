@@ -10,8 +10,12 @@
   const addStatus = document.getElementById('camera-add-status');
   const livePeers = new Map(); // camera key -> RTCPeerConnection
 
-  addToggle.addEventListener('click', () => { addForm.hidden = !addForm.hidden; });
-  document.getElementById('camera-add-cancel').addEventListener('click', () => { addForm.hidden = true; });
+  // Linking a camera lives in Settings → CAMERAS, never in this module: the
+  // module is only for watching. The ＋ ADD button opens that tab (wired in
+  // renderer.js), and CLEAR empties the fields instead of hiding the panel.
+  document.getElementById('camera-add-cancel').addEventListener('click', () => {
+    nameInput.value = ''; urlInput.value = ''; addStatus.textContent = '';
+  });
 
   // Brand tabs: LOCAL (RTSP) | BLINK
   const panes = { rtsp: document.getElementById('camera-pane-rtsp'), blink: document.getElementById('camera-pane-blink'), ring: document.getElementById('camera-pane-ring'), nest: document.getElementById('camera-pane-nest') };
@@ -29,7 +33,7 @@
   let pendingBlinkAccount = '';
 
   document.getElementById('blink-cancel').addEventListener('click', () => {
-    addForm.hidden = true; blinkPassword.value = ''; blinkPinRow.hidden = true; pendingBlinkAccount = '';
+    blinkEmail.value = ''; blinkPassword.value = ''; blinkPinRow.hidden = true; pendingBlinkAccount = ''; addStatus.textContent = '';
   });
 
   document.getElementById('blink-signin').addEventListener('click', async () => {
@@ -45,7 +49,6 @@
       return;
     }
     addStatus.textContent = result.message || 'Blink is connected.';
-    addForm.hidden = true;
     render();
   });
 
@@ -56,7 +59,6 @@
     addStatus.textContent = result.message || '';
     if (result.ok) {
       blinkPin.value = ''; blinkPinRow.hidden = true; pendingBlinkAccount = '';
-      addForm.hidden = true;
       render();
     }
   });
@@ -71,15 +73,14 @@
     if (!nameInput.value) nameInput.value = found[0].name;
   });
 
-  addForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
+  document.getElementById('camera-add-save').addEventListener('click', async () => {
     addStatus.textContent = 'Saving…';
     const result = await window.jarvis.cameras.addRtsp({
       name: nameInput.value || 'My cameras',
       cameras: [{ name: nameInput.value, url: urlInput.value }]
     });
     addStatus.textContent = result.message || '';
-    if (result.ok) { nameInput.value = ''; urlInput.value = ''; addForm.hidden = true; render(); }
+    if (result.ok) { nameInput.value = ''; urlInput.value = ''; render(); }
   });
 
   function tile(camera) {
@@ -208,7 +209,7 @@
   let ringPending = null; // {email, password} kept until the code arrives
 
   document.getElementById('ring-cancel').addEventListener('click', () => {
-    addForm.hidden = true; ringPassword.value = ''; ringCodeRow.hidden = true; ringPending = null;
+    ringEmail.value = ''; ringPassword.value = ''; ringCodeRow.hidden = true; ringPending = null; addStatus.textContent = '';
   });
 
   async function ringSignIn(code) {
@@ -229,7 +230,6 @@
     }
     ringPending = null; ringPassword.value = ''; ringCode.value = ''; ringCodeRow.hidden = true;
     addStatus.textContent = result.message || 'Ring is connected.';
-    addForm.hidden = true;
     render();
   }
 
@@ -239,8 +239,10 @@
   // Nest advanced setup: three Google console values, then browser sign-in.
   document.getElementById('nest-console').addEventListener('click', () => window.jarvis.cameras.openNestConsole());
   document.getElementById('nest-cancel').addEventListener('click', () => {
-    addForm.hidden = true;
+    document.getElementById('nest-project').value = '';
+    document.getElementById('nest-client-id').value = '';
     document.getElementById('nest-client-secret').value = '';
+    addStatus.textContent = '';
   });
   document.getElementById('nest-signin').addEventListener('click', async () => {
     addStatus.textContent = 'Opening Google sign-in in your browser… approve JARVIS there, then come back.';
@@ -252,7 +254,6 @@
     addStatus.textContent = result.message || '';
     if (result.ok) {
       document.getElementById('nest-client-secret').value = '';
-      addForm.hidden = true;
       render();
     }
   });

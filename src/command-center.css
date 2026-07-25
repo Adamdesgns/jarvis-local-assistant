@@ -139,6 +139,8 @@ body[data-skin="command-center"] .diagnostic-row:not(.pass):not(.fail) i{backgro
 body[data-skin="command-center"] .pw-field .pw-toggle{border-left-color:rgba(88,216,255,.22);background:rgba(88,216,255,.07)}
 body[data-skin="command-center"] .settings-tabs{border-bottom-color:rgba(88,216,255,.2)}
 body[data-skin="command-center"] .settings-tabs button.active{color:#8fe6ff;border-color:rgba(88,216,255,.55);background:rgba(88,216,255,.09)}
+body[data-skin="command-center"] .camera-brand-tabs button.active{color:#8fe6ff;border-color:rgba(88,216,255,.55);background:rgba(88,216,255,.09)}
+body[data-skin="command-center"] #camera-add-save,body[data-skin="command-center"] #blink-signin,body[data-skin="command-center"] #blink-verify,body[data-skin="command-center"] #ring-signin,body[data-skin="command-center"] #ring-verify,body[data-skin="command-center"] #nest-signin{border-color:rgba(88,216,255,.45);background:rgba(88,216,255,.09);color:#bdefff}
 
 @keyframes cc-spin{to{transform:rotate(360deg)}}
 @keyframes cc-reverseSpin{to{transform:rotate(-360deg)}}

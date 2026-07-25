@@ -361,7 +361,13 @@ body.busy .ai-stop { display: inline-block }
 .cameras-content { display: flex; flex-direction: column; gap: var(--s2); overflow: auto }
 .camera-add-form { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s3) }
 .camera-hint { font: 400 var(--text-sm)/1.5 var(--ui); color: var(--text-secondary); margin: 0 }
-.camera-add-actions { display: flex; gap: 6px }
+.camera-add-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px }
+/* These were raw browser buttons before — grey boxes in an amber app. */
+.camera-add-actions button { height: 36px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--text-secondary); font: 500 var(--text-sm) var(--font); padding: 0 var(--s3); transition: all var(--dur-fast) var(--ease) }
+.camera-add-actions button:hover { border-color: var(--line-strong); color: var(--text-primary) }
+#camera-add-save, #blink-signin, #blink-verify, #ring-signin, #ring-verify, #nest-signin { border-color: var(--line-accent); background: var(--accent-tint-10); color: var(--accent-bright) }
+/* Inside Settings the panel sits in a bordered section already. */
+.settings-grid .camera-add-form { border: 0; border-radius: 0; padding: 0; margin-top: var(--s3) }
 .camera-status { font: 400 var(--text-sm)/1.4 var(--ui); color: var(--accent); margin: 0; min-height: 14px }
 .camera-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s3) }
 .camera-empty { font: 400 var(--text-sm)/1.6 var(--ui); color: var(--text-secondary); opacity: .8 }
@@ -379,6 +385,10 @@ body.busy .ai-stop { display: inline-block }
 .camera-brand-tabs button { background: none; border: 1px solid var(--line); border-radius: var(--r-pill); color: var(--text-muted); font: 500 var(--text-xs)/1 var(--ui); padding: 7px 12px; cursor: pointer; transition: all var(--dur-fast) var(--ease) }
 .camera-brand-tabs button.active { color: var(--accent); border-color: var(--line-accent); background: var(--accent-tint-06) }
 .camera-pane { display: flex; flex-direction: column; gap: 6px }
+/* A class-level `display:flex` beats the browser's own [hidden] rule, so every
+   brand pane and every conditional row rendered at once — all four sign-ins
+   stacked on top of each other. These put the hidden attribute back in charge. */
+.camera-pane[hidden], .camera-add-actions[hidden] { display: none }
 .camera-systems { display: flex; flex-direction: column; gap: 4px }
 .camera-system { display: flex; align-items: center; gap: var(--s2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px var(--s3) }
 .camera-system-name { font: 500 var(--text-sm)/1 var(--ui); color: var(--text-primary); flex: 1 }

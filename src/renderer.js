@@ -1219,7 +1219,7 @@ function initSettingsTabs() {
   }));
 }
 
-function openSettings() {
+function openSettings(tab = 'general') {
   $('setting-ollama-model').value = state.settings.ollamaModel || 'qwen3:8b';
   const presets = ['qwen3:4b', 'qwen3:8b', 'qwen3:14b'];
   $('setting-ollama-preset').value = presets.includes($('setting-ollama-model').value) ? $('setting-ollama-model').value : 'custom';
@@ -1274,7 +1274,7 @@ function openSettings() {
   updateScheduleFormVisibility();
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
   if (!state.updateUrl) applyUpdateInfo({ current: state.version });
-  selectSettingsTab('general');
+  selectSettingsTab(tab);
   $('settings-modal').showModal();
 }
 
@@ -1513,7 +1513,9 @@ function bindEvents() {
   });
 
   initSettingsTabs();
-  $('settings-button').addEventListener('click', openSettings);
+  $('settings-button').addEventListener('click', () => openSettings());
+  // Cameras module: ＋ ADD sends you to the one place linking happens.
+  $('camera-add-toggle')?.addEventListener('click', () => openSettings('cameras'));
   document.querySelectorAll('[data-close-settings]').forEach((button) => button.addEventListener('click', () => $('settings-modal').close()));
   $('settings-form').addEventListener('submit', saveSettings);
   $('setting-ollama-preset').addEventListener('change', () => {
