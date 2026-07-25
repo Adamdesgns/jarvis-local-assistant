@@ -546,8 +546,48 @@ body.busy .ai-stop { display: inline-block }
 }
 .term-rain {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  z-index: 0; pointer-events: none; opacity: .38;
+  z-index: 0; pointer-events: none; opacity: .62;
 }
+
+/* ── FULLSCREEN CONSOLE ──────────────────────────────────────────────────
+   The terminal stops being a panel and becomes the machine: the desk, the
+   sphere and every other module step aside, and the rain runs at 'bold'.
+   Escape always gets you out — same contract as defense mode. The module
+   carries inline left/top/width/height from the layout engine, so these
+   need !important to win; nothing else in the app does that. */
+body.terminal-full .topbar,
+body.terminal-full .jarvis-stage,
+body.terminal-full .response-dock,
+body.terminal-full #autonomy-cards,
+body.terminal-full .module:not([data-module="terminal"]) { display: none; }
+body.terminal-full .workspace { height: 100vh; }
+body.terminal-full .module[data-module="terminal"] {
+  position: fixed !important; inset: 0 !important;
+  left: 0 !important; top: 0 !important; width: 100vw !important; height: 100vh !important;
+  z-index: 58 !important; border: 0 !important; border-radius: 0 !important;
+  background: #000; backdrop-filter: none;
+}
+/* Full bleed: no glass wash between you and the rain. */
+body.terminal-full .module[data-module="terminal"] .module-content.term-body { background: transparent; }
+body.terminal-full .term-rain { opacity: .92; }
+body.terminal-full .term-log {
+  background: linear-gradient(to bottom, rgba(0,0,0,.18), rgba(0,0,0,.34));
+  font-size: 14px; line-height: 1.7; padding: 18px 26px;
+}
+body.terminal-full .term-line { grid-template-columns: 70px 62px 1fr; }
+body.terminal-full .term-input-row { padding: 14px 26px; background: rgba(0,0,0,.5); }
+body.terminal-full .term-input, body.terminal-full .term-prompt { font-size: 14px; }
+body.terminal-full .module[data-module="terminal"] .module-header {
+  background: rgba(0,0,0,.55); cursor: default;
+}
+/* Dragging or resizing a fullscreen console is meaningless. */
+body.terminal-full .module[data-module="terminal"] .edge-grip { display: none; }
+.term-exit-hint {
+  position: fixed; right: 18px; bottom: 16px; z-index: 59;
+  color: var(--term-accent, var(--accent)); opacity: .5;
+  font: 400 10px/1 var(--font-display); letter-spacing: .16em; pointer-events: none;
+}
+body:not(.terminal-full) .term-exit-hint { display: none; }
 .term-log {
   position: relative; z-index: 1; flex: 1; min-height: 0;
   overflow-y: auto; overflow-x: hidden;

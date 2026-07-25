@@ -613,10 +613,38 @@ const terminal = (() => {
     if (!ready) return;
     if (isVisible()) {
       view.render(log.lines());
+      rain.setLevel(isFull() ? 'bold' : 'normal');
       if (motionAllowsRain()) rain.start(); else rain.stop();
     } else {
       rain.stop();
     }
+  }
+
+  function isFull() {
+    return document.body.classList.contains('terminal-full');
+  }
+
+  // Fullscreen: the console stops being a panel and becomes the machine.
+  // Always reachable and always escapable — Esc and the header button both
+  // exit, and the module's own header stays on screen carrying them.
+  function setFull(on) {
+    const wanted = Boolean(on);
+    if (wanted === isFull()) return;
+    if (wanted) {
+      if (!isVisible()) toggleModule('terminal', true);
+      document.body.classList.add('terminal-full');
+      push('system', 'Fullscreen console. Press Esc to come back.');
+    } else {
+      document.body.classList.remove('terminal-full');
+    }
+    const button = $('terminal-full');
+    if (button) {
+      button.textContent = wanted ? 'EXIT' : 'FULL';
+      button.title = wanted ? 'Back to the desk (Esc)' : 'Take over the whole screen (Esc to exit)';
+    }
+    // The canvas just changed size by a lot; re-measure before the next frame.
+    rain?.resize();
+    sync();
   }
 
   // Activity arrives newest-first and gets re-fetched whole, so diff it rather
@@ -652,6 +680,9 @@ const terminal = (() => {
     submit,
     noteActivity,
     applyAccent,
+    isFull,
+    setFull,
+    toggleFull: () => setFull(!isFull()),
     say: (text) => push('jarvis', text),
     heard: (text) => push('you', text),
     note: (text) => push('system', text),
@@ -659,6 +690,10 @@ const terminal = (() => {
     clear: () => { if (ready) { log.clear(); view.reset(); push('system', 'Console cleared.'); } },
   };
 })();
+// defense-ui.js loads before this file and needs to drop the fullscreen
+// console when the board comes up; this is the only seam it uses. Guarded
+// because interrupt/speech tests require() this file in plain Node.
+if (typeof window !== 'undefined') window.jarvisTerminal = terminal;
 
 function scheduleLayoutSave() {
   clearTimeout(state.saveTimer);
@@ -689,6 +724,9 @@ function toggleModule(name, visible) {
   scheduleLayoutSave();
   if (name === 'file-explorer' && shouldShow) showFileRoots();
   if (name === 'browser') syncBrowserAudio();
+  // Closing the console while it owns the screen would leave a black window
+  // with every other module hidden — come back to the desk first.
+  if (name === 'terminal' && !shouldShow) terminal.setFull(false);
 }
 
 // A hidden or collapsed browser module keeps its pages fully alive
@@ -1783,6 +1821,7 @@ function bindEvents() {
     terminal.submit($('terminal-input').value);
   });
   $('terminal-clear').addEventListener('click', () => terminal.clear());
+  $('terminal-full').addEventListener('click', () => terminal.toggleFull());
   $('mic-button').addEventListener('click', () => startRecording('manual'));
   $('quick-task-form').addEventListener('submit', async (event) => {
     event.preventDefault(); const title = $('quick-task-input').value.trim(); if (!title) return;
@@ -2050,6 +2089,9 @@ function bindEvents() {
     // A dialog handles its own Escape (approval modal, settings, diagnostics)
     // — let it close normally instead of also cutting off speech underneath it.
     if (document.querySelector('dialog[open]')) return;
+    // Escape is the way out of the fullscreen console, and it takes priority:
+    // being stuck in a screen-filling panel is worse than a stray speech cut.
+    if (terminal.isFull()) { terminal.setFull(false); return; }
     const speaking = 'speechSynthesis' in window && speechSynthesis.speaking;
     if (speaking || document.body.classList.contains('busy')) interruptJarvis();
   });

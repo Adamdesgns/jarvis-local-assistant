@@ -9,6 +9,23 @@
   const FONT_SIZE = 14;
   const FRAME_MS = 55; // ~18fps. Rain does not need 60 and this is somebody's laptop.
 
+  // How hard the rain paints. `normal` is the in-module look; `bold` is for
+  // fullscreen, where the rain IS the screen rather than a texture behind a
+  // panel. fade is the alpha of the black wash laid over the previous frame —
+  // LOWER fade means longer trails, so brighter levels fade less, not more.
+  // headChance/glowChance are PROBABILITIES (higher = more of them), not the
+  // raw thresholds paint() compares against — a test caught that reading the
+  // thresholds backwards is far too easy.
+  const RAIN_LEVELS = ['normal', 'bold'];
+  const RAIN_STYLES = {
+    normal: { fade: 0.14, trail: 0.34, glow: 0.72, headChance: 0.045, glowChance: 0.14 },
+    bold: { fade: 0.10, trail: 0.52, glow: 0.95, headChance: 0.08, glowChance: 0.26 }
+  };
+
+  function rainStyle(level) {
+    return RAIN_STYLES[level] || RAIN_STYLES.normal;
+  }
+
   function createRain(canvas) {
     const ctx = canvas.getContext('2d');
     let drops = [];
@@ -17,6 +34,7 @@
     let raf = 0;
     let last = 0;
     let running = false;
+    let style = rainStyle('normal');
 
     function resize() {
       const rect = canvas.getBoundingClientRect();
@@ -33,7 +51,7 @@
 
     function paint(width, height) {
       // Fade the previous frame instead of clearing: that smear IS the trail.
-      ctx.fillStyle = 'rgba(3, 4, 5, 0.16)';
+      ctx.fillStyle = `rgba(3, 4, 5, ${style.fade})`;
       ctx.fillRect(0, 0, width, height);
       ctx.font = `${FONT_SIZE}px "IBM Plex Mono", ui-monospace, monospace`;
 
@@ -42,9 +60,12 @@
         const x = i * FONT_SIZE;
         const y = drops[i] * FONT_SIZE;
         // The leading character is bright; the tail is the accent, dimmed.
-        ctx.fillStyle = Math.random() > 0.975 ? '#ffffff' : accent;
-        ctx.globalAlpha = Math.random() > 0.9 ? 0.55 : 0.22;
+        const head = Math.random() < style.headChance;
+        ctx.fillStyle = head ? '#ffffff' : accent;
+        ctx.globalAlpha = head || Math.random() < style.glowChance ? style.glow : style.trail;
+        if (head) { ctx.shadowColor = accent; ctx.shadowBlur = 8; }
         ctx.fillText(glyph, x, y);
+        ctx.shadowBlur = 0;
         if (y > height && Math.random() > 0.975) drops[i] = 0;
         else drops[i] += 1;
       }
@@ -90,6 +111,8 @@
       },
       resize,
       setAccent(hex) { accent = hex; },
+      // Fullscreen cranks this to 'bold'; the module view stays 'normal'.
+      setLevel(level) { style = rainStyle(level); },
       isRunning: () => running,
     };
   }
@@ -143,7 +166,7 @@
     };
   }
 
-  const api = { createRain, createView, FONT_SIZE };
+  const api = { createRain, createView, rainStyle, RAIN_LEVELS, FONT_SIZE };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.JarvisTerminalUI = api;
 })();

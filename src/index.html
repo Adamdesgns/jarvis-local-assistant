@@ -124,7 +124,7 @@
         </article>
 
         <article class="module hidden-module" data-module="terminal">
-          <header class="module-header drag-handle"><div><span>Console</span><h2>Terminal</h2></div><div class="module-actions"><button type="button" id="terminal-clear" class="term-clear" title="Clear the console">CLR</button><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Console</span><h2>Terminal</h2></div><div class="module-actions"><button type="button" id="terminal-clear" class="term-clear" title="Clear the console">CLR</button><button type="button" id="terminal-full" class="term-clear" title="Take over the whole screen (Esc to exit)">FULL</button><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content term-body">
             <canvas id="terminal-rain" class="term-rain" aria-hidden="true"></canvas>
             <div id="terminal-log" class="term-log" role="log" aria-live="polite" aria-label="JARVIS console"></div>
@@ -599,6 +599,7 @@
     <div id="screen-privacy" class="screen-privacy" aria-live="polite"><i></i> JARVIS IS VIEWING YOUR SCREEN</div>
     <div id="action-timeline" class="action-timeline" aria-label="Recent JARVIS actions"></div>
     <div id="toast" class="toast"></div>
+    <div class="term-exit-hint" aria-hidden="true">ESC TO EXIT</div>
     <script src="orbs/orb-engine.js"></script>
     <script src="orbs/plasma.js"></script>
     <script src="orbs/neural.js"></script>

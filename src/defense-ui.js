@@ -116,6 +116,9 @@
     bannerLabel.textContent = payload.banner || 'DEFENSE MODE';
     renderRail(payload.alert, payload.headlines);
     wall.append(grid);
+    // Defense outranks every other posture: drop the fullscreen console so two
+    // screen-filling layers never stack, and so Esc means one thing at a time.
+    window.jarvisTerminal?.setFull?.(false);
     document.body.classList.add('defense');
     board.hidden = false;
     // The stage is hidden while defense is up — pause the main orb (restore
