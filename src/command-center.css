@@ -140,6 +140,13 @@ body[data-skin="command-center"] .pw-field .pw-toggle{border-left-color:rgba(88,
 body[data-skin="command-center"] .settings-tabs{border-bottom-color:rgba(88,216,255,.2)}
 body[data-skin="command-center"] .settings-tabs button.active{color:#8fe6ff;border-color:rgba(88,216,255,.55);background:rgba(88,216,255,.09)}
 body[data-skin="command-center"] .camera-brand-tabs button.active{color:#8fe6ff;border-color:rgba(88,216,255,.55);background:rgba(88,216,255,.09)}
+body[data-skin="command-center"] .camera-icon:hover,body[data-skin="command-center"] .camera-live:hover{background:#58d8ff;border-color:#58d8ff;color:#02121a}
+body[data-skin="command-center"] .camera-read{background:rgba(88,216,255,.06);border-top-color:rgba(88,216,255,.22)}
+body[data-skin="command-center"] .camera-read[data-tone="alert"]{background:rgba(88,216,255,.11);border-top-color:rgba(88,216,255,.5)}
+body[data-skin="command-center"] .camera-read svg{stroke:#58d8ff}
+body[data-skin="command-center"] .camera-tile:hover{box-shadow:var(--shadow-soft),var(--inset-highlight),0 0 0 1px rgba(88,216,255,.3)}
+body[data-skin="command-center"] .camera-arm:hover,body[data-skin="command-center"] #camera-add-toggle:hover{border-color:rgba(88,216,255,.5);color:#8fe6ff;background:rgba(88,216,255,.07)}
+body[data-skin="command-center"] .camera-none-cta{border-color:rgba(88,216,255,.45);background:rgba(88,216,255,.09);color:#bdefff}
 body[data-skin="command-center"] #camera-add-save,body[data-skin="command-center"] #blink-signin,body[data-skin="command-center"] #blink-verify,body[data-skin="command-center"] #ring-signin,body[data-skin="command-center"] #ring-verify,body[data-skin="command-center"] #nest-signin{border-color:rgba(88,216,255,.45);background:rgba(88,216,255,.09);color:#bdefff}
 
 @keyframes cc-spin{to{transform:rotate(360deg)}}
