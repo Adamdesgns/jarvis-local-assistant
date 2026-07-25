@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "JARVIS JUNIOR — the children's build, packaged from this same repo.",
+    "Run: npm run dist:junior",
+    "",
+    "extraMetadata stamps the edition into the packaged package.json, which is",
+    "what core/edition.js reads at startup. The renamed 'name' gives the junior",
+    "build its own %APPDATA% folder, so a child's settings, chart, and notes",
+    "never mix with the grown-up JARVIS on the same PC — and the grown-up",
+    "build's saved cloud API key is not inherited by the children's one.",
+    "",
+    "Both installers can be present at once: different appId, different",
+    "product name, different icon, different shortcuts."
+  ],
+  "appId": "com.adam.jarvis.junior",
+  "productName": "JARVIS JUNIOR",
+  "asar": true,
+  "extraMetadata": {
+    "name": "jarvis-junior",
+    "productName": "JARVIS JUNIOR",
+    "jarvisEdition": "junior"
+  },
+  "asarUnpack": [
+    "scripts/**/*"
+  ],
+  "files": [
+    "main.js",
+    "preload.js",
+    "preload-stop.js",
+    "core/**/*",
+    "src/**/*",
+    "!src/mobile/**",
+    "scripts/**/*",
+    "!scripts/*.ps1",
+    "assets/**/*",
+    "INSTALL-OLLAMA.url",
+    "DISCLAIMER.txt",
+    "LICENSE",
+    "package.json"
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "assets/icon-junior.ico",
+    "artifactName": "JARVIS-JUNIOR-Setup-${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "JARVIS JUNIOR"
+  }
+}

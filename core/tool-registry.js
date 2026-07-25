@@ -1,9 +1,17 @@
 /* Safe, documented tools the local model may call. Destructive or
    approval-gated actions (delete, move, power, organize) are deliberately
    absent: those run only through the deterministic router with approval
-   cards, never on the model's own initiative. */
+   cards, never on the model's own initiative.
 
-function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras, getAi }) {
+   Two independent flags narrow this list further, and both are allowlists —
+   an unflagged tool is denied:
+     unattendedSafe — may run with nobody at the desk (scheduled tasks).
+     kidSafe        — may run in the JARVIS JUNIOR build. Reaching the file
+                      system, other programs, or the cameras is never kid-safe,
+                      so those tools carry no flag and the junior build simply
+                      never offers them. See core/edition.js. */
+
+function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras, getAi, starChart }) {
   const registry = [
     {
       name: 'add_task',
@@ -36,6 +44,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
       name: 'remember_note',
       description: 'Save a short note to local memory.',
       unattendedSafe: true,
+      kidSafe: true,
       parameters: {
         type: 'object',
         properties: { text: { type: 'string', description: 'The note to remember' } },
@@ -47,6 +56,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
       name: 'search_memory',
       description: 'Search saved local notes and memories.',
       unattendedSafe: true,
+      kidSafe: true,
       parameters: {
         type: 'object',
         properties: { query: { type: 'string' } },
@@ -101,6 +111,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
       name: 'get_current_datetime',
       description: 'Get the current local date and time.',
       unattendedSafe: true,
+      kidSafe: true,
       parameters: { type: 'object', properties: {} },
       execute: async () => ({ ok: true, now: new Date().toString() })
     },
@@ -139,6 +150,70 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
       }
     }
   ];
+
+  // JARVIS JUNIOR's own tools. Only built when a star chart exists (the
+  // junior build constructs one), so the standard registry is unchanged.
+  if (starChart) {
+    registry.push(
+      {
+        name: 'list_my_jobs',
+        description: "List the child's jobs on the star chart for today, and which are already done.",
+        kidSafe: true,
+        parameters: { type: 'object', properties: {} },
+        execute: async () => {
+          const today = starChart.listChores().filter((chore) => chore.dueToday);
+          return {
+            ok: true,
+            jobs: today.map((chore) => ({ title: chore.title, stars: chore.stars, done: chore.doneToday })),
+            stars: starChart.summary().stars
+          };
+        }
+      },
+      {
+        name: 'mark_job_done',
+        description: "Mark one of the child's jobs as done for today and award its stars. Use the job's name as the child said it.",
+        kidSafe: true,
+        parameters: {
+          type: 'object',
+          properties: { job: { type: 'string', description: 'The job the child says they finished' } },
+          required: ['job']
+        },
+        execute: async (args) => {
+          const chore = starChart.findChore(String(args.job || ''));
+          if (!chore) return { ok: false, message: `There is no job like "${args.job}" on the star chart.` };
+          const outcome = starChart.markDone(chore.id);
+          if (!outcome.ok) return { ok: false, message: 'That job could not be ticked off.' };
+          return {
+            ok: true,
+            job: chore.title,
+            alreadyDone: outcome.already === true,
+            earned: outcome.earned,
+            stars: outcome.stars,
+            streak: outcome.streak,
+            allJobsDone: outcome.allDone
+          };
+        }
+      },
+      {
+        name: 'count_my_stars',
+        description: "Get the child's star total, today's stars, and their streak of finished days.",
+        kidSafe: true,
+        parameters: { type: 'object', properties: {} },
+        execute: async () => {
+          const summary = starChart.summary();
+          return {
+            ok: true,
+            stars: summary.stars,
+            todayStars: summary.todayStars,
+            weekStars: summary.weekStars,
+            streak: summary.streak,
+            jobsLeftToday: Math.max(0, summary.dueToday - summary.doneToday)
+          };
+        }
+      }
+    );
+  }
+
   void config;
   return registry;
 }

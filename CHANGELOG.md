@@ -1,5 +1,18 @@
 # JARVIS Changelog
 
+## Unreleased
+
+### Added — JARVIS JUNIOR: a separate children's build, for ages 5 to 12
+- **Its own installer**, built from the same source: `JARVIS-JUNIOR-Setup-<version>.exe` (`npm run dist:junior`). Installs beside the grown-up JARVIS with its own name, icon, and data folder — a family PC can have both.
+- **A child's window**: one screen, a friendly face, hold-to-talk (or the space bar), spoken replies in a voice you choose, and five big buttons — Story, Joke, Riddle, My jobs, Timer.
+- **Answers at their level.** One age setting (5–12) scales sentence length, vocabulary, and story length. Homework gets hints and first steps, never the finished answer and never their essay.
+- **Story time**: original stories on any subject they pick, ending safe and settled — plus jokes, riddles, would-you-rather, and true facts.
+- **Timers and routines**: morning, bedtime, a real two-minute toothbrush timer, homework, tidy-up race, and a calming-down breathing routine that ends by pointing at a grown-up.
+- **Star chart**: jobs you set, stars they earn by saying "I fed the cat", a streak for finished days, and stars you can trade in for a real reward.
+- **The safety guard runs before the model.** Dangerous how-to questions, grown-up subjects, private-information and stranger questions get fixed answers written in the source, not whatever a model decides to say. If a child says something that sounds like they are hurting or unsafe, JARVIS JUNIOR answers with care and points them at a trusted grown-up — and deliberately does **not** list it on the grown-up screen, so a child who is unsafe at home can still say so. Everything else it deflects is listed for you.
+- **It cannot reach your PC.** No file search, reading, moving or deleting; no opening programs; no screen reading or driving; no cameras; no phone pairing, schedules, night shift or folder watching; no power controls. Those services are never started in this build, the router answers a child from a separate allowlist, and the model is offered only kid-safe tools.
+- **Grown-up settings behind a PIN** (salted, hashed, with a doubling lockout): name, age, voice, the job list, stars, and the questions it handed back to you.
+
 ## 0.17.0 — July 23, 2026
 
 ### Added — JARVIS's hands (slice 2, BETA): he can click and type for you

@@ -132,5 +132,23 @@ contextBridge.exposeInMainWorld('jarvis', {
   onUIState: (callback) => on('ui:state', callback),
   onAgentStep: (callback) => on('agent:step', callback),
   setSkin: (skin) => ipcRenderer.send('ui:skin', skin),
-  onSkin: (callback) => on('ui:skin', callback)
+  onSkin: (callback) => on('ui:skin', callback),
+  // JARVIS JUNIOR. The handlers behind these exist only in the junior build,
+  // so calling them from the grown-up window rejects — which is correct: the
+  // grown-up window has no reason to.
+  kid: {
+    chart: () => ipcRenderer.invoke('kid:chart'),
+    addJob: (input) => ipcRenderer.invoke('kid:add-job', input),
+    removeJob: (id) => ipcRenderer.invoke('kid:remove-job', id),
+    markJob: (id) => ipcRenderer.invoke('kid:mark-job', id),
+    undoJob: (id) => ipcRenderer.invoke('kid:undo-job', id),
+    redeem: (input) => ipcRenderer.invoke('kid:redeem', input),
+    questions: (limit) => ipcRenderer.invoke('kid:questions', limit),
+    onChartChanged: (callback) => on('kid:chart-changed', callback)
+  },
+  parent: {
+    status: () => ipcRenderer.invoke('parent:status'),
+    unlock: (pin) => ipcRenderer.invoke('parent:unlock', pin),
+    setPin: (payload) => ipcRenderer.invoke('parent:set-pin', payload)
+  }
 });

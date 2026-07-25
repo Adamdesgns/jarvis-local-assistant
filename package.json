@@ -19,9 +19,11 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "start:junior": "electron . --junior",
     "test": "node --test",
     "capture": "node scripts/capture-preview.js",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis",
+    "dist:junior": "electron-builder --win nsis --config electron-builder.junior.json"
   },
   "devDependencies": {
     "electron": "^43.1.0",

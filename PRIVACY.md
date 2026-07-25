@@ -36,6 +36,27 @@ To see it, press Win+R, paste `%APPDATA%\jarvis-local-assistant`, and press Ente
   (the default) sends nothing off the PC.
 - Nothing else is transmitted. JARVIS has no analytics, telemetry, or accounts.
 
+## JARVIS JUNIOR (the children's build)
+
+JARVIS JUNIOR keeps its own folder, `%APPDATA%\jarvis-junior\`, with the same
+files plus `star-chart.json` (the job list, the stars earned, and rewards
+traded in). It is a separate install: nothing is shared with the grown-up
+JARVIS on the same PC, and an API key saved in one is not visible to the
+other.
+
+Two things a parent should know before handing it over:
+
+- **The grown-up screen lists the questions it declined to answer** — the
+  "ask a grown-up" ones, so you can have the conversation yourself. Ordinary
+  chat is in `activity.jsonl` like any other command.
+- **Messages that sound like distress are answered but not listed.** If a
+  child says something suggesting they are hurting themselves or that someone
+  is hurting them, JARVIS JUNIOR responds with care and points them at a
+  trusted adult — and does not put it on the grown-up screen. A child who is
+  not safe at home has to be able to say so without the family computer
+  reporting it to the family. It is a deliberate choice, and it is the one
+  place the children's build keeps something back from a parent.
+
 ## Deleting your data
 
 - Remove a single API key: Settings → the matching Brain card → REMOVE KEY.

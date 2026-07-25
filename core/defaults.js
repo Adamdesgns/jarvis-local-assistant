@@ -99,7 +99,20 @@ const DEFAULT_SETTINGS = {
   routines: {
     'start work': { apps: ['chrome'], folders: ['anvil'] }
   },
-  personality: 'Witty, composed, loyal, and lightly sarcastic. Reads like a sharp human assistant with dry humor, never like a chatbot or movie script. Casual greetings get casual answers before any offer to help.'
+  personality: 'Witty, composed, loyal, and lightly sarcastic. Reads like a sharp human assistant with dry humor, never like a chatbot or movie script. Casual greetings get casual answers before any offer to help.',
+  // JARVIS JUNIOR (the children's build) reads these; the standard build
+  // ignores them entirely. kidAge drives vocabulary, sentence length, and
+  // story length — see core/kid-mode.js.
+  kidName: '',
+  kidAge: 8,
+  kidVoiceName: '',
+  // Grown-up settings sit behind the PIN once one is set. The PIN itself is
+  // never in settings.json — it lives in the encrypted secrets store.
+  parentLockEnabled: true,
+  // A quiet hour: the junior build answers, but says it is bedtime first.
+  kidBedtimeHour: 20,
+  kidWakeHour: 6,
+  kidBedtimeReminder: true
 };
 
 module.exports = { DEFAULT_SETTINGS };

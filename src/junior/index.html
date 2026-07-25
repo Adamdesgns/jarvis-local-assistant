@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src http://127.0.0.1:*;">
+    <title>JARVIS JUNIOR</title>
+    <link rel="stylesheet" href="junior.css">
+  </head>
+  <body>
+    <div id="app" class="app" data-state="ready">
+      <header class="topbar">
+        <div class="stars" id="star-badge" title="Your stars">
+          <span class="star-mark">★</span><b id="star-count">0</b><span class="stars-word">stars</span>
+        </div>
+        <div class="streak" id="streak-badge" hidden><span class="streak-mark">◆</span><b id="streak-count">0</b><span>day streak</span></div>
+        <div class="topbar-spacer"></div>
+        <button id="grownups-button" class="grownups-button">Grown-ups</button>
+        <button id="window-minimize" class="window-button" title="Minimise">—</button>
+        <button id="window-close" class="window-button" title="Close">×</button>
+      </header>
+
+      <main class="stage">
+        <canvas id="orb" class="orb" aria-hidden="true"></canvas>
+        <p id="listen-hint" class="listen-hint">Hold the button and talk to me</p>
+        <div id="answer" class="answer" role="status" aria-live="polite"></div>
+      </main>
+
+      <div class="talk-row">
+        <button id="talk-button" class="talk-button">
+          <span class="talk-icon" aria-hidden="true"></span>
+          <span class="talk-label">HOLD TO TALK</span>
+        </button>
+        <button id="stop-button" class="stop-button" hidden>STOP</button>
+      </div>
+
+      <form id="type-row" class="type-row">
+        <input id="type-input" class="type-input" placeholder="…or type it here" autocomplete="off" spellcheck="false" maxlength="300">
+        <button class="type-send" type="submit">ASK</button>
+      </form>
+
+      <nav class="quick-row" aria-label="Things to do">
+        <button class="quick" data-say="tell me a story"><span class="quick-mark">✦</span>Story</button>
+        <button class="quick" data-say="tell me a joke"><span class="quick-mark">☺</span>Joke</button>
+        <button class="quick" data-say="tell me a riddle"><span class="quick-mark">?</span>Riddle</button>
+        <button class="quick" id="jobs-button"><span class="quick-mark">★</span>My jobs</button>
+        <button class="quick" data-say="set a timer for 5 minutes"><span class="quick-mark">◷</span>Timer</button>
+      </nav>
+    </div>
+
+    <!-- Countdown --------------------------------------------------------->
+    <div id="timer-overlay" class="overlay" hidden>
+      <div class="sheet timer-sheet">
+        <h2 id="timer-title">Timer</h2>
+        <div class="timer-ring">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <circle class="ring-track" cx="100" cy="100" r="88"></circle>
+            <circle id="ring-progress" class="ring-progress" cx="100" cy="100" r="88"></circle>
+          </svg>
+          <b id="timer-remaining">0:00</b>
+        </div>
+        <p id="timer-step" class="timer-step"></p>
+        <div class="sheet-buttons">
+          <button id="timer-skip" class="sheet-button quiet" hidden>Next step</button>
+          <button id="timer-stop" class="sheet-button">Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Star chart -------------------------------------------------------->
+    <div id="jobs-overlay" class="overlay" hidden>
+      <div class="sheet jobs-sheet">
+        <h2>My jobs today</h2>
+        <div id="jobs-list" class="jobs-list"></div>
+        <p id="jobs-empty" class="jobs-empty" hidden>No jobs today. Lucky you.</p>
+        <div class="sheet-buttons">
+          <button id="jobs-close" class="sheet-button">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grown-up PIN ------------------------------------------------------>
+    <div id="gate-overlay" class="overlay" hidden>
+      <div class="sheet gate-sheet">
+        <h2 id="gate-title">Grown-ups only</h2>
+        <p id="gate-hint" class="gate-hint">Type the PIN to open the grown-up settings.</p>
+        <div class="pin-display" id="pin-display"></div>
+        <div class="pin-pad" id="pin-pad">
+          <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+          <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+          <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+          <button data-key="clear" class="pin-wide">Clear</button><button data-key="0">0</button><button data-key="enter" class="pin-go">OK</button>
+        </div>
+        <p id="gate-error" class="gate-error" hidden></p>
+        <button id="gate-cancel" class="sheet-button quiet">Back</button>
+      </div>
+    </div>
+
+    <!-- Grown-up panel ---------------------------------------------------->
+    <div id="parent-overlay" class="overlay parent-overlay" hidden>
+      <div class="parent-panel">
+        <header class="parent-header">
+          <h2>Grown-up settings</h2>
+          <button id="parent-close" class="sheet-button quiet">Close</button>
+        </header>
+
+        <nav class="parent-tabs" id="parent-tabs">
+          <button class="parent-tab active" data-tab="child">CHILD</button>
+          <button class="parent-tab" data-tab="jobs">JOBS &amp; STARS</button>
+          <button class="parent-tab" data-tab="questions">QUESTIONS</button>
+          <button class="parent-tab" data-tab="lock">PIN</button>
+          <button class="parent-tab" data-tab="about">ABOUT</button>
+        </nav>
+
+        <section class="parent-section" data-panel="child">
+          <label class="field"><span>Child's name</span>
+            <input id="kid-name" maxlength="24" placeholder="What should I call them?">
+          </label>
+          <label class="field"><span>Age <b id="kid-age-value">8</b></span>
+            <input id="kid-age" type="range" min="5" max="12" step="1">
+          </label>
+          <p class="field-note">Age sets how JARVIS JUNIOR talks: sentence length, vocabulary, and how long a story runs. Everything else is the same at every age.</p>
+          <label class="field"><span>Reading voice</span>
+            <select id="kid-voice"></select>
+          </label>
+          <button id="child-save" class="sheet-button">Save</button>
+          <p id="child-saved" class="saved-note" hidden>Saved.</p>
+        </section>
+
+        <section class="parent-section" data-panel="jobs" hidden>
+          <div class="chart-summary" id="chart-summary"></div>
+          <div id="parent-jobs" class="parent-jobs"></div>
+          <form id="add-job" class="add-job">
+            <input id="job-title" placeholder="Add a job — e.g. Feed the cat" maxlength="80" required>
+            <select id="job-stars">
+              <option value="1">1 star</option><option value="2">2 stars</option>
+              <option value="3">3 stars</option><option value="4">4 stars</option><option value="5">5 stars</option>
+            </select>
+            <div class="day-picker" id="day-picker">
+              <label><input type="checkbox" value="mon"><span>M</span></label>
+              <label><input type="checkbox" value="tue"><span>T</span></label>
+              <label><input type="checkbox" value="wed"><span>W</span></label>
+              <label><input type="checkbox" value="thu"><span>T</span></label>
+              <label><input type="checkbox" value="fri"><span>F</span></label>
+              <label><input type="checkbox" value="sat"><span>S</span></label>
+              <label><input type="checkbox" value="sun"><span>S</span></label>
+            </div>
+            <p class="field-note">Leave every day unticked for a job that happens every day.</p>
+            <button class="sheet-button" type="submit">Add job</button>
+          </form>
+          <form id="redeem-form" class="redeem">
+            <span>Trade in stars</span>
+            <input id="redeem-stars" type="number" min="1" max="999" value="10">
+            <input id="redeem-reward" placeholder="What for? e.g. Cinema trip" maxlength="60">
+            <button class="sheet-button quiet" type="submit">Trade in</button>
+          </form>
+          <p id="redeem-note" class="saved-note" hidden></p>
+        </section>
+
+        <section class="parent-section" data-panel="questions" hidden>
+          <p class="field-note">Questions JARVIS JUNIOR handed back to you instead of answering. Worth a conversation.</p>
+          <div id="question-list" class="question-list"></div>
+          <p id="questions-empty" class="jobs-empty" hidden>Nothing here yet.</p>
+          <p class="field-note">If your child ever says something that sounds like they are unsafe or hurting, JARVIS JUNIOR answers with care and points them at a grown-up they trust — and deliberately does <b>not</b> list it here. A child who is not safe at home must be able to say so without the computer reporting it to the house.</p>
+        </section>
+
+        <section class="parent-section" data-panel="lock" hidden>
+          <p class="field-note">The PIN keeps this panel shut. Without one, any child who finds this button can change their own age and jobs.</p>
+          <label class="field" id="current-pin-field" hidden><span>Current PIN</span>
+            <input id="current-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+          </label>
+          <label class="field"><span>New PIN (4–8 numbers)</span>
+            <input id="new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+          </label>
+          <label class="field"><span>Type it again</span>
+            <input id="confirm-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+          </label>
+          <button id="pin-save" class="sheet-button">Save PIN</button>
+          <p id="pin-note" class="saved-note" hidden></p>
+        </section>
+
+        <section class="parent-section" data-panel="about" hidden>
+          <p class="field-note" id="about-version"></p>
+          <p class="field-note">JARVIS JUNIOR is the children's build of JARVIS. It cannot open programs, read or delete files, watch the screen, reach a camera, buy anything, send a message, or pair with a phone. Those parts of JARVIS are never started in this build and nothing your child can say or press reaches them — it is not a setting that can be switched back on from in here.</p>
+          <p class="field-note">Conversation runs on the brain you have set up. With Ollama installed it never leaves this PC. If a cloud brain key is saved, questions go to that provider under their terms — a grown-up decision, made in the full JARVIS app.</p>
+          <p class="field-note">Everything is stored in one folder on this PC and nothing is sent anywhere else. No account, no telemetry, no advertising.</p>
+          <p class="field-note">JARVIS JUNIOR is a computer program, and it says so to your child whenever they ask. It is not a friend, a therapist, or a substitute for you.</p>
+        </section>
+      </div>
+    </div>
+
+    <script src="junior.js"></script>
+  </body>
+</html>

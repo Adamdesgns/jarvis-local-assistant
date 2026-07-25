@@ -36,7 +36,23 @@ const { ScheduleStore } = require('./core/schedule-store');
 const { ScheduleService } = require('./core/schedule-service');
 const { NightShiftService } = require('./core/night-shift');
 const { HeartbeatService, buildDefaultChecks } = require('./core/heartbeat');
+const { currentEdition, profileFor, isJunior } = require('./core/edition');
+const { StarChartStore } = require('./core/star-chart');
+const { validatePin, hashPin, verifyPin, PinGate } = require('./core/parent-lock');
 const QRCode = require('qrcode');
+
+// Which build this is: 'standard' (JARVIS) or 'junior' (JARVIS JUNIOR, the
+// children's edition). Stamped into package.json by the junior build and
+// overridable with JARVIS_EDITION for `npm run start:junior`. Everything the
+// junior build must not have is skipped at construction below, not hidden.
+const EDITION = currentEdition({
+  // `npm run start:junior` passes --junior so one checkout can run either
+  // build without setting an environment variable on Windows.
+  env: process.argv.includes('--junior') ? { ...process.env, JARVIS_EDITION: 'junior' } : process.env,
+  stamp: require('./package.json')
+});
+const PROFILE = profileFor(EDITION);
+const JUNIOR = isJunior(EDITION);
 
 // Chromium's native Windows window-occlusion tracker is a separate mechanism
 // from Electron's per-window `backgroundThrottling` option (already false on
@@ -85,6 +101,8 @@ let scheduleStore;
 let scheduleService;
 let nightShift;
 let heartbeat;
+let starChart;
+const parentGate = new PinGate();
 let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
 let previousCpu = null;
@@ -148,14 +166,14 @@ function attachEditingShortcuts(window) {
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 900,
-    minWidth: 960,
-    minHeight: 640,
+    width: JUNIOR ? 1180 : 1480,
+    height: JUNIOR ? 820 : 900,
+    minWidth: JUNIOR ? 900 : 960,
+    minHeight: JUNIOR ? 620 : 640,
     show: false,
     frame: false,
-    backgroundColor: '#02070b',
-    title: 'JARVIS',
+    backgroundColor: JUNIOR ? '#1b1140' : '#02070b',
+    title: PROFILE.productName,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -166,7 +184,7 @@ function createMainWindow() {
       backgroundThrottling: false
     }
   });
-  mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, ...PROFILE.ui));
   attachEditingShortcuts(mainWindow);
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -178,12 +196,15 @@ function createMainWindow() {
     if (url !== mainWindow.webContents.getURL()) event.preventDefault();
   });
   mainWindow.on('minimize', (event) => {
-    if (config.getSettings().minimizeToOrb) {
+    // The junior build minimises like any other program. A floating orb that
+    // survives "closing" is a grown-up convenience and a child's confusion.
+    if (!JUNIOR && config.getSettings().minimizeToOrb) {
       event.preventDefault();
       showOrb();
     }
   });
   mainWindow.on('close', (event) => {
+    if (JUNIOR) { isQuitting = true; return; }
     if (!isQuitting && !captureMode) {
       event.preventDefault();
       showOrb();
@@ -331,14 +352,16 @@ function restoreMainWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 24, height: 24 });
+  const iconFile = JUNIOR ? 'icon-junior.png' : 'icon.png';
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', iconFile)).resize({ width: 24, height: 24 });
   tray = new Tray(icon);
-  tray.setToolTip('JARVIS — Local Assistant');
+  tray.setToolTip(JUNIOR ? 'JARVIS JUNIOR' : 'JARVIS — Local Assistant');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open JARVIS', click: restoreMainWindow },
-    { label: 'Show Floating Orb', click: showOrb },
+    { label: `Open ${PROFILE.productName}`, click: restoreMainWindow },
+    // The floating orb is a grown-up convenience; the junior build has none.
+    ...(JUNIOR ? [] : [{ label: 'Show Floating Orb', click: showOrb }]),
     { type: 'separator' },
-    { label: 'Exit JARVIS', click: () => { isQuitting = true; app.quit(); } }
+    { label: `Exit ${PROFILE.productName}`, click: () => { isQuitting = true; app.quit(); } }
   ]));
   tray.on('double-click', restoreMainWindow);
 }
@@ -473,6 +496,94 @@ function pushCameraAlertToPhones({ key, kind, name, body, at }) {
   for (const device of mobileAuth.listDevices()) {
     mobileServer.pushEvent(device.id, 'camera-alert', { key, kind, name, body, at });
   }
+}
+
+// The junior window's whole IPC surface. An allowlist, applied by wrapping
+// ipcMain while setupIpc() registers: a channel that is not named here is
+// registered as a refusal instead of its real handler, so an IPC added to the
+// grown-up build later is denied to children until somebody adds it here on
+// purpose. The router is the real gate; this is the second lock.
+const JUNIOR_IPC = new Set([
+  'bootstrap', 'command:submit', 'ai:cancel', 'voice:transcribe', 'voice:status',
+  'settings:save', 'window:control', 'crash:renderer-error', 'ui:state',
+  'kid:chart', 'kid:add-job', 'kid:remove-job', 'kid:mark-job', 'kid:undo-job',
+  'kid:redeem', 'kid:questions', 'parent:status', 'parent:unlock', 'parent:set-pin'
+]);
+
+function registerIpc(register) {
+  if (!JUNIOR) return register();
+  const realHandle = ipcMain.handle.bind(ipcMain);
+  const realOn = ipcMain.on.bind(ipcMain);
+  ipcMain.handle = (channel, listener) => realHandle(channel, JUNIOR_IPC.has(channel)
+    ? listener
+    : async () => { throw new Error(`${channel} is not part of JARVIS JUNIOR.`); });
+  ipcMain.on = (channel, listener) => realOn(channel, JUNIOR_IPC.has(channel) ? listener : () => {});
+  try {
+    register();
+  } finally {
+    ipcMain.handle = realHandle;
+    ipcMain.on = realOn;
+  }
+}
+
+// The children's build: the star chart, the questions list, and the PIN.
+function setupJuniorIpc() {
+  const chartPayload = () => ({ chores: starChart.listChores(), summary: starChart.summary() });
+  const announce = () => sendEverywhere('kid:chart-changed', chartPayload());
+
+  ipcMain.handle('kid:chart', async () => chartPayload());
+  ipcMain.handle('kid:add-job', async (_event, input) => {
+    starChart.addChore(input || {});
+    announce();
+    return chartPayload();
+  });
+  ipcMain.handle('kid:remove-job', async (_event, id) => {
+    starChart.removeChore(id);
+    announce();
+    return chartPayload();
+  });
+  ipcMain.handle('kid:mark-job', async (_event, id) => {
+    const outcome = starChart.markDone(id);
+    announce();
+    return outcome;
+  });
+  ipcMain.handle('kid:undo-job', async (_event, id) => {
+    const outcome = starChart.undoDone(id);
+    announce();
+    return outcome;
+  });
+  ipcMain.handle('kid:redeem', async (_event, input) => {
+    const outcome = starChart.redeem(input || {});
+    announce();
+    return outcome;
+  });
+  // Only the deflected "ask a grown-up" questions. Distress is never written
+  // to this log in the first place — see core/kid-mode.js.
+  ipcMain.handle('kid:questions', async (_event, limit) => log.recentOfType('kid-guard', Math.min(100, Number(limit) || 25)));
+
+  const storedPin = () => {
+    try { return JSON.parse(config.getSecret('parentPin') || 'null'); } catch { return null; }
+  };
+
+  ipcMain.handle('parent:status', async () => ({ pinSet: Boolean(storedPin()), ...parentGate.status() }));
+  ipcMain.handle('parent:unlock', async (_event, pin) => {
+    const record = storedPin();
+    if (!record) return { ok: true, pinSet: false };
+    return parentGate.attempt(() => verifyPin(pin, record));
+  });
+  ipcMain.handle('parent:set-pin', async (_event, payload = {}) => {
+    const record = storedPin();
+    // Changing an existing PIN needs the old one — otherwise the panel a
+    // child has already opened could be used to lock the parent out of it.
+    if (record && !verifyPin(payload.current, record)) {
+      return { ok: false, message: 'That is not the current PIN.' };
+    }
+    const checked = validatePin(payload.next);
+    if (!checked.ok) return checked;
+    config.setSecret('parentPin', JSON.stringify(hashPin(checked.pin)));
+    parentGate.reset();
+    return { ok: true };
+  });
 }
 
 function setupIpc() {
@@ -637,11 +748,14 @@ function setupIpc() {
       localVoice.stop();
       setTimeout(() => localVoice.start(), 1700);
     }
-    if (JSON.stringify(previous.watchedFolders || []) !== JSON.stringify(updated.watchedFolders || [])) {
+    // The services below exist only in the grown-up build. The junior window
+    // never sends the settings that would reach them, but a saved setting
+    // must not be able to throw on a service that was never constructed.
+    if (!JUNIOR && JSON.stringify(previous.watchedFolders || []) !== JSON.stringify(updated.watchedFolders || [])) {
       folderWatch.start();
     }
-    if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
-    if (previous.schedulesEnabled !== updated.schedulesEnabled) {
+    if (!JUNIOR && (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort)) syncMobileServer();
+    if (!JUNIOR && previous.schedulesEnabled !== updated.schedulesEnabled) {
       scheduleService.start().catch((error) => {
         log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
       });
@@ -649,7 +763,7 @@ function setupIpc() {
     if (previous.orbSkin !== updated.orbSkin || previous.orbColor !== updated.orbColor) {
       sendEverywhere('orb:prefs', { orbSkin: updated.orbSkin || 'original', orbColor: updated.orbColor || 'gold' });
     }
-    if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
+    if (!JUNIOR && updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
       return setupNightShift(updated);
     }
     return updated;
@@ -996,8 +1110,41 @@ app.whenReady().then(async () => {
   // below, and `ai` cannot be passed to its own registry before `new
   // AIService(...)` returns. Both closures resolve once the module-level
   // `let` bindings are assigned, without reordering construction.
-  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai }));
+  // The junior build's chore-and-stars chart. Its own file; the grown-up
+  // build never constructs it, and the junior build never constructs the
+  // camera, screen, phone, schedule, or night-shift services below.
+  if (PROFILE.starChart) starChart = new StarChartStore(app.getPath('userData'));
+  ai = new AIService(
+    config,
+    buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai, starChart }),
+    { edition: EDITION }
+  );
   ollama = new OllamaService({ config, emit: sendEverywhere });
+  if (JUNIOR) {
+    // The junior build stops here. Nothing below this line is constructed:
+    // no camera process, no screen reader, no screen driving, no Claude
+    // bridge, no phone server, no schedules, no night shift, no folder
+    // watching, no autonomy, and no start-with-Windows. A child's build is
+    // the voice, the brain, and the star chart — that is the whole of it.
+    router = new CommandRouter({ config, tools, documents, ai, memory, tasks, log, edition: EDITION, starChart });
+    localVoice = new LocalVoiceService({
+      voiceRoot: voiceDataRoot(),
+      scriptPath: packagedScript('local_voice.py'),
+      config,
+      emit: sendEverywhere
+    });
+    try {
+      const gpu = await app.getGPUInfo('basic');
+      const device = gpu?.gpuDevice?.find((item) => item.active) || gpu?.gpuDevice?.[0];
+      if (device?.deviceString) gpuLabel = device.deviceString;
+    } catch {}
+    registerIpc(setupIpc);
+    setupJuniorIpc();
+    createMainWindow();
+    createTray();
+    localVoice.start();
+    return;
+  }
   go2rtc = new Go2RtcManager({
     binaryPath: app.isPackaged
       ? path.join(process.resourcesPath, 'go2rtc', 'go2rtc.exe')
@@ -1122,7 +1269,7 @@ app.whenReady().then(async () => {
     if (device?.deviceString) gpuLabel = device.deviceString;
   } catch {}
 
-  setupIpc();
+  registerIpc(setupIpc);
   createMainWindow();
   createTray();
   applyLoginSetting(config.getSettings().startWithWindows);

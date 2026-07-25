@@ -31,6 +31,24 @@ class ActivityLog {
       return [];
     }
   }
+
+  // Newest entries of one kind. The junior build's grown-up screen uses this
+  // to show the questions it handed back to a parent, without wading through
+  // every ordinary line.
+  recentOfType(type, limit = 20) {
+    try {
+      return fs.readFileSync(this.filePath, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => { try { return JSON.parse(line); } catch { return null; } })
+        .filter((entry) => entry && entry.type === type)
+        .slice(-limit)
+        .reverse();
+    } catch {
+      return [];
+    }
+  }
 }
 
 module.exports = { ActivityLog };

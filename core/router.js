@@ -2,6 +2,10 @@ const crypto = require('node:crypto');
 const { classifyCommand } = require('./security');
 const { isBattleRequest, buildBattlePrompt } = require('./battle-mode');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
+const { isJunior } = require('./edition');
+const { guardTopic, capabilitiesReply, greeting, clampAge, ageBand } = require('./kid-mode');
+const { detectPlay, buildPlayPrompt } = require('./story-time');
+const { detectTimer, detectRoutine, describeRoutine, describeDuration } = require('./kid-routines');
 
 // An approved drive plan must be exactly what was shown on the card — frozen
 // all the way down before it is stored, so nothing between approval and
@@ -62,7 +66,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, edition, starChart }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -74,6 +78,8 @@ class CommandRouter {
     this.claude = claude || null;
     this.screen = screen || null;
     this.hands = hands || null;
+    this.edition = edition || 'standard';
+    this.starChart = starChart || null;
     this.pending = new Map();
   }
 
@@ -181,9 +187,223 @@ class CommandRouter {
     );
   }
 
+  // ---------------------------------------------------------------------
+  // JARVIS JUNIOR
+  // ---------------------------------------------------------------------
+  //
+  // The children's build routes here and never returns to the branches
+  // below. That is the point: this is an allowlist of the handful of things
+  // a child can ask for, so nothing a grown-up build can do — deleting a
+  // file, opening a program, driving the screen, looking at a camera — is
+  // reachable by phrasing, by accident, or by a model deciding to try.
+
+  #kidResult(response, source, extra = {}) {
+    return this.#result(response, source, { kid: true, ...extra });
+  }
+
+  async #handleKid(text, stream = {}) {
+    const settings = this.config.getSettings();
+    const kidName = settings.kidName || '';
+    const age = clampAge(settings.kidAge);
+
+    // 1. The guard, before anything else and before any model.
+    const guard = guardTopic(text);
+    if (guard) {
+      const result = this.#kidResult(guard.reply, 'kid-safety', { guard: guard.kind, guardId: guard.id, success: true });
+      // A child in distress is answered, not filed. Only the "ask a grown-up"
+      // kinds reach the grown-up screen — see the note in kid-mode.js.
+      if (guard.parentVisible) {
+        this.log.write({ type: 'kid-guard', command: text, response: guard.reply, source: 'kid-safety', guard: guard.id });
+      }
+      return result;
+    }
+
+    // 2. Timers — the renderer runs the clock, so this only parses.
+    const timer = detectTimer(text);
+    if (timer) {
+      const result = this.#kidResult(
+        `${describeDuration(timer.seconds)}, starting now. I will tell you when it is finished.`,
+        'kid-timer',
+        { timer, success: true }
+      );
+      this.#log(text, result);
+      return result;
+    }
+
+    // 3. Routines — a step list the junior window walks through out loud.
+    const routine = detectRoutine(text);
+    if (routine) {
+      const result = this.#kidResult(describeRoutine(routine), 'kid-routine', { routine, success: true });
+      this.#log(text, result);
+      return result;
+    }
+
+    // 4. The star chart.
+    const chart = await this.#kidStarChart(text, kidName);
+    if (chart) {
+      this.#log(text, chart);
+      return chart;
+    }
+
+    // 5. Stories, jokes, riddles, would-you-rather, facts. One-shot prompts
+    //    with no history, exactly like battle mode in the grown-up build.
+    const play = detectPlay(text);
+    if (play) {
+      const prompt = buildPlayPrompt(play.kind, { topic: play.topic, age, kidName });
+      const written = await this.ai.reply(prompt, { onChunk: stream.onChunk, onReset: stream.onReset });
+      const result = this.#kidResult(written.text, `kid-${play.kind}`, { success: written.ok !== false, play: play.kind });
+      this.#log(text, result);
+      return result;
+    }
+
+    // 6. The little things worth answering without waking the brain.
+    const quick = this.#kidQuickReply(text, kidName, age);
+    if (quick) {
+      const result = this.#kidResult(quick, 'kid-core');
+      this.#log(text, result);
+      return result;
+    }
+
+    // 7. Everything else is a real question. The brain answers it with the
+    //    children's prompt (ai-service picks it from the edition) and only
+    //    the kidSafe tools.
+    const memories = this.memory.search(text, 3);
+    const chores = this.starChart ? this.starChart.listChores().filter((chore) => chore.dueToday) : [];
+    const answer = await this.ai.reply(text, {
+      memories,
+      chores,
+      project: 'junior',
+      onChunk: stream.onChunk,
+      onReset: stream.onReset,
+      onStep: stream.onStep
+    });
+    const extra = { success: answer.ok, detail: answer.detail };
+    if ((answer.usedTools || []).includes('mark_job_done')) extra.starChart = this.starChart ? this.starChart.summary() : null;
+    const result = this.#kidResult(answer.text, answer.source, extra);
+    this.#log(text, result);
+    return result;
+  }
+
+  // Jobs and stars, spoken. Returns null when the child said something else.
+  async #kidStarChart(text, kidName) {
+    if (!this.starChart) return null;
+    const name = String(kidName || '').trim();
+
+    if (/^(?:what|which)\s+(?:are\s+)?(?:my\s+)?(?:jobs|chores|things)\b|^what\s+(?:do\s+i|have\s+i\s+got)\s+to\s+do(?:\s+today)?$|^(?:my\s+)?(?:star\s+)?chart$/i.test(text)) {
+      const due = this.starChart.listChores().filter((chore) => chore.dueToday);
+      const left = due.filter((chore) => !chore.doneToday);
+      if (!due.length) return this.#kidResult('You have no jobs today. Lucky.', 'kid-chores', { chores: due });
+      if (!left.length) {
+        return this.#kidResult(
+          `Every job is done${name ? `, ${name}` : ''}. That is the whole list.`,
+          'kid-chores',
+          { chores: due, starChart: this.starChart.summary() }
+        );
+      }
+      const spoken = left.map((chore) => chore.title).join(', ');
+      return this.#kidResult(
+        `${left.length} job${left.length === 1 ? '' : 's'} left today: ${spoken}.`,
+        'kid-chores',
+        { chores: due, starChart: this.starChart.summary() }
+      );
+    }
+
+    if (/^(?:how many stars|what(?:'s| is) my star count|my stars|star count)\b/i.test(text)) {
+      const summary = this.starChart.summary();
+      const streak = summary.streak > 1 ? ` And you have finished everything ${summary.streak} days in a row.` : '';
+      return this.#kidResult(
+        `You have ${summary.stars} star${summary.stars === 1 ? '' : 's'}. ${summary.todayStars} of them are from today.${streak}`,
+        'kid-chores',
+        { starChart: summary }
+      );
+    }
+
+    // Two shapes, treated differently on a miss.
+    //
+    // Explicit — "tick off the bins", "I finished my homework". The child
+    // plainly meant to tick something off, so a miss says so.
+    // Loose — "I fed the cat", "I brushed my teeth". Any past-tense sentence
+    // could be one, so a miss must fall through to the brain instead: a child
+    // saying "I learned about volcanoes today" wants a conversation, not a
+    // complaint that volcanoes are not on their chart.
+    const explicit = text.match(/^(?:tick|check|mark)\s+(?:off\s+)?(.+)$/i)
+      || text.match(/^i(?:'ve)?(?:\s+have)?(?:\s+just|\s+already)?\s+(?:did|done|finished|completed)\s+(.+)$/i);
+    const loose = explicit ? null : text.match(/^i(?:'ve)?(?:\s+have)?(?:\s+just|\s+already)?\s+((?:\w+ed|made|fed|read|put|got|hung|swept|took)\s+.+)$/i);
+    const doneMatch = explicit || loose;
+    if (doneMatch) {
+      const query = cleanTarget(doneMatch[1]).replace(/\s+(?:done|off)$/i, '');
+      const chore = this.starChart.findChore(query);
+      if (!chore) {
+        if (loose) return null;
+        return this.#kidResult(
+          `I could not find a job called “${query}” on your chart. Say “what are my jobs” and I will read them out.`,
+          'kid-chores',
+          { success: false }
+        );
+      }
+      const outcome = this.starChart.markDone(chore.id);
+      if (outcome.already) {
+        return this.#kidResult(`${chore.title} was already ticked off today. Nice try.`, 'kid-chores', { starChart: outcome, chores: this.starChart.listChores() });
+      }
+      const stars = `${outcome.earned} star${outcome.earned === 1 ? '' : 's'}`;
+      const closing = outcome.allDone
+        ? ' That is every job done today. Brilliant.'
+        : ` ${outcome.dueToday - outcome.doneToday} job${outcome.dueToday - outcome.doneToday === 1 ? '' : 's'} to go.`;
+      return this.#kidResult(
+        `${chore.title} — done. That is ${stars}, so you have ${outcome.stars} altogether.${closing}`,
+        'kid-chores',
+        { starChart: outcome, chores: this.starChart.listChores(), celebrate: true }
+      );
+    }
+
+    return null;
+  }
+
+  // Small talk and the questions a child asks a talking computer on day one.
+  // Honesty about what JARVIS JUNIOR is comes first: it is a program, it is
+  // not alive, and it is not a substitute for a person.
+  #kidQuickReply(text, kidName, age) {
+    const name = String(kidName || '').trim();
+    if (/^(?:hello|hi|hey|hiya|good morning|good afternoon|good evening|jarvis)$/i.test(text)) {
+      return greeting(name);
+    }
+    if (/^(?:how are you|are you ok|you good|how are you doing)$/i.test(text)) {
+      return 'I am working perfectly, thank you for asking. How are you?';
+    }
+    if (/^(?:what(?:'s| is) your name|who are you)$/i.test(text)) {
+      return name
+        ? `I am Jarvis Junior. I am a computer program that lives on this computer, and I am here to help you, ${name}.`
+        : 'I am Jarvis Junior — a computer program that lives on this computer, here to help you.';
+    }
+    if (/^(?:are you (?:real|alive|a robot|a person|human)|do you have feelings|are you my friend)/i.test(text)) {
+      return ageBand(age) === 'little'
+        ? 'I am a computer program, not a real person. I am not alive and I do not have feelings, but I do like helping you.'
+        : 'I am a computer program, so I am not alive and I do not have feelings the way you do — I am very good at pretending to, which is why it is worth knowing. Real friends and real grown-ups are the ones to talk to about things that matter.';
+    }
+    if (/^(?:help|what can you do|what do you do|show commands)$/i.test(text)) {
+      return capabilitiesReply(name, age);
+    }
+    if (/\b(?:what(?:'s| is) the )?time\b/i.test(text)) {
+      return `It is ${new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }).format(new Date())}.`;
+    }
+    if (/\b(?:what(?:'s| is) the )?date\b|\bwhat day is it\b/i.test(text)) {
+      return `It is ${new Intl.DateTimeFormat([], { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}.`;
+    }
+    if (/^(?:thank you|thanks|ta|cheers)$/i.test(text)) {
+      return 'You are very welcome.';
+    }
+    if (/^(?:bye|goodbye|good night|night night|see you)$/i.test(text)) {
+      return name ? `Bye, ${name}. Come back whenever you like.` : 'Bye. Come back whenever you like.';
+    }
+    return null;
+  }
+
   async handle(rawText, project = 'general', stream = {}) {
     const text = cleanTarget(rawText);
     if (!text) return this.#result('I didn’t catch a command.', 'local-core');
+    // The junior build's entire surface. Nothing below this line runs for a
+    // child — not the file branches, not the app branches, not the screen.
+    if (isJunior(this.edition)) return this.#handleKid(text, stream);
     const security = classifyCommand(text);
     if (security.level === 'blocked') {
       const result = this.#result(security.reason, 'safety', { blocked: true });

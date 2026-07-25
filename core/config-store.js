@@ -1,9 +1,15 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { DEFAULT_SETTINGS } = require('./defaults');
+const { clampAge } = require('./kid-mode');
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function clampHour(value, fallback) {
+  const hour = Math.round(Number(value));
+  return Number.isFinite(hour) && hour >= 0 && hour <= 23 ? hour : fallback;
 }
 
 function mergeSettings(defaults, saved) {
@@ -32,6 +38,12 @@ function mergeSettings(defaults, saved) {
   // Never allow a stale V1 address to redirect the private local Ollama connection.
   result.ollamaUrl = 'http://127.0.0.1:11434';
   delete result.transcriptionModel;
+  // A child's age decides how the junior build talks, so it is clamped here
+  // rather than trusted: a hand-edited settings.json cannot age a 5-year-old
+  // into an answer written for a teenager.
+  result.kidAge = clampAge(result.kidAge);
+  result.kidBedtimeHour = clampHour(result.kidBedtimeHour, 20);
+  result.kidWakeHour = clampHour(result.kidWakeHour, 6);
   return result;
 }
 
@@ -92,7 +104,12 @@ class ConfigStore {
       'screenControlEnabled', 'screenControlAllowlist',
       // Screen driving (slice 2) — its own switch, off by default, so reading
       // can be on while the hands stay off.
-      'screenDriveEnabled'
+      'screenDriveEnabled',
+      // JARVIS JUNIOR. Written from the grown-up screen, which sits behind
+      // the PIN. 'parentPin' is deliberately NOT here: the hash lives in the
+      // encrypted secrets store so a settings:save can never overwrite it.
+      'kidName', 'kidAge', 'kidVoiceName', 'parentLockEnabled',
+      'kidBedtimeHour', 'kidWakeHour', 'kidBedtimeReminder'
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {

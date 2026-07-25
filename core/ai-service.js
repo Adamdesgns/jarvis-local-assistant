@@ -1,6 +1,8 @@
 const { toolSpecs, executeToolCall } = require('./tool-registry');
 const { runAgent } = require('./agent-loop');
 const { normalizeOllama, normalizeAnthropic, anthropicTools, OpenAIResponsesSession } = require('./brain-adapters');
+const { isJunior, filterRegistryForEdition } = require('./edition');
+const { buildKidPrompt } = require('./kid-mode');
 
 // Unattended runs (scheduled tasks firing with nobody watching) get an
 // allowlisted tool registry, not a denylisted one: a tool is only offered
@@ -21,9 +23,13 @@ function accumulateStreamChunk(state, chunk) {
 }
 
 class AIService {
-  constructor(config, registry = null) {
+  constructor(config, registry = null, options = {}) {
     this.config = config;
     this.registry = registry;
+    // Which build this is. 'junior' swaps the system prompt for the
+    // children's one and narrows the tool belt to the kidSafe tools — for
+    // every brain, local or cloud, without each call site remembering to.
+    this.edition = options.edition || 'standard';
     // Rolling conversation history per project so follow-up questions work.
     this.sessions = new Map();
   }
@@ -47,7 +53,7 @@ class AIService {
   // The agentic loop's registry, filtered when the caller marked this run
   // unattended (e.g. a scheduled task firing with nobody watching).
   #registryFor(context) {
-    const registry = this.registry || [];
+    const registry = filterRegistryForEdition(this.registry || [], this.edition);
     if (context.unattended === true) return registry.filter((tool) => tool.unattendedSafe === true);
     return registry;
   }
@@ -59,6 +65,17 @@ class AIService {
   }
 
   prompt(settings, context = {}) {
+    // The junior build never uses the grown-up prompt — not for chat, not for
+    // a follow-up, not for a tool round. One branch, at the source.
+    if (isJunior(this.edition)) {
+      return buildKidPrompt({
+        kidName: settings.kidName,
+        age: settings.kidAge,
+        assistantName: settings.assistantName || 'JARVIS JUNIOR',
+        memories: context.memories || [],
+        chores: context.chores || []
+      });
+    }
     const memories = (context.memories || []).map((item) => `- ${item.text}`).join('\n') || '- None';
     const tasks = (context.tasks || []).map((item) => `- ${item.title} [${item.project}]`).join('\n') || '- None';
     return [
