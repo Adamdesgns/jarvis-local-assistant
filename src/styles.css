@@ -529,3 +529,62 @@ body.busy .ai-stop { display: inline-block }
 .pro-feature-table > div { padding: 10px 12px; border: 1px solid var(--accent-tint-20); background: var(--accent-tint-06) }
 .pro-feature-table b { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: .12em; color: var(--gold-300) }
 .pro-feature-table ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.7; opacity: .85 }
+
+/* ── THE TERMINAL (stage 1) ─────────────────────────────────────────────
+   A JARVIS console, not a shell. --term-accent is written by the renderer
+   from the chosen orb colour, so the rain and the text wear the same
+   colourway as the sphere. */
+.module[data-module="terminal"] { --term-accent: var(--accent) }
+.module[data-module="terminal"] .module-content.term-body {
+  position: relative; display: flex; flex-direction: column;
+  padding: 0; overflow: hidden; background: rgba(0, 0, 0, .55);
+}
+.term-rain {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  z-index: 0; pointer-events: none; opacity: .38;
+}
+.term-log {
+  position: relative; z-index: 1; flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 10px 12px; margin: 0;
+  font-family: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+  font-size: 12px; line-height: 1.65;
+  /* Let the rain read through the text block without washing it out. */
+  background: linear-gradient(to bottom, rgba(0,0,0,.35), rgba(0,0,0,.55));
+}
+.term-line { display: grid; grid-template-columns: 58px 52px 1fr; gap: 8px; align-items: baseline }
+.term-time { color: var(--text-muted); font-variant-numeric: tabular-nums; opacity: .7 }
+.term-tag { color: var(--text-muted); letter-spacing: .1em; font-size: 10px; text-align: right }
+.term-text { color: var(--text-secondary); overflow-wrap: anywhere }
+
+.term-line.term-you .term-tag,
+.term-line.term-you .term-text { color: var(--text-primary) }
+.term-line.term-jarvis .term-tag { color: var(--term-accent) }
+.term-line.term-jarvis .term-text { color: var(--text-primary) }
+.term-line.term-agent .term-tag,
+.term-line.term-agent .term-text { color: var(--term-accent); opacity: .85 }
+.term-line.term-night .term-tag,
+.term-line.term-night .term-text { color: var(--success); opacity: .9 }
+.term-line.term-system .term-text { color: var(--text-muted); font-style: italic }
+
+.term-input-row {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, .6);
+}
+.term-prompt {
+  color: var(--term-accent); font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px; opacity: .8;
+}
+.term-input {
+  flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+  color: var(--text-primary);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+}
+.term-input::placeholder { color: var(--text-muted) }
+.term-clear {
+  font-family: var(--font-display); font-size: 9px; letter-spacing: .12em;
+  color: var(--text-muted); background: transparent; border: 1px solid var(--line);
+  border-radius: 3px; padding: 2px 6px; cursor: pointer;
+}
+.term-clear:hover { color: var(--term-accent); border-color: var(--line-accent) }
