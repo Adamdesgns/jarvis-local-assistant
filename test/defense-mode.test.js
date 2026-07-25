@@ -4,7 +4,8 @@ const {
   isDefenseRequest,
   isStandDown,
   pickTriggerAlert,
-  buildBannerLabel
+  buildBannerLabel,
+  createEntryGate
 } = require('../core/defense-mode');
 
 test('isDefenseRequest recognizes defense phrasings', () => {
@@ -88,6 +89,48 @@ test('buildBannerLabel formats a camera trigger', () => {
     buildBannerLabel({ kind: 'camera', cameraName: 'Front Door' }, nineFortyThree),
     'DEFENSE MODE · MOTION AT FRONT DOOR · 21:43'
   );
+});
+
+// --- Entry gate: every automatic entry announces itself and can be waved off ---
+
+test('the gate proposes, waits the full window, then enters', () => {
+  const gate = createEntryGate({ timeoutMs: 15000 });
+  const reason = { kind: 'weather', event: 'Tornado Warning' };
+  const proposed = gate.propose(reason, 1000);
+  assert.deepEqual(proposed, { pending: true, expiresAt: 16000 });
+  assert.equal(gate.expire(15999), null); // still inside the wave-off window
+  assert.deepEqual(gate.expire(16000), { enter: true, reason });
+  assert.equal(gate.entered(), true);
+});
+
+test('a wave-off cancels the pending entry for good', () => {
+  const gate = createEntryGate({ timeoutMs: 15000 });
+  gate.propose({ kind: 'camera', cameraName: 'Front Door' }, 1000);
+  assert.equal(gate.waveOff(), true);
+  assert.equal(gate.expire(99999), null);
+  assert.equal(gate.entered(), false);
+});
+
+test('waveOff with nothing pending reports false', () => {
+  const gate = createEntryGate({ timeoutMs: 15000 });
+  assert.equal(gate.waveOff(), false);
+});
+
+test('a second propose while one is pending or entered is refused', () => {
+  const gate = createEntryGate({ timeoutMs: 15000 });
+  assert.equal(gate.propose({ kind: 'manual' }, 1000).pending, true);
+  assert.equal(gate.propose({ kind: 'manual' }, 2000), null);
+  gate.expire(16000);
+  assert.equal(gate.propose({ kind: 'manual' }, 20000), null); // already entered
+});
+
+test('reset returns the gate to idle', () => {
+  const gate = createEntryGate({ timeoutMs: 15000 });
+  gate.propose({ kind: 'manual' }, 1000);
+  gate.expire(16000);
+  gate.reset();
+  assert.equal(gate.entered(), false);
+  assert.equal(gate.propose({ kind: 'manual' }, 20000).pending, true);
 });
 
 test('buildBannerLabel pads early hours and survives a bare reason', () => {

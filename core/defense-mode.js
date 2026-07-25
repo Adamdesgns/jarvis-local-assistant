@@ -72,4 +72,42 @@ function buildBannerLabel(reason, now) {
   return `DEFENSE MODE · ${cause} · ${time}`;
 }
 
-module.exports = { isDefenseRequest, isStandDown, pickTriggerAlert, buildBannerLabel, WARNING_TIER };
+// The announce-and-wave-off gate. Pure state machine — the caller owns the
+// clock and the timers, which is what makes "silence enters, a word cancels"
+// provable in tests. One gate instance guards the whole posture: while an
+// entry is pending or live, nothing else may propose.
+function createEntryGate({ timeoutMs = 15000 } = {}) {
+  let state = 'idle'; // idle -> pending -> entered
+  let reason = null;
+  let expiresAt = 0;
+  return {
+    propose(proposedReason, now) {
+      if (state !== 'idle') return null;
+      state = 'pending';
+      reason = proposedReason;
+      expiresAt = now + timeoutMs;
+      return { pending: true, expiresAt };
+    },
+    waveOff() {
+      if (state !== 'pending') return false;
+      state = 'idle';
+      reason = null;
+      return true;
+    },
+    expire(now) {
+      if (state !== 'pending' || now < expiresAt) return null;
+      state = 'entered';
+      return { enter: true, reason };
+    },
+    entered() {
+      return state === 'entered';
+    },
+    reset() {
+      state = 'idle';
+      reason = null;
+      expiresAt = 0;
+    }
+  };
+}
+
+module.exports = { isDefenseRequest, isStandDown, pickTriggerAlert, buildBannerLabel, createEntryGate, WARNING_TIER };
