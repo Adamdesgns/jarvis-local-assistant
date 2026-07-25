@@ -103,6 +103,33 @@ function setCoreState(coreState, kicker) {
 function setResponse(message) {
   $('jarvis-response').textContent = message;
   window.JarvisCommandCenter?.setResponse?.(message);
+  showOrbReply(message);
+}
+
+// With the command bar closed there is nowhere for JARVIS's words to land, so
+// they surface under the orb for a few seconds and then fade. Nothing but him
+// on screen, and you still see what he said.
+let orbReplyTimer = null;
+let orbReplyFade = null;
+function showOrbReply(message) {
+  const reply = $('orb-reply');
+  if (!reply) return;
+  clearTimeout(orbReplyTimer);
+  clearTimeout(orbReplyFade);
+  reply.classList.remove('fading');
+  if (!message || !state.hiddenModules.includes('command')) {
+    reply.hidden = true;
+    return;
+  }
+  reply.textContent = message;
+  reply.hidden = false;
+  orbReplyTimer = setTimeout(() => {
+    reply.classList.add('fading');
+    orbReplyFade = setTimeout(() => {
+      reply.hidden = true;
+      reply.classList.remove('fading');
+    }, 700);
+  }, 9000);
 }
 
 function showDocumentOutput(title, content) {
@@ -462,7 +489,9 @@ function toggleModule(name, visible) {
   const shouldShow = visible ?? currentlyHidden;
   if (shouldShow) state.hiddenModules = state.hiddenModules.filter((item) => item !== name);
   else if (!currentlyHidden) state.hiddenModules.push(name);
-  if (shouldShow && state.engine) {
+  // The command bar is docked, not a floating panel — it never gets placed
+  // by the layout engine, it just shows or hides.
+  if (shouldShow && state.engine && name !== 'command') {
     const rect = state.layout[name] || RESET_LAYOUT[name] || { x: 30, y: 12, w: 32, h: 44 };
     const visible = Object.entries(state.layout).filter(([key]) => key !== name && !state.hiddenModules.includes(key)).map(([, value]) => value);
     const covered = visible.reduce((sum, other) => sum + window.JarvisLayout.overlapArea(rect, other), 0);
@@ -858,6 +887,14 @@ function initPasswordReveals() {
 }
 
 let commandCenterReady = false;
+// How much of JARVIS shows through the windows. One attribute on <body>;
+// tokens.css re-points --surface-glass and --surface-bar off it.
+function applyGlass(level) {
+  document.body.dataset.glass = window.JarvisGlass
+    ? window.JarvisGlass.normalizeGlass(level)
+    : 'glass';
+}
+
 function applySkin(name) {
   const { dataSkin, pauseCanvas } = window.JarvisSkins.resolveSkin(name);
   document.body.dataset.skin = dataSkin;
@@ -1250,6 +1287,16 @@ function openSettings(tab = 'general') {
     orbSkinSelect.value = state.settings.orbSkin || 'original';
   }
   $('setting-orb-color').value = state.settings.orbColor || 'gold';
+  const glassSelect = $('setting-glass');
+  if (glassSelect && window.JarvisGlass) {
+    glassSelect.replaceChildren(...window.JarvisGlass.GLASS_LEVELS.map((level) => {
+      const option = document.createElement('option');
+      option.value = level.id;
+      option.textContent = level.label;
+      return option;
+    }));
+    glassSelect.value = window.JarvisGlass.normalizeGlass(state.settings.windowGlass);
+  }
   $('setting-nightshift').checked = state.settings.nightShiftEnabled === true;
   $('setting-heartbeat').checked = state.settings.heartbeatEnabled === true;
   $('setting-nightshift-budget').value = Number(state.settings.nightShiftCloudBudgetUsd) || 0;
@@ -1298,6 +1345,7 @@ async function saveSettings(event) {
     skin: $('setting-skin').value,
     orbSkin: $('setting-orb-skin').value || 'original',
     orbColor: $('setting-orb-color').value || 'gold',
+    windowGlass: $('setting-glass').value || 'glass',
     nightShiftEnabled: $('setting-nightshift').checked,
     heartbeatEnabled: $('setting-heartbeat').checked,
     nightShiftCloudBudgetUsd: Math.max(0, Number($('setting-nightshift-budget').value) || 0),
@@ -1322,6 +1370,7 @@ async function saveSettings(event) {
     searchRoots: state.settings.searchRoots
   };
   state.settings = await window.jarvis.saveSettings(patch);
+  applyGlass(state.settings.windowGlass);
   $('settings-modal').close();
   showToast('Settings saved locally.');
 }
@@ -1478,6 +1527,16 @@ function bindEvents() {
   document.querySelectorAll('[data-toggle-module]').forEach((button) => button.addEventListener('click', () => toggleModule(button.dataset.toggleModule)));
   document.querySelectorAll('[data-hide]').forEach((button) => button.addEventListener('click', () => toggleModule(button.closest('.module').dataset.module, false)));
   document.querySelectorAll('[data-collapse]').forEach((button) => button.addEventListener('click', () => button.closest('.module').classList.toggle('collapsed')));
+  // Closing the command bar leaves voice as the only way in, so say so plainly
+  // if the wake word is off. Reopening is always in Modules.
+  $('dock-close')?.addEventListener('click', () => {
+    toggleModule('command', false);
+    if (!state.settings.wakeWordEnabled) {
+      showToast('Command bar closed. “Hey Jarvis” is off, so turn it on in Settings — or reopen the bar from Modules.', 7000);
+    } else {
+      showToast('Command bar closed. Say “Hey Jarvis” to talk, or reopen it from Modules.', 5000);
+    }
+  });
   $('reset-layout').addEventListener('click', () => {
     state.hiddenModules = ['performance','memory','activity','quick-commands','projects','file-explorer','document-viewer','cameras'];
     for (const key of Object.keys(state.layout)) delete state.layout[key];
@@ -1732,6 +1791,7 @@ async function initialize() {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
     window.jarvisHologram?.applySettings({ skin: state.settings.orbSkin, color: state.settings.orbColor });
+    applyGlass(state.settings.windowGlass);
     applySkin(state.settings.skin || 'classic');
     state.tasks = bootstrap.tasks;
     state.memories = bootstrap.memories;

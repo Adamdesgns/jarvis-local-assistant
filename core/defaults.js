@@ -53,6 +53,7 @@ const DEFAULT_SETTINGS = {
   skin: 'classic',
   orbSkin: 'original',
   orbColor: 'gold',
+  windowGlass: 'glass',
   nightShiftEnabled: false,
   nightShiftStart: 0,
   nightShiftEnd: 6,
