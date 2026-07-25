@@ -41,11 +41,13 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
 
 ## NEXT
 
-- [ ] **THE BROWSER, stage 1: surf inside JARVIS** — embedded browser module
-      (WebContentsView/webview): address bar, back/forward, tabs, chrome styled to
-      skin + orb accent. Walled off from JARVIS internals: isolated session/partition,
-      no nodeIntegration, no preload leakage, downloads + mic/camera permissions
-      locked down. Web pages are strangers in the house.
+- [x] **THE BROWSER, stage 1: surf inside JARVIS** — **BUILT 2026-07-25** (branch
+      `browser-stage1`, unmerged). `<webview>` (NOT WebContentsView — it would paint
+      over approval cards) + main-process wall: `core/browser-guard.js` rewrites
+      every attach (no preload, forced `persist:jarvis-browser` partition, no node),
+      permissions deny-all, downloads blocked, http/https only, new windows → tabs,
+      cap 5. Chrome in `src/browser-tabs.js` (pure, tested) + `src/browser-ui.js`;
+      rig `test/rigs/browser.html`. Live webview check is Adam's hands-on pass.
 - [ ] **THE BROWSER, stage 2: JARVIS reads the page** — "summarize this page",
       grounded answers from the current tab only.
 - [ ] **MORE MAINFRAME SKINS** — full-window themes beyond Classic amber and
