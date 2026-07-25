@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS = {
   minimizeToOrb: true,
   orbAlwaysOnTop: true,
   motionMode: 'cinematic',
-  hiddenModules: ['performance', 'memory', 'activity', 'quick-commands', 'projects', 'file-explorer', 'document-viewer', 'cameras', 'night-shift', 'terminal'],
+  hiddenModules: ['performance', 'memory', 'activity', 'quick-commands', 'projects', 'file-explorer', 'document-viewer', 'cameras', 'night-shift', 'terminal', 'browser'],
   cameraAccounts: [],
   cameraAiDescriptions: true,
   cameraCloudVision: false,
@@ -96,7 +96,8 @@ const DEFAULT_SETTINGS = {
     'document-viewer': { x: 18, y: 5, w: 64, h: 76 },
     cameras: { x: 26, y: 8, w: 46, h: 60 },
     'night-shift': { x: 38, y: 8, w: 24, h: 42 },
-    terminal: { x: 28, y: 46, w: 44, h: 46 }
+    terminal: { x: 28, y: 46, w: 44, h: 46 },
+    browser: { x: 22, y: 8, w: 56, h: 72 }
   },
   searchRoots: [
     windowsHomeFolder('Documents'),

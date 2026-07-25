@@ -710,3 +710,52 @@ body.defense #autonomy-cards { display: none; }
 .defense-banner { justify-content: flex-start; }
 .defense-banner button { margin-left: auto; }
 
+
+/* ============================== THE BROWSER ==============================
+   Stage 1: surf inside JARVIS. The chrome wears the tokens; the active tab
+   underline and loading shimmer use --browser-accent, set from the orb
+   colorway by browser-ui.js (via JarvisTerminal.accentFor - one mapper). */
+
+.browser-content { display: flex; flex-direction: column; gap: 6px; }
+.browser-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; }
+.browser-tab {
+  display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 180px;
+  padding: 5px 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 5px 5px 0 0; border-bottom: 2px solid transparent;
+  background: rgba(0, 0, 0, .35); color: var(--text-muted);
+  font-size: 11px;
+}
+.browser-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--browser-accent, var(--gold-400));
+}
+.browser-tab.loading { border-bottom-color: var(--browser-accent, var(--gold-400)); animation: browser-loading 1s ease-in-out infinite; }
+@keyframes browser-loading { 0%, 100% { border-bottom-color: transparent } 50% { border-bottom-color: var(--browser-accent, var(--gold-400)) } }
+.browser-tab b { font-weight: 400; cursor: pointer; padding: 0 2px; }
+.browser-tab b:hover { color: var(--danger) }
+#browser-new-tab {
+  flex-shrink: 0; width: 24px; height: 24px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--text-muted);
+}
+#browser-new-tab:hover { color: var(--browser-accent, var(--gold-400)); border-color: var(--line-accent) }
+.browser-address { display: flex; align-items: center; gap: 4px; }
+.browser-address button {
+  width: 28px; height: 28px; cursor: pointer; font-size: 14px;
+  border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--text-muted);
+}
+.browser-address button:disabled { opacity: .35; cursor: default }
+.browser-address button:not(:disabled):hover { color: var(--browser-accent, var(--gold-400)) }
+.browser-address input {
+  flex: 1; min-width: 0; height: 28px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 5px; background: rgba(0, 0, 0, .45);
+  color: var(--text-primary); font-size: 12px; outline: none;
+}
+.browser-address input:focus { border-color: var(--browser-accent, var(--gold-400)) }
+.browser-pages { flex: 1; min-height: 0; position: relative; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #05070a; }
+.browser-pages webview, .browser-pages .browser-rig-frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+.browser-pages webview[data-active="false"], .browser-pages .browser-rig-frame[data-active="false"] { visibility: hidden; }
+.browser-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  margin: 0; padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px;
+}

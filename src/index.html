@@ -165,6 +165,21 @@
           </div>
           <i class="resize-handle"></i>
         </article>
+
+        <article class="module hidden-module" data-module="browser">
+          <header class="module-header drag-handle"><div><span>The web</span><h2>Browser</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content browser-content">
+            <div id="browser-tabs" class="browser-tabs"><button id="browser-new-tab" type="button" title="New tab">＋</button></div>
+            <form id="browser-address-form" class="browser-address">
+              <button type="button" id="browser-back" title="Back" disabled>‹</button>
+              <button type="button" id="browser-forward" title="Forward" disabled>›</button>
+              <button type="button" id="browser-reload" title="Reload">⟳</button>
+              <input id="browser-address" placeholder="Search or type an address" autocomplete="off">
+            </form>
+            <div id="browser-pages" class="browser-pages"><p class="browser-empty" id="browser-empty">Open a tab to start surfing. Pages live in their own walled-off session — they can't touch JARVIS.</p></div>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
       </section>
 
       <div id="autonomy-cards"></div>
@@ -603,5 +618,7 @@
     <script src="command-center.js"></script>
     <script src="cameras-ui.js"></script>
     <script src="defense-ui.js"></script>
+    <script src="browser-tabs.js"></script>
+    <script src="browser-ui.js"></script>
   </body>
 </html>
