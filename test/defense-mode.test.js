@@ -5,7 +5,8 @@ const {
   isStandDown,
   pickTriggerAlert,
   buildBannerLabel,
-  createEntryGate
+  createEntryGate,
+  parseRss
 } = require('../core/defense-mode');
 
 test('isDefenseRequest recognizes defense phrasings', () => {
@@ -89,6 +90,53 @@ test('buildBannerLabel formats a camera trigger', () => {
     buildBannerLabel({ kind: 'camera', cameraName: 'Front Door' }, nineFortyThree),
     'DEFENSE MODE · MOTION AT FRONT DOOR · 21:43'
   );
+});
+
+// --- RSS parser ---
+
+const WLOX_STYLE_FEED = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>WLOX Local News</title>
+  <item>
+    <title><![CDATA[Tornado confirmed near Gulfport, crews assessing damage]]></title>
+    <link>https://www.wlox.com/2026/07/25/tornado-gulfport/</link>
+    <pubDate>Fri, 25 Jul 2026 21:10:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Shelters open across Harrison County</title>
+    <link>https://www.wlox.com/2026/07/25/shelters-open/</link>
+  </item>
+</channel></rss>`;
+
+test('parseRss pulls titles, links, and dates from a real-shape feed', () => {
+  const items = parseRss(WLOX_STYLE_FEED);
+  assert.equal(items.length, 2);
+  assert.deepEqual(items[0], {
+    title: 'Tornado confirmed near Gulfport, crews assessing damage',
+    link: 'https://www.wlox.com/2026/07/25/tornado-gulfport/',
+    date: 'Fri, 25 Jul 2026 21:10:00 GMT'
+  });
+  assert.deepEqual(items[1], { title: 'Shelters open across Harrison County', link: 'https://www.wlox.com/2026/07/25/shelters-open/', date: '' });
+});
+
+test('parseRss caps the item count', () => {
+  const many = `<rss><channel>${'<item><title>headline</title></item>'.repeat(25)}</channel></rss>`;
+  assert.equal(parseRss(many).length, 10);
+  assert.equal(parseRss(many, 3).length, 3);
+});
+
+test('parseRss survives garbage, atom-less empties, and non-strings', () => {
+  assert.deepEqual(parseRss('not xml at all {'), []);
+  assert.deepEqual(parseRss('<rss><channel><title>empty</title></channel></rss>'), []);
+  assert.deepEqual(parseRss(null), []);
+  assert.deepEqual(parseRss(12), []);
+});
+
+test('parseRss skips items with no usable title', () => {
+  const feed = '<rss><channel><item><link>https://x.test/a</link></item><item><title>real one</title></item></channel></rss>';
+  const items = parseRss(feed);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].title, 'real one');
 });
 
 // --- Entry gate: every automatic entry announces itself and can be waved off ---

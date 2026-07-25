@@ -110,4 +110,39 @@ function createEntryGate({ timeoutMs = 15000 } = {}) {
   };
 }
 
-module.exports = { isDefenseRequest, isStandDown, pickTriggerAlert, buildBannerLabel, createEntryGate, WARNING_TIER };
+// RSS headlines for the situation rail. fast-xml-parser is already a
+// dependency (the ONVIF camera path uses it), so no new packages. Feeds are
+// strangers' XML — every failure collapses to [] and the board carries on.
+const { XMLParser } = require('fast-xml-parser');
+
+function textOf(value) {
+  if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+  if (value && typeof value === 'object') {
+    // CDATA and attribute-carrying nodes land as objects; '#text' holds the words.
+    if (typeof value['#text'] === 'string' || typeof value['#text'] === 'number') return String(value['#text']).trim();
+  }
+  return '';
+}
+
+function parseRss(xml, max = 10) {
+  if (typeof xml !== 'string' || !xml.trim()) return [];
+  let parsed;
+  try {
+    parsed = new XMLParser({ ignoreAttributes: true }).parse(xml);
+  } catch {
+    return [];
+  }
+  const channel = parsed?.rss?.channel;
+  const raw = channel?.item;
+  const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const out = [];
+  for (const item of items) {
+    if (out.length >= max) break;
+    const title = textOf(item?.title);
+    if (!title) continue;
+    out.push({ title, link: textOf(item?.link), date: textOf(item?.pubDate) });
+  }
+  return out;
+}
+
+module.exports = { isDefenseRequest, isStandDown, pickTriggerAlert, buildBannerLabel, createEntryGate, parseRss, WARNING_TIER };
