@@ -1,0 +1,501 @@
+<title>JARVIS — Everything It Can Do</title>
+<style>
+  :root {
+    --ground: #0b0d10;
+    --panel: #10141a;
+    --panel-2: #0d1116;
+    --line: rgba(255, 178, 31, 0.22);
+    --line-dim: rgba(255, 178, 31, 0.10);
+    --amber: #ffb21f;
+    --amber-soft: #ffcf6e;
+    --steel: #6c858c;
+    --ink: #e6dcc6;
+    --ink-dim: #a89f8c;
+    --red: #ff4b4b;
+    --cyan: #3ec6e0;
+    --font-display: "Bahnschrift", "Arial Narrow", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-mono: "Cascadia Mono", "Consolas", ui-monospace, "SF Mono", monospace;
+  }
+
+  html { background: var(--ground); }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(255, 178, 31, 0.07), transparent 70%),
+      var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: rgba(255, 178, 31, 0.35); color: #fff8e8; }
+
+  a { color: var(--amber); text-decoration: none; border-bottom: 1px solid var(--line); }
+  a:hover, a:focus-visible { color: var(--amber-soft); border-bottom-color: var(--amber-soft); }
+  a:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- Hero ---------- */
+  header {
+    padding: 72px 0 56px;
+    text-align: center;
+    border-bottom: 1px solid var(--line-dim);
+    position: relative;
+    overflow: hidden;
+  }
+  .orb {
+    width: 150px; height: 150px;
+    margin: 0 auto 40px;
+    border-radius: 50%;
+    position: relative;
+    background:
+      radial-gradient(circle at 38% 34%, rgba(255, 236, 190, 0.95), rgba(255, 178, 31, 0.85) 32%, rgba(180, 100, 8, 0.75) 62%, rgba(60, 30, 0, 0.9) 100%);
+    box-shadow:
+      0 0 45px rgba(255, 178, 31, 0.45),
+      0 0 130px rgba(255, 178, 31, 0.18),
+      inset 0 0 34px rgba(0, 0, 0, 0.45);
+    animation: breathe 4.5s ease-in-out infinite;
+  }
+  .orb::after {
+    content: "";
+    position: absolute; inset: -22px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 178, 31, 0.25);
+    border-top-color: rgba(255, 178, 31, 0.7);
+    animation: ring 9s linear infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 45px rgba(255,178,31,.45), 0 0 130px rgba(255,178,31,.18), inset 0 0 34px rgba(0,0,0,.45); }
+    50% { transform: scale(1.04); box-shadow: 0 0 60px rgba(255,178,31,.6), 0 0 160px rgba(255,178,31,.25), inset 0 0 30px rgba(0,0,0,.4); }
+  }
+  @keyframes ring { to { transform: rotate(360deg); } }
+
+  .kicker {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.32em;
+    color: var(--steel);
+    text-transform: uppercase;
+    margin: 0 0 18px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(40px, 7vw, 68px);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 20px;
+    text-wrap: balance;
+    text-shadow: 0 0 34px rgba(255, 178, 31, 0.35);
+  }
+  .standfirst {
+    max-width: 620px;
+    margin: 0 auto;
+    color: var(--ink);
+    font-size: 19px;
+  }
+  .standfirst em { color: var(--amber-soft); font-style: normal; }
+  .sysline {
+    margin-top: 34px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--steel);
+    letter-spacing: 0.08em;
+  }
+  .sysline b { color: var(--amber); font-weight: 400; }
+
+  /* ---------- Marquee tickers ---------- */
+  .ticker {
+    overflow: hidden;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255, 178, 31, 0.05), rgba(255, 178, 31, 0.02));
+    padding: 11px 0;
+    margin: 64px 0;
+    white-space: nowrap;
+  }
+  .ticker-track {
+    display: inline-flex;
+    width: max-content;
+    animation: ticker 42s linear infinite;
+  }
+  .ticker:hover .ticker-track { animation-play-state: paused; }
+  .ticker span {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--amber);
+    padding-right: 3.2em;
+  }
+  .ticker span i { font-style: normal; color: var(--steel); padding-right: 3.2em; }
+  .ticker.alt { border-color: rgba(108, 133, 140, 0.35); background: rgba(108, 133, 140, 0.05); }
+  .ticker.alt span { color: var(--steel); }
+  .ticker.alt span i { color: rgba(255, 178, 31, 0.55); }
+  .ticker.red { border-color: rgba(255, 75, 75, 0.4); background: rgba(255, 75, 75, 0.045); }
+  .ticker.red span { color: var(--red); }
+  .ticker.red span i { color: var(--steel); }
+  .ticker.reverse .ticker-track { animation-direction: reverse; }
+  @keyframes ticker { to { transform: translateX(-50%); } }
+
+  /* ---------- Sections ---------- */
+  section { margin: 0 0 8px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 6px; }
+  .sec-id {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--steel);
+    letter-spacing: 0.2em;
+    white-space: nowrap;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-size: clamp(26px, 4vw, 36px);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0;
+    text-wrap: balance;
+  }
+  .lede { font-size: 18px; color: var(--ink); max-width: 640px; margin: 14px 0 26px; }
+  .lede q { color: var(--amber-soft); quotes: "\201C" "\201D"; }
+
+  .chip {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 3px 10px 2px;
+    border: 1px solid;
+    border-radius: 2px;
+    vertical-align: 2px;
+    white-space: nowrap;
+  }
+  .chip.ship { color: #57d98a; border-color: rgba(87, 217, 138, 0.5); }
+  .chip.beta { color: var(--amber); border-color: var(--line); }
+  .chip.lab  { color: var(--steel); border-color: rgba(108, 133, 140, 0.5); }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px 22px;
+    justify-content: center;
+    font-family: var(--font-mono); font-size: 12px; color: var(--steel);
+    margin-top: 26px;
+  }
+
+  ul.caps { list-style: none; padding: 0; margin: 0; max-width: 680px; }
+  ul.caps li {
+    padding: 13px 0 13px 26px;
+    border-bottom: 1px solid var(--line-dim);
+    position: relative;
+  }
+  ul.caps li::before {
+    content: "▸";
+    position: absolute; left: 0; top: 13px;
+    color: var(--amber);
+    font-size: 13px;
+  }
+  ul.caps b { color: #fff3d6; font-weight: 600; }
+  ul.caps .say { font-family: var(--font-mono); font-size: 14px; color: var(--amber-soft); }
+
+  .note {
+    max-width: 680px;
+    margin: 22px 0 0;
+    padding: 14px 18px;
+    border-left: 2px solid var(--line);
+    background: var(--panel-2);
+    color: var(--ink-dim);
+    font-size: 15px;
+  }
+  .note b { color: var(--ink); }
+  .note.red { border-left-color: var(--red); }
+  .note.red b { color: var(--red); }
+
+  /* ---------- Orb gallery ---------- */
+  .orb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-top: 26px;
+  }
+  .orb-card {
+    background: var(--panel);
+    border: 1px solid var(--line-dim);
+    padding: 22px 14px 16px;
+    text-align: center;
+  }
+  .orb-card .mini {
+    width: 64px; height: 64px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    animation: breathe 5s ease-in-out infinite;
+  }
+  .orb-card h3 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 4px;
+  }
+  .orb-card p { font-size: 13px; color: var(--steel); margin: 0; line-height: 1.5; }
+
+  .m-original  { background: radial-gradient(circle at 40% 35%, rgba(255,220,150,.9), rgba(255,178,31,.5) 40%, transparent 72%); box-shadow: 0 0 18px rgba(255,178,31,.5), inset 0 0 0 1px rgba(255,178,31,.6), inset 0 0 14px rgba(255,178,31,.35); }
+  .m-classic   { background: radial-gradient(circle at 38% 34%, #ffedc2, #ffb21f 45%, #7a4a05 100%); box-shadow: 0 0 20px rgba(255,178,31,.55); }
+  .m-aurora    { background: radial-gradient(circle at 30% 65%, #3fe0a8, transparent 55%), radial-gradient(circle at 70% 30%, #7a6cff, transparent 60%), radial-gradient(circle, #123326, #050b09 85%); box-shadow: 0 0 20px rgba(63,224,168,.35); }
+  .m-halation  { background: radial-gradient(circle at 50% 45%, #fffdf4, rgba(255,214,140,.75) 34%, rgba(255,178,31,.18) 68%, transparent 90%); box-shadow: 0 0 26px rgba(255,236,190,.5); }
+  .m-neural    { background: radial-gradient(circle at 30% 30%, rgba(255,178,31,.9) 2px, transparent 3px), radial-gradient(circle at 68% 42%, rgba(255,178,31,.9) 2px, transparent 3px), radial-gradient(circle at 46% 72%, rgba(255,178,31,.9) 2px, transparent 3px), radial-gradient(circle at 74% 74%, rgba(255,207,110,.8) 1.6px, transparent 2.6px), radial-gradient(circle at 24% 60%, rgba(255,207,110,.8) 1.6px, transparent 2.6px), radial-gradient(circle, #1a1408, #08060a 80%); box-shadow: 0 0 16px rgba(255,178,31,.3), inset 0 0 0 1px rgba(255,178,31,.25); }
+  .m-plasma    { background: radial-gradient(circle at 32% 62%, #ff5f3c, transparent 55%), radial-gradient(circle at 70% 32%, #ff2f8f, transparent 58%), radial-gradient(circle, #ffb21f, #30060f 88%); box-shadow: 0 0 22px rgba(255,95,60,.4); }
+  .m-starfield { background: radial-gradient(circle at 22% 30%, #fff 1px, transparent 1.8px), radial-gradient(circle at 64% 22%, #fff 0.8px, transparent 1.5px), radial-gradient(circle at 80% 58%, #ffe9c0 1px, transparent 1.8px), radial-gradient(circle at 42% 74%, #fff 0.8px, transparent 1.5px), radial-gradient(circle at 55% 48%, #cfd8ff 0.7px, transparent 1.4px), radial-gradient(circle, #101625, #04060c 85%); box-shadow: 0 0 16px rgba(160,180,255,.25); }
+  .m-zen       { background: radial-gradient(circle at 42% 38%, #f3ead6, #cbb58a 55%, #6f5f43 100%); box-shadow: 0 0 14px rgba(230,220,198,.3); animation-duration: 8s; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    border-top: 1px solid var(--line-dim);
+    margin-top: 8px;
+    padding: 56px 0 72px;
+    text-align: center;
+  }
+  .cta {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #140d00;
+    background: var(--amber);
+    padding: 15px 34px;
+    border: none;
+    box-shadow: 0 0 30px rgba(255, 178, 31, 0.35);
+  }
+  .cta:hover, .cta:focus-visible { background: var(--amber-soft); color: #140d00; }
+  footer .fine {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--steel);
+    margin-top: 26px;
+    letter-spacing: 0.06em;
+    line-height: 2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ticker-track, .orb, .orb::after, .orb-card .mini { animation: none !important; }
+  }
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="orb" aria-hidden="true"></div>
+    <p class="kicker">System dossier · Local desktop assistant · Windows</p>
+    <h1>Say &ldquo;Hey&nbsp;Jarvis.&rdquo;</h1>
+    <p class="standfirst">Everything on this page runs on <em>your own PC</em>. No account, no subscription, no telemetry — an assistant with a voice, eyes, hands, a memory, and a soul you can choose. This is the full capability readout.</p>
+    <p class="sysline">BUILD <b>v0.17.0</b> · LICENSE <b>MIT</b> · TESTS <b>320 PASSING</b> · TELEMETRY <b>NONE</b></p>
+    <div class="legend">
+      <span><span class="chip ship">Shipped</span>&nbsp; in the installer today</span>
+      <span><span class="chip beta">Beta</span>&nbsp; shipped, off by default</span>
+      <span><span class="chip lab">In the lab</span>&nbsp; built &amp; tested, next release</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker" aria-hidden="true"><div class="ticker-track">
+  <span>Hey Jarvis <i>◆</i> 100% local wake word <i>◆</i> Local speech recognition <i>◆</i> Spoken replies <i>◆</i> Interrupt anytime <i>◆</i> Voice diagnostics <i>◆</i></span>
+  <span>Hey Jarvis <i>◆</i> 100% local wake word <i>◆</i> Local speech recognition <i>◆</i> Spoken replies <i>◆</i> Interrupt anytime <i>◆</i> Voice diagnostics <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">01</span><h2>Voice — fully on-device</h2></div>
+  <p class="lede">The wake word and the speech recognition never touch a server. Talk to it like it's in the room, cut it off mid-sentence, and repair the whole voice stack with one click.</p>
+  <ul class="caps">
+    <li><b>&ldquo;Hey Jarvis&rdquo; wake word + push-to-talk</b> — both processed entirely on your machine. <span class="chip ship">Shipped</span></li>
+    <li><b>Local speech recognition</b> via faster-whisper; spoken replies in Windows voices. <span class="chip ship">Shipped</span></li>
+    <li><b>Interrupt anytime</b> — Escape, the stop button, or <span class="say">&ldquo;JARVIS, stop&rdquo;</span> cuts a reply off mid-sentence. Voice, not just thinking. <span class="chip ship">Shipped</span></li>
+    <li><b>Voice Diagnostics panel</b> — seven green/red checks, a live mic meter, transcript playback, a 15-second wake-word test, and one-click Repair Voice. <span class="chip ship">Shipped</span></li>
+    <li><b>Real voices</b> — a local voice studio (Voicebox / Kokoro) is being wired in so JARVIS gets a proper voice of his own. <span class="chip lab">In the lab</span></li>
+  </ul>
+</section>
+
+<div class="ticker alt reverse" aria-hidden="true"><div class="ticker-track">
+  <span>Local brain via Ollama <i>◆</i> Bring-your-own-key Claude &amp; OpenAI <i>◆</i> Multi-step agent loop <i>◆</i> Streaming replies <i>◆</i> Ask Claude by voice <i>◆</i></span>
+  <span>Local brain via Ollama <i>◆</i> Bring-your-own-key Claude &amp; OpenAI <i>◆</i> Multi-step agent loop <i>◆</i> Streaming replies <i>◆</i> Ask Claude by voice <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">02</span><h2>Brains — your choice</h2></div>
+  <p class="lede">Free local intelligence is the default. Cloud is strictly opt-in, with your own key, encrypted on your machine, removable anytime.</p>
+  <ul class="caps">
+    <li><b>Local brain via Ollama</b> — open-ended conversation with no cloud at all. Size presets: Small (qwen3:4b), Balanced (8b), Advanced (14b), or any custom model. <span class="chip ship">Shipped</span></li>
+    <li><b>Cloud brains, bring-your-own-key</b> — Claude (Anthropic) or OpenAI, key encrypted with Windows secure storage. Never a bundled subscription. <span class="chip ship">Shipped</span></li>
+    <li><b>Agentic multi-step loop</b> — one request can search, read a file, then act: <span class="say">&ldquo;find the invoice, read the total, add a task.&rdquo;</span> Same abilities on all three brains; each step shows as a live status line. <span class="chip lab">In the lab</span></li>
+    <li><b>Streaming replies</b> with a STOP button that cancels cleanly. <span class="chip ship">Shipped</span></li>
+    <li><b>&ldquo;Ask Claude&rdquo;</b> — say <span class="say">&ldquo;JARVIS, ask Claude&hellip;&rdquo;</span> and he consults Claude Code on your PC, speaks the answer, and saves the transcript. Answers only — Claude is tool-blocked from changing anything, and that guard is mutation-tested. <span class="chip lab">In the lab</span></li>
+    <li><b>Battle mode</b> — say <span class="say">&ldquo;battle me&rdquo;</span> or <span class="say">&ldquo;spit some bars&rdquo;</span> and the composed British butler delivers 8–16 bars of original, PG-13, multisyllabic menace, ending on a mic-drop couplet. <span class="chip lab">In the lab</span></li>
+  </ul>
+</section>
+
+<div class="ticker" aria-hidden="true"><div class="ticker-track">
+  <span>Tasks &amp; reminders <i>◆</i> Morning briefing <i>◆</i> Searchable memory <i>◆</i> Saved routines <i>◆</i> Scheduled tasks <i>◆</i> Quiet hours <i>◆</i> Project dashboards <i>◆</i></span>
+  <span>Tasks &amp; reminders <i>◆</i> Morning briefing <i>◆</i> Searchable memory <i>◆</i> Saved routines <i>◆</i> Scheduled tasks <i>◆</i> Quiet hours <i>◆</i> Project dashboards <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">03</span><h2>Daily operations</h2></div>
+  <p class="lede"><q>Remind me to drain the compressor every morning.</q> Done — with priorities, repeats, briefings, and a memory you can edit or tell it to forget.</p>
+  <ul class="caps">
+    <li><b>Tasks</b> with priorities, due dates, and repeats; edit in place, filter by today or project; desktop notifications when things come due. <span class="chip ship">Shipped</span></li>
+    <li><b>Morning briefing</b> — open and overdue tasks, next due items, latest note, and PC status, on request or as a quick button. <span class="chip ship">Shipped</span></li>
+    <li><b>Searchable memory</b> — click-to-edit notes, forget buttons, and the <span class="say">&ldquo;forget about X&rdquo;</span> voice command. <span class="chip ship">Shipped</span></li>
+    <li><b>Saved routines</b> — <span class="say">&ldquo;Start work&rdquo;</span> opens your approved apps and project folders in one go. <span class="chip ship">Shipped</span></li>
+    <li><b>Scheduled tasks on a timer</b> — four kinds: SPEAK a reminder aloud, ASK the agent a question, run the daily BRIEFING, or check a CAMERA and describe what it sees. Quiet hours (default 9&nbsp;PM–7&nbsp;AM) mute audio; missed tasks catch up on restart with a late marker. Off by default. <span class="chip ship">Shipped</span></li>
+    <li><b>Project dashboards</b> — <span class="say">&ldquo;Show my Anvil dashboard&rdquo;</span> summarizes one project's tasks, notes, and recent files. <span class="chip ship">Shipped</span></li>
+    <li><b>Close apps on request</b> — <span class="say">&ldquo;close Chrome&rdquo;</span> closes gracefully, never force-kills, never touches the Windows shell. <span class="chip ship">Shipped</span></li>
+  </ul>
+</section>
+
+<div class="ticker alt reverse" aria-hidden="true"><div class="ticker-track">
+  <span>Voice file search <i>◆</i> Reads PDF · Word · Excel · CSV <i>◆</i> Document Q&amp;A cited to the page <i>◆</i> Folder watching <i>◆</i> Delete means Recycle Bin <i>◆</i></span>
+  <span>Voice file search <i>◆</i> Reads PDF · Word · Excel · CSV <i>◆</i> Document Q&amp;A cited to the page <i>◆</i> Folder watching <i>◆</i> Delete means Recycle Bin <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">04</span><h2>Files &amp; documents</h2></div>
+  <p class="lede">It only sees the folders you approve — nowhere else. Inside them, it finds, reads, summarizes, organizes, and answers questions with receipts.</p>
+  <ul class="caps">
+    <li><b>Voice file search</b> across approved folders only, enforced in the app's main process — not by a prompt. <span class="chip ship">Shipped</span></li>
+    <li><b>Reads &amp; summarizes</b> PDF, Word, Excel, CSV, and text files. <span class="chip ship">Shipped</span></li>
+    <li><b>Ask your documents</b> — <span class="say">&ldquo;Ask my documents: what preheat does P91 need?&rdquo;</span> Answers come only from your files, cited [1][2] by filename and PDF page, and every citation is clickable. <span class="chip ship">Shipped</span></li>
+    <li><b>Built-in explorer</b> — pinned folders, recent files, watched folders that fire a notification when contents change. <span class="chip ship">Shipped</span></li>
+    <li><b>File authority</b> — moves, copies, renames, and organizing happen on request. <b>&ldquo;Delete&rdquo; always means the Recycle Bin</b>; if the bin can't hold it, JARVIS refuses. Permanent erasure is impossible by design. <span class="chip ship">Shipped</span></li>
+    <li><b>Backup &amp; restore</b> — export tasks, notes, folders, and routines to one file; import merges without deleting. API keys are never exported. <span class="chip ship">Shipped</span></li>
+  </ul>
+</section>
+
+<div class="ticker red" aria-hidden="true"><div class="ticker-track">
+  <span>Ring <i>◆</i> Blink <i>◆</i> Nest <i>◆</i> Any RTSP / ONVIF camera <i>◆</i> Arm &amp; disarm by voice <i>◆</i> Doorbell spoken aloud <i>◆</i> Someone's-here card <i>◆</i></span>
+  <span>Ring <i>◆</i> Blink <i>◆</i> Nest <i>◆</i> Any RTSP / ONVIF camera <i>◆</i> Arm &amp; disarm by voice <i>◆</i> Doorbell spoken aloud <i>◆</i> Someone's-here card <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">05</span><h2>Security cameras &amp; defense</h2></div>
+  <p class="lede">JARVIS watches the house. Four camera families, one assistant — snapshots on your desktop and your phone, alerts spoken in his voice, and the whole system armed or disarmed on your word.</p>
+  <ul class="caps">
+    <li><b>Camera drivers</b> for Ring, Blink, Nest, and any generic RTSP/ONVIF camera (via go2rtc), behind one unified camera service. <span class="chip lab">In the lab</span></li>
+    <li><b>Defense — arm &amp; disarm by voice</b> — flip your Ring location or Blink network between armed and disarmed: <span class="say">&ldquo;System armed.&rdquo;</span> Every arm/disarm is written to the Activity log. <span class="chip lab">In the lab</span></li>
+    <li><b>Autonomy rules</b> — JARVIS speaks the doorbell aloud, announces motion, and shows a &ldquo;someone's here&rdquo; card with the camera picture. Four rules, each individually switched, all off by default. A configurable night window keeps daytime motion quiet. <span class="chip lab">In the lab</span></li>
+    <li><b>Scheduled camera checks</b> — put a camera on the schedule and JARVIS looks and describes what he sees. <span class="chip ship">Shipped</span></li>
+    <li><b>Cameras on your phone</b> — fresh snapshots from the doorbell and cameras, tap to refresh, badges for motion and doorbell events. Battery cams are protected from over-polling. <span class="chip ship">Shipped</span></li>
+  </ul>
+  <p class="note"><b>Autonomy only announces.</b> Nothing is sent, spent, deleted, or executed by a camera event — anything beyond speaking still goes through the usual approval card, and all of it shows in the Activity log.</p>
+</section>
+
+<div class="ticker" aria-hidden="true"><div class="ticker-track">
+  <span>Look at my screen <i>◆</i> Red indicator always on <i>◆</i> Click &amp; type by voice <i>◆</i> Plan card first <i>◆</i> STOP stays on top <i>◆</i> Financial windows blocked forever <i>◆</i></span>
+  <span>Look at my screen <i>◆</i> Red indicator always on <i>◆</i> Click &amp; type by voice <i>◆</i> Plan card first <i>◆</i> STOP stays on top <i>◆</i> Financial windows blocked forever <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">06</span><h2>Eyes &amp; hands</h2></div>
+  <p class="lede">He can see your screen when you ask, and — in beta — click and type for you. Both were built rails-first: the indicator, the plan card, and the STOP window existed before the first real action did.</p>
+  <ul class="caps">
+    <li><b>&ldquo;Look at my screen&rdquo;</b> — captures and describes your screen with the cloud vision model, always behind a red on-screen indicator, logged to Activity with a live timeline. Refuses plainly when no key is set. <span class="chip ship">Shipped</span></li>
+    <li><b>Screen driving</b> — <span class="say">&ldquo;click Save&rdquo;</span>, <span class="say">&ldquo;type hello world into Notepad&rdquo;</span>, <span class="say">&ldquo;select budget.xlsx in Explorer.&rdquo;</span> File Explorer and Notepad first; Chrome later behind its own clean profile. <span class="chip beta">Beta</span></li>
+    <li><b>You see the plan first</b> — every job shows a numbered plan card and waits for your OK; steps that save, send, delete, or overwrite pause again individually mid-job.</li>
+    <li><b>A STOP window stays on top</b> the entire time, showing the current step in plain English. Press it, hit Escape, or say &ldquo;stop&rdquo; — everything ends instantly, with a chime at start and end.</li>
+    <li><b>Named buttons, never blind clicks</b> — controls are pressed by their accessibility name through Windows UI Automation. If a control is missing or ambiguous, he stops and asks. He never guesses at coordinates.</li>
+    <li><b>Honest logging</b> — every press is logged; anything typed is recorded as a hash and a length, never the text.</li>
+  </ul>
+  <p class="note red"><b>Hard walls, enforced in code and re-checked before every single press:</b> financial windows — banks, brokers, anything that spends — are blocked permanently with no off switch, not even by voice. Sign-in surfaces refused. Password fields never typed into. A Windows UAC prompt ends the job and hands you the machine. Never runs unattended, on a schedule, or from the phone.</p>
+</section>
+
+<div class="ticker alt reverse" aria-hidden="true"><div class="ticker-track">
+  <span>Phone chat over Tailscale <i>◆</i> Voice messages <i>◆</i> Camera snapshots on mobile <i>◆</i> Send photos to your PC <i>◆</i> QR pairing <i>◆</i> Never exposed to the internet <i>◆</i></span>
+  <span>Phone chat over Tailscale <i>◆</i> Voice messages <i>◆</i> Camera snapshots on mobile <i>◆</i> Send photos to your PC <i>◆</i> QR pairing <i>◆</i> Never exposed to the internet <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">07</span><h2>JARVIS Mobile</h2></div>
+  <p class="lede">Your assistant in your pocket — over your own private network, never the open internet. Off by default; pair with a QR code, revoke any device anytime.</p>
+  <ul class="caps">
+    <li><b>Chat + voice from your phone</b> — press-and-hold voice messages; replies stream back as audio and text. <span class="chip ship">Shipped</span></li>
+    <li><b>Three tabs: Chat, Cameras, Send</b> — camera stills and alert badges on the Cameras tab; the Send tab uploads photos and files from your phone straight into a folder you choose on the PC. <span class="chip ship">Shipped</span></li>
+    <li><b>Findable names</b> — a photo sent from iOS arrives as &ldquo;Phone photo 2026-07-20 12-16.png&rdquo;, not a meaningless GUID. <span class="chip ship">Shipped</span></li>
+    <li><b>Private by construction</b> — runs over Tailscale (a zero-config private VPN) with HTTPS pairing; the QR code pre-fills the six-digit code. <span class="chip ship">Shipped</span></li>
+  </ul>
+</section>
+
+<div class="ticker" aria-hidden="true"><div class="ticker-track">
+  <span>Eight orb souls <i>◆</i> Original <i>◆</i> Classic <i>◆</i> Aurora <i>◆</i> Halation <i>◆</i> Neural <i>◆</i> Plasma <i>◆</i> Starfield <i>◆</i> Zen <i>◆</i> Gold &amp; Obsidian <i>◆</i></span>
+  <span>Eight orb souls <i>◆</i> Original <i>◆</i> Classic <i>◆</i> Aurora <i>◆</i> Halation <i>◆</i> Neural <i>◆</i> Plasma <i>◆</i> Starfield <i>◆</i> Zen <i>◆</i> Gold &amp; Obsidian <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">08</span><h2>The orbs — pick a soul</h2></div>
+  <p class="lede">The orb is JARVIS's face. It listens, thinks, and speaks with you — brightening, dimming, and reacting to his state — and it floats above your desktop when the app is minimized. Eight souls, each in a gold or obsidian palette. <span class="chip lab">In the lab</span></p>
+  <div class="orb-grid">
+    <div class="orb-card"><div class="mini m-original" aria-hidden="true"></div><h3>Original</h3><p>The holographic wireframe that started it all.</p></div>
+    <div class="orb-card"><div class="mini m-classic" aria-hidden="true"></div><h3>Classic</h3><p>The solid amber core. Warm, cinematic, canon.</p></div>
+    <div class="orb-card"><div class="mini m-aurora" aria-hidden="true"></div><h3>Aurora</h3><p>Polar light drifting inside the sphere.</p></div>
+    <div class="orb-card"><div class="mini m-halation" aria-hidden="true"></div><h3>Halation</h3><p>A soft over-exposed bloom, like film catching light.</p></div>
+    <div class="orb-card"><div class="mini m-neural" aria-hidden="true"></div><h3>Neural</h3><p>A living network of firing nodes.</p></div>
+    <div class="orb-card"><div class="mini m-plasma" aria-hidden="true"></div><h3>Plasma</h3><p>Turbulent, hot, barely contained.</p></div>
+    <div class="orb-card"><div class="mini m-starfield" aria-hidden="true"></div><h3>Starfield</h3><p>A galaxy in a marble.</p></div>
+    <div class="orb-card"><div class="mini m-zen" aria-hidden="true"></div><h3>Zen</h3><p>Still, sand-toned, unhurried.</p></div>
+  </div>
+  <ul class="caps" style="margin-top: 26px;">
+    <li><b>Two full-window skins</b> — Classic Amber, or the cyan <b style="color: var(--cyan);">Command Center</b> dashboard with live CPU/RAM/GPU, projects, tasks, activity, a cameras panel, and a FOCUS mode — its color tracks JARVIS's state. <span class="chip lab">In the lab</span></li>
+    <li><b>Movable modules</b> — drag any panel by its header, resize from all eight edges, stacking order saved. <span class="chip ship">Shipped</span></li>
+    <li><b>Floating orb</b> when minimized — JARVIS never really leaves the desk. <span class="chip ship">Shipped</span></li>
+  </ul>
+</section>
+
+<div class="ticker alt reverse" aria-hidden="true"><div class="ticker-track">
+  <span>Night Shift <i>◆</i> Drafts only — never sends, never deletes <i>◆</i> Job caps <i>◆</i> Wall-clock caps <i>◆</i> Cloud locked off by default <i>◆</i> Every job leaves a receipt <i>◆</i></span>
+  <span>Night Shift <i>◆</i> Drafts only — never sends, never deletes <i>◆</i> Job caps <i>◆</i> Wall-clock caps <i>◆</i> Cloud locked off by default <i>◆</i> Every job leaves a receipt <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">09</span><h2>Night Shift</h2></div>
+  <p class="lede">Queue up thinking work before bed; wake up to drafts. <span class="chip lab">In the lab</span></p>
+  <ul class="caps">
+    <li><b>Unattended brain jobs</b> that run only inside a night window you set, and leave <b>draft files</b> behind — never sends, never deletes.</li>
+    <li><b>Rails in code, not prompts</b> — a per-night job cap, a wall-clock cap, and cloud inference locked off unless you both ask per-job and set a budget above zero.</li>
+    <li><b>Receipts for everything</b> — every job is logged, and logging failures can never take the service down.</li>
+  </ul>
+</section>
+
+<div class="ticker red" aria-hidden="true"><div class="ticker-track">
+  <span>Cannot send messages <i>◆</i> Cannot spend money <i>◆</i> Cannot run shell commands <i>◆</i> By architecture, not policy <i>◆</i> Your data in one folder <i>◆</i></span>
+  <span>Cannot send messages <i>◆</i> Cannot spend money <i>◆</i> Cannot run shell commands <i>◆</i> By architecture, not policy <i>◆</i> Your data in one folder <i>◆</i></span>
+</div></div>
+
+<section class="wrap">
+  <div class="sec-head"><span class="sec-id">10</span><h2>The safety core</h2></div>
+  <p class="lede">Every capability above sits on the same bedrock. These aren't settings — they're how the thing is built.</p>
+  <ul class="caps">
+    <li><b>It cannot send messages, spend money, or run shell commands</b> — by architecture, not policy. The model is never handed a command line.</li>
+    <li><b>Destructive actions ask first</b> — deletes (Recycle Bin only), moves, renames, and shutdown all show an approval card.</li>
+    <li><b>Approved folders are a wall</b>, enforced in the Electron main process — a rule you tell a model is not a control, so the control doesn't live in the model.</li>
+    <li><b>All your data lives in one folder</b> (<code>%APPDATA%\jarvis-local-assistant</code>) you can back up, export, or delete outright.</li>
+    <li><b>No account. No telemetry. No subscription.</b> The app checks GitHub for new releases and tells you — nothing ever installs itself.</li>
+    <li><b>Honest distribution</b> — it's a free, unsigned app, so Windows SmartScreen will warn you; every release ships with a SHA-256 checksum you can verify.</li>
+  </ul>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="kicker" style="margin-bottom: 24px;">Free · Open source · Yours</p>
+    <a class="cta" href="https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest">Download JARVIS-FREE-SETUP.exe</a>
+    <p class="fine">
+      MIT license · github.com/Adamdesgns/jarvis-local-assistant<br>
+      Windows · optional Python 3.12 for local voice · optional Ollama for local conversation<br>
+      Local by default. Cloud only if you opt in — with your own key.
+    </p>
+  </div>
+</footer>
