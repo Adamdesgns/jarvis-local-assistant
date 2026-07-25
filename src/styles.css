@@ -259,6 +259,9 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 .folder-setting small { margin: 3px 0 0; font-size: var(--text-xs) }
 .folder-setting button { border: 1px solid var(--line-accent); border-radius: var(--r-sm); background: transparent; color: var(--accent); font: 500 var(--text-xs) var(--font); padding: 7px 10px }
 .wide-setting { grid-column: 1/-1 }
+/* Was an inline style attribute, which the page's CSP blocks — bullets and
+   default list padding leaked through. Lives in CSS now. */
+#schedule-list { list-style: none; margin: 12px 0 0; padding: 0 }
 .search-root { height: 32px; display: grid; grid-template-columns: 1fr 24px; align-items: center; border-bottom: 1px solid var(--line); color: var(--text-secondary); font-size: var(--text-sm) }
 .search-root span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .search-root button { border: 0; background: transparent; color: var(--danger) }

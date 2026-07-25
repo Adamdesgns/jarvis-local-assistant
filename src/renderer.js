@@ -875,13 +875,13 @@ function applyUpdateInfo(info = {}) {
     if (light) { light.style.background = '#ffb21f'; light.style.boxShadow = '0 0 8px #ffb21f'; }
     if (title) title.textContent = `UPDATE AVAILABLE · ${info.latest}`;
     if (detail) detail.textContent = `You have ${info.current}. Version ${info.latest} is ready.`;
-    if (download) download.style.display = '';
+    if (download) download.hidden = false;
     showToast(`JARVIS ${info.latest} is available. Open Settings to download.`, 6000);
   } else {
     if (light) { light.style.background = '#61efb2'; light.style.boxShadow = '0 0 8px #61efb2'; }
     if (title) title.textContent = `JARVIS ${info.current || ''}`.trim();
     if (detail) detail.textContent = info.latest ? 'You are on the latest version.' : 'Free local assistant.';
-    if (download) download.style.display = 'none';
+    if (download) download.hidden = true;
   }
 }
 

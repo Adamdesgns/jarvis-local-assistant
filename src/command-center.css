@@ -65,7 +65,7 @@ body[data-skin="command-center"] #classic-root { display: none; }
   .panel-body{padding:11px 13px 12px}
 
   .meter-row{display:flex;justify-content:space-around;gap:8px}
-  .meter{--value:90deg;width:63px;aspect-ratio:1;display:grid;place-content:center;text-align:center;border-radius:50%;background:radial-gradient(circle,#071018 55%,transparent 56%),conic-gradient(var(--cyan) var(--value),rgba(88,216,255,.1) 0);box-shadow:0 0 12px rgba(69,205,245,.13);position:relative}
+  .meter{--value:0deg;width:63px;aspect-ratio:1;display:grid;place-content:center;text-align:center;border-radius:50%;background:radial-gradient(circle,#071018 55%,transparent 56%),conic-gradient(var(--cyan) var(--value),rgba(88,216,255,.1) 0);box-shadow:0 0 12px rgba(69,205,245,.13);position:relative}
   .meter:before{content:"";position:absolute;inset:6px;border:1px dashed rgba(88,216,255,.24);border-radius:50%}
   .meter strong{font-size:15px}.meter strong small{font-size:7px;color:var(--muted)}.meter span{font-size:6px;color:var(--muted)}
   .telemetry{margin-top:9px;display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid rgba(88,216,255,.09)}.telemetry span{color:#4f7886;font-size:7px}.telemetry b{color:#b6e9f3;margin-left:4px}
