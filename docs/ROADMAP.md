@@ -29,9 +29,30 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
       module in the renderer. Rig at `test/rigs/terminal.html` — serve the repo
       root and open it; `rain.renderOnce()` paints a frame without rAF so the
       canvas can be checked in a background tab.
+- [x] **THE TERMINAL, immersive pass** — **Done 2026-07-25** (`0ba845d`), Adam's ask:
+      a FULL button (Esc exits) puts the console on the whole window via
+      `body.terminal-full`, and the rain got named intensity levels — brighter in
+      the module, `bold` at fullscreen, with glowing white heads. `rainStyle()` is
+      pure and tested. Guards: closing the console exits fullscreen first, and
+      Defense Mode drops it on entry so two fullscreen layers never stack.
 - [ ] **THE TERMINAL, stage 2: real commands** — user-typed Windows commands run in
       the terminal (user-driven only; the AI still never gets arbitrary shell).
       Confirm-card before anything destructive. Display-only for AI output.
+      **Build notes from the 2026-07-25 research pass — read before starting:**
+      - Scaffolding to reuse, do NOT rebuild: `shellHint()`/`SHELL_WORDS` in
+        `src/terminal-log.js` is the classifier seed and the seam is already cut
+        at the renderer's `submit()`; `showApproval()` + `resolveApproval` is the
+        confirm-card pattern; `core/tool-service.js` is the safe-spawn precedent
+        (argv array, `shell:false`); `core/screen-guard.js`'s frozen DENY/APPROVE
+        regex tiers are the exact mold for the command classifier.
+      - **Settle the name collision first.** `core/defaults.js` registers an app
+        named `terminal` (`wt.exe`), so "open terminal" already launches Windows
+        Terminal *externally* while the in-app module is also called terminal.
+        Harmless until stage 2 gives the module command execution — then one of
+        the two routes bypasses the confirm card. Decide the wording in the spec.
+      - cwd policy ties to `documentService.approvedRoots()`; needs a real deny
+        list (format, `del /f`, reg, bcdedit, vssadmin, net user), a timeout/kill
+        for hung processes, and `unattendedSafe: false` (the guard test enforces).
 - [x] **0.18.0 release stamp** — version bump + CHANGELOG entry covering the merged
       pile (orb souls everywhere, tabbed settings, Night Shift, battle mode).
       Done 2026-07-24: package.json was already 0.18.0 via the Pro merge; the
