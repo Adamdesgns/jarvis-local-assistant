@@ -668,3 +668,25 @@ body.defense #autonomy-cards { display: none; }
   color: #000; background: var(--danger); border: 0; border-radius: 4px;
   padding: 8px 14px; cursor: pointer;
 }
+
+/* Defense settings: the RSS feed list in Settings -> CAMERAS. */
+.defense-feeds { margin-top: 10px; }
+.defense-feeds-title {
+  display: block; margin-bottom: 6px; font-family: var(--font-display);
+  font-size: 10px; letter-spacing: .14em; color: var(--text-muted);
+}
+.defense-feed-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.defense-feed-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px;
+}
+.defense-feed-row span {
+  font-size: 11px; color: var(--text-primary); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.defense-feed-row button {
+  font-family: var(--font-display); font-size: 9px; letter-spacing: .12em;
+  color: var(--text-muted); background: transparent; border: 1px solid var(--line);
+  border-radius: 3px; padding: 3px 8px; cursor: pointer; flex-shrink: 0;
+}
+.defense-feed-row button:hover { color: var(--danger); border-color: var(--danger) }

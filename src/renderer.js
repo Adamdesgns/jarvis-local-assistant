@@ -1098,6 +1098,65 @@ function fillHourSelect(select) {
   }
 }
 
+// Defense mode settings: county picker fed live from the NWS, plus the RSS
+// feed list. Feeds are edited on a working copy and saved with the form.
+const US_STATES = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
+
+async function fillDefenseCounties(stateCode, selectedZone) {
+  const county = $('setting-defense-county');
+  if (!stateCode) {
+    county.replaceChildren(new Option('CHOOSE A STATE FIRST', ''));
+    return;
+  }
+  county.replaceChildren(new Option('LOADING COUNTIES…', ''));
+  const result = await window.jarvis.defense.zones(stateCode);
+  if (!result.ok) {
+    county.replaceChildren(new Option('COULD NOT LOAD — CHECK THE INTERNET', ''));
+    return;
+  }
+  county.replaceChildren(new Option('CHOOSE A COUNTY', ''));
+  for (const zone of result.zones) {
+    const option = new Option(zone.name.toUpperCase(), zone.id);
+    option.dataset.name = `${zone.name} County`;
+    county.append(option);
+  }
+  if (selectedZone) county.value = selectedZone;
+}
+
+function renderDefenseFeeds() {
+  const list = $('defense-feed-list');
+  list.replaceChildren();
+  for (const url of state.defenseFeeds || []) {
+    const row = document.createElement('div');
+    row.className = 'defense-feed-row';
+    const label = document.createElement('span');
+    label.textContent = url;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'REMOVE';
+    remove.addEventListener('click', () => {
+      state.defenseFeeds = state.defenseFeeds.filter((item) => item !== url);
+      renderDefenseFeeds();
+    });
+    row.append(label, remove);
+    list.append(row);
+  }
+}
+
+function populateDefenseSettings() {
+  const defense = state.settings.defense || {};
+  const stateSelect = $('setting-defense-state');
+  if (stateSelect.options.length <= 1) {
+    for (const code of US_STATES) stateSelect.append(new Option(code, code));
+  }
+  stateSelect.value = defense.countyState || '';
+  fillDefenseCounties(defense.countyState, defense.countyZone);
+  $('setting-defense-weather').checked = defense.autoWeather === true;
+  $('setting-defense-camera').checked = defense.autoCamera === true;
+  state.defenseFeeds = [...(defense.rssFeeds || [])];
+  renderDefenseFeeds();
+}
+
 function showAutonomyCard(card) {
   const holder = $('autonomy-cards');
   if (!holder) return;
@@ -1499,6 +1558,7 @@ function openSettings(tab = 'general') {
   $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
   $('setting-screen-drive').checked = Boolean(state.settings.screenDriveEnabled);
   $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
+  populateDefenseSettings();
   updateScheduleFormVisibility();
   updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList(); renderLicenseSection();
   $('setting-license-key').value = '';
@@ -1548,6 +1608,14 @@ async function saveSettings(event) {
     screenControlEnabled: $('setting-screen-control').checked,
     screenDriveEnabled: $('setting-screen-drive').checked,
     schedulesEnabled: $('setting-schedules').checked,
+    defense: {
+      countyZone: $('setting-defense-county').value,
+      countyName: $('setting-defense-county').selectedOptions[0]?.dataset.name || '',
+      countyState: $('setting-defense-state').value,
+      autoWeather: $('setting-defense-weather').checked,
+      autoCamera: $('setting-defense-camera').checked,
+      rssFeeds: state.defenseFeeds || []
+    },
     projects: state.settings.projects,
     searchRoots: state.settings.searchRoots
   };
@@ -1765,6 +1833,15 @@ function bindEvents() {
   $('camera-add-toggle')?.addEventListener('click', () => openSettings('cameras'));
   document.querySelectorAll('[data-close-settings]').forEach((button) => button.addEventListener('click', () => $('settings-modal').close()));
   $('settings-form').addEventListener('submit', saveSettings);
+  $('setting-defense-state').addEventListener('change', () => fillDefenseCounties($('setting-defense-state').value, ''));
+  $('defense-feed-add').addEventListener('click', () => {
+    const input = $('defense-feed-url');
+    const url = input.value.trim();
+    if (!/^https?:\/\//i.test(url)) { showToast('A feed link starts with https:// — copy it from your station’s RSS page.'); return; }
+    state.defenseFeeds = [...new Set([...(state.defenseFeeds || []), url])];
+    input.value = '';
+    renderDefenseFeeds();
+  });
   $('setting-ollama-preset').addEventListener('change', () => {
     const preset = $('setting-ollama-preset').value;
     if (preset !== 'custom') $('setting-ollama-model').value = preset;
