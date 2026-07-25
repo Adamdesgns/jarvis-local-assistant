@@ -29,12 +29,16 @@
   .rig-desk h4 { margin: 0 0 8px; color: var(--text-muted); font-size: 11px; letter-spacing: .12em; }
   /* Fake camera tiles: enough structure for defense-ui to reparent + click. */
   .camera-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-  .camera-tile { border: 1px solid var(--line); border-radius: 6px; padding: 0; overflow: hidden; background: #0a0a0a; }
+  .camera-tile { position: relative; border: 1px solid var(--line); border-radius: 6px; padding: 0; overflow: hidden; background: #0a0a0a; }
+  /* The app styles .camera-live as an absolutely-centered circle; in the rig
+     the tiles are fakes, so pin the button back into the footer. */
+  .camera-tile .camera-live { position: static; width: auto; height: auto; border-radius: 3px; }
   .camera-tile .rig-frame { height: 130px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 11px; letter-spacing: .1em; }
   .camera-tile[data-live="on"] .rig-frame { color: var(--danger); }
   .camera-tile footer { display: flex; justify-content: space-between; padding: 6px 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--text-primary); }
-  /* The board must keep the rig bar reachable. */
+  /* The board and the pending card must clear the rig bar (app has no bar). */
   .defense-board { top: 42px; }
+  .defense-pending { top: 100px; }
 </style>
 </head>
 <body>

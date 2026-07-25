@@ -690,3 +690,7 @@ body.defense #autonomy-cards { display: none; }
   border-radius: 3px; padding: 3px 8px; cursor: pointer; flex-shrink: 0;
 }
 .defense-feed-row button:hover { color: var(--danger); border-color: var(--danger) }
+
+/* The class rules above set display, which would beat the [hidden] attribute
+   exactly like the camera sign-in bug of 2026-07-24. Never again: */
+.defense-board[hidden], .defense-pending[hidden] { display: none; }
