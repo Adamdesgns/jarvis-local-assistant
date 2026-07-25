@@ -2,7 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   isDefenseRequest,
-  isStandDown
+  isStandDown,
+  pickTriggerAlert,
+  buildBannerLabel
 } = require('../core/defense-mode');
 
 test('isDefenseRequest recognizes defense phrasings', () => {
@@ -36,4 +38,59 @@ test('isStandDown leaves ordinary sentences alone', () => {
   assert.equal(isStandDown('stand down from the ladder'), null);
   assert.equal(isStandDown('is the all clear given yet'), null);
   assert.equal(isStandDown('when should I stand down the crew'), null);
+});
+
+// --- Warning-tier alert filter ---
+
+function feature(event, extra = {}) {
+  return { properties: { event, id: `test-${event}`, areaDesc: 'Harrison, MS', ...extra } };
+}
+
+test('pickTriggerAlert takes the first warning-tier alert only', () => {
+  const picked = pickTriggerAlert([
+    feature('Tornado Watch'),
+    feature('Special Weather Statement'),
+    feature('Tornado Warning'),
+    feature('Hurricane Warning')
+  ]);
+  assert.equal(picked.properties.event, 'Tornado Warning');
+});
+
+test('pickTriggerAlert covers the whole warning tier', () => {
+  for (const event of ['Tornado Warning', 'Hurricane Warning', 'Severe Thunderstorm Warning', 'Flash Flood Warning', 'Extreme Wind Warning']) {
+    assert.equal(pickTriggerAlert([feature(event)]).properties.event, event);
+  }
+});
+
+test('pickTriggerAlert refuses watches, advisories, and empty skies', () => {
+  assert.equal(pickTriggerAlert([feature('Tornado Watch'), feature('Wind Advisory'), feature('Flood Watch')]), null);
+  assert.equal(pickTriggerAlert([]), null);
+  assert.equal(pickTriggerAlert(undefined), null);
+});
+
+// --- Banner label ---
+
+const nineFortyThree = new Date(2026, 6, 25, 21, 43);
+
+test('buildBannerLabel formats the manual trigger', () => {
+  assert.equal(buildBannerLabel({ kind: 'manual' }, nineFortyThree), 'DEFENSE MODE · MANUAL TRIGGER · 21:43');
+});
+
+test('buildBannerLabel formats a weather trigger with event and area', () => {
+  assert.equal(
+    buildBannerLabel({ kind: 'weather', event: 'Tornado Warning', area: 'Harrison County' }, nineFortyThree),
+    'DEFENSE MODE · TORNADO WARNING, HARRISON COUNTY · 21:43'
+  );
+});
+
+test('buildBannerLabel formats a camera trigger', () => {
+  assert.equal(
+    buildBannerLabel({ kind: 'camera', cameraName: 'Front Door' }, nineFortyThree),
+    'DEFENSE MODE · MOTION AT FRONT DOOR · 21:43'
+  );
+});
+
+test('buildBannerLabel pads early hours and survives a bare reason', () => {
+  assert.equal(buildBannerLabel({ kind: 'manual' }, new Date(2026, 6, 25, 7, 5)), 'DEFENSE MODE · MANUAL TRIGGER · 07:05');
+  assert.equal(buildBannerLabel({ kind: 'weather', event: 'Flash Flood Warning' }, nineFortyThree), 'DEFENSE MODE · FLASH FLOOD WARNING · 21:43');
 });
