@@ -17,6 +17,18 @@
   const emptyNote = document.getElementById('browser-empty');
   const views = new Map(); // tab id -> webview (or rig frame)
   const rigMode = window.JarvisBrowserRig === true; // rigs can't host real webviews
+  let silenced = false; // hidden/collapsed module: pages stay alive, so mute them
+
+  function applySilence(view) {
+    if (!rigMode && view.dataset.ready === 'true') view.setAudioMuted(silenced);
+  }
+
+  // display:none does not pause a webview — a hidden module kept playing
+  // audio with no visible UI. The renderer flips this on hide/collapse.
+  function setSilenced(on) {
+    silenced = Boolean(on);
+    for (const view of views.values()) applySilence(view);
+  }
 
   function accentRefresh() {
     const palette = window.jarvisHologram?.palette || 'gold';
@@ -36,6 +48,9 @@
     // Belt to the guard's suspenders — main.js forces this anyway.
     view.setAttribute('partition', 'persist:jarvis-browser');
     view.setAttribute('src', tab.url);
+    // Every webview method throws until dom-ready has fired (crash.log caught
+    // canGoBack doing exactly that on openTab) — gate them on this flag.
+    view.addEventListener('dom-ready', () => { view.dataset.ready = 'true'; applySilence(view); syncControls(); });
     view.addEventListener('page-title-updated', (event) => { tabs.update(tab.id, { title: event.title }); renderStrip(); });
     view.addEventListener('did-navigate', (event) => { tabs.update(tab.id, { url: event.url }); syncAddress(); });
     view.addEventListener('did-navigate-in-page', (event) => { tabs.update(tab.id, { url: event.url }); syncAddress(); });
@@ -75,11 +90,15 @@
     if (!tab) addressInput.value = '';
   }
 
+  function readyView(id) {
+    const view = views.get(id);
+    return view && !rigMode && view.dataset.ready === 'true' ? view : null;
+  }
+
   function syncControls() {
-    const view = tabs.active() ? views.get(tabs.active().id) : null;
-    const real = view && !rigMode && typeof view.canGoBack === 'function';
-    backButton.disabled = !(real && view.canGoBack());
-    forwardButton.disabled = !(real && view.canGoForward());
+    const view = tabs.active() ? readyView(tabs.active().id) : null;
+    backButton.disabled = !(view && view.canGoBack());
+    forwardButton.disabled = !(view && view.canGoForward());
   }
 
   function syncVisibility() {
@@ -133,14 +152,14 @@
     addressInput.blur();
   });
   newTabButton.addEventListener('click', () => openTab('https://duckduckgo.com'));
-  backButton.addEventListener('click', () => { const view = views.get(tabs.active()?.id); if (view?.canGoBack?.()) view.goBack(); });
-  forwardButton.addEventListener('click', () => { const view = views.get(tabs.active()?.id); if (view?.canGoForward?.()) view.goForward(); });
-  reloadButton.addEventListener('click', () => { const view = views.get(tabs.active()?.id); if (view?.reload) view.reload(); });
+  backButton.addEventListener('click', () => { const view = readyView(tabs.active()?.id); if (view?.canGoBack()) view.goBack(); });
+  forwardButton.addEventListener('click', () => { const view = readyView(tabs.active()?.id); if (view?.canGoForward()) view.goForward(); });
+  reloadButton.addEventListener('click', () => { const view = readyView(tabs.active()?.id); if (view) view.reload(); });
 
   window.jarvis.onBrowserOpenTab?.((payload) => { if (payload?.url) openTab(payload.url); });
   window.jarvis.onBrowserNotice?.((payload) => { if (payload?.message && typeof showToast === 'function') showToast(payload.message, 5000); });
   window.jarvis.onOrbPrefs?.(() => accentRefresh());
   accentRefresh();
 
-  window.JarvisBrowser = { openTab, tabCount: () => tabs.list().length };
+  window.JarvisBrowser = { openTab, setSilenced, tabCount: () => tabs.list().length };
 })();
