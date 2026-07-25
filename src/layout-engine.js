@@ -53,6 +53,42 @@
     return 1 + Math.max(0, ...Object.values(layout).map((rect) => Number(rect?.z) || 0));
   }
 
+  // Maximize as layout data, not CSS: the rect becomes the whole workspace and
+  // the old rect is kept as `restore`, so it persists and reloads like any
+  // other layout fact. Returns whether the module is maximized afterwards.
+  function toggleMaximize(layout, name) {
+    const current = layout[name];
+    if (!current) return false;
+    if (current.restore) {
+      layout[name] = { ...current.restore, z: current.z };
+      return false;
+    }
+    layout[name] = {
+      x: 0, y: 0, w: 100, h: 100, z: current.z,
+      restore: { x: current.x, y: current.y, w: current.w, h: current.h }
+    };
+    return true;
+  }
+
+  // Hand-arranging a maximized module means the user took over — forget the
+  // old spot rather than teleporting them back on the next toggle.
+  function clearRestore(layout, name) {
+    if (layout[name]) delete layout[name].restore;
+  }
+
+  // One pointermove step of a drag or resize. Returns whether anything moved.
+  // The no-change gate is load-bearing: a maximized module is pinned by
+  // clampRect, so a jittery header click produces identical rects — clearing
+  // restore then would wedge the maximize toggle at full-screen forever.
+  function applyDragStep(layout, name, next) {
+    const current = layout[name];
+    if (!current) return false;
+    if (next.x === current.x && next.y === current.y && next.w === current.w && next.h === current.h) return false;
+    clearRestore(layout, name);
+    Object.assign(current, { x: next.x, y: next.y, w: next.w, h: next.h });
+    return true;
+  }
+
   function createEngine({ layer, layout, apply, save, onFront }) {
     let frame = 0;
     const schedule = (name) => {
@@ -82,8 +118,7 @@
           const next = edge
             ? resizeRect(start, edge, dx, dy)
             : clampRect({ ...start, x: start.x + dx, y: start.y + dy });
-          Object.assign(layout[name], { x: next.x, y: next.y, w: next.w, h: next.h });
-          schedule(name);
+          if (applyDragStep(layout, name, next)) schedule(name);
         };
         const up = () => {
           handle.removeEventListener('pointermove', move);
@@ -119,10 +154,18 @@
       save();
     }
 
-    return { attach, place, bringToFront };
+    function maximize(name) {
+      const nowMaximized = toggleMaximize(layout, name);
+      if (layout[name]) layout[name].z = nextZ(layout);
+      apply(name);
+      save();
+      return nowMaximized;
+    }
+
+    return { attach, place, bringToFront, maximize };
   }
 
-  const api = { MIN_W, MIN_H, clampRect, resizeRect, overlapArea, findOpenSpace, nextZ, createEngine };
+  const api = { MIN_W, MIN_H, clampRect, resizeRect, overlapArea, findOpenSpace, nextZ, toggleMaximize, clearRestore, applyDragStep, createEngine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.JarvisLayout = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added — THE BROWSER (stage 1): surf inside JARVIS
+- A new **Browser** module (Modules → Browser): tabs (up to five), address bar,
+  back/forward/reload, dressed in your skin with the active-tab underline in
+  your orb's colour. Type an address or just type words — words become a
+  DuckDuckGo search.
+- **Web pages are strangers in the house.** Every page runs in its own
+  walled-off session with no path to JARVIS's files, settings, keys, or
+  controls — enforced in the main process, not by politeness.
+- **Deny by default:** pages asking for camera, mic, or location are refused
+  automatically (you'll see a quiet note). Downloads are switched off entirely
+  for now. Links that try to open new windows open new tabs instead, and only
+  real web addresses load — nothing from disk, ever.
+
 ### Added — DEFENSE MODE: when something is wrong, the whole window is the situation board
 - Say **"defense mode"** (or press the new ⛨ button in the bar) and the desk
   drops away: **every camera goes live at once** on a fullscreen wall, with a

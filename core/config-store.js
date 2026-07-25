@@ -99,7 +99,16 @@ class ConfigStore {
       'screenControlEnabled', 'screenControlAllowlist',
       // Screen driving (slice 2) — its own switch, off by default, so reading
       // can be on while the hands stay off.
-      'screenDriveEnabled'
+      'screenDriveEnabled',
+      // The look: orb soul/color picker, window glass. These applied live but
+      // silently reset on save until test/settings-persistence.test.js began
+      // asserting every key the settings dialog sends actually persists.
+      'orbSkin', 'orbColor', 'windowGlass',
+      // Night Shift, heartbeat, and the Defense Mode setup (county, feeds,
+      // auto-triggers) — same silent-reset bug, same guard.
+      'nightShiftEnabled', 'nightShiftStart', 'nightShiftEnd', 'nightShiftMaxJobs',
+      'nightShiftMaxMinutes', 'nightShiftCloudBudgetUsd', 'nightShiftFolder',
+      'heartbeatEnabled', 'heartbeatMinutes', 'defense'
       // 'license' is intentionally NOT in this list: settings:save is
       // renderer-reachable, and license state must only ever be written by
       // the main-process LicenseService through setLicenseState below.

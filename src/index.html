@@ -50,7 +50,7 @@
 
       <section id="module-layer" class="module-layer">
         <article class="module" data-module="tasks">
-          <header class="module-header drag-handle"><div><span>Work queue</span><h2>Today’s tasks</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Work queue</span><h2>Today’s tasks</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content">
             <form id="quick-task-form" class="inline-entry"><input id="quick-task-input" placeholder="Add something you need to finish…"><button>ADD</button></form>
             <div class="task-filters"><button class="active" data-task-filter="open">OPEN</button><button data-task-filter="today">TODAY</button><button data-task-filter="project">PROJECT</button><button data-task-filter="all">ALL</button><span id="task-count">0 OPEN</span></div>
@@ -60,7 +60,7 @@
         </article>
 
         <article class="module hidden-module" data-module="file-explorer">
-          <header class="module-header drag-handle"><div><span>Live search</span><h2>File explorer</h2></div><div class="module-actions"><button id="file-collapse">−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Live search</span><h2>File explorer</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button id="file-collapse">−</button><button data-hide>×</button></div></header>
           <div class="module-content explorer-content">
             <div class="explorer-toolbar">
               <button id="file-up" title="Up one folder">↑</button>
@@ -81,7 +81,7 @@
         </article>
 
         <article class="module hidden-module" data-module="night-shift">
-          <header class="module-header drag-handle"><div><span>While you sleep</span><h2>Night shift</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>While you sleep</span><h2>Night shift</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content">
             <div class="nightshift-counter"><b id="nightshift-done">0</b><span>jobs done, lifetime</span></div>
             <div id="nightshift-jobs" class="nightshift-jobs"></div>
@@ -91,7 +91,7 @@
         </article>
 
         <article class="module hidden-module" data-module="performance">
-          <header class="module-header drag-handle"><div><span>Telemetry</span><h2>PC performance</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Telemetry</span><h2>PC performance</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content performance-grid">
             <div class="meter" id="cpu-meter"><b id="cpu-value">0</b><span>% CPU</span></div>
             <div class="meter" id="ram-meter"><b id="ram-value">0</b><span>% MEMORY</span></div>
@@ -101,13 +101,13 @@
         </article>
 
         <article class="module hidden-module" data-module="memory">
-          <header class="module-header drag-handle"><div><span>Knowledge</span><h2>Memory</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Knowledge</span><h2>Memory</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content"><form id="memory-form" class="inline-entry"><input id="memory-input" placeholder="Remember something…"><button>STORE</button></form><input id="memory-search" class="memory-search" placeholder="Search memories…"><div id="memory-list" class="memory-list"></div></div>
           <i class="resize-handle"></i>
         </article>
 
         <article class="module hidden-module" data-module="projects">
-          <header class="module-header drag-handle"><div><span>Context</span><h2>Projects</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Context</span><h2>Projects</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content project-list">
             <button data-project="general" class="active"><i></i><span>GENERAL</span><b>PERSONAL</b></button>
             <button data-project="anvil"><i></i><span>ANVIL</span><b>BUSINESS</b></button>
@@ -118,13 +118,13 @@
         </article>
 
         <article class="module hidden-module" data-module="activity">
-          <header class="module-header drag-handle"><div><span>Audit</span><h2>Recent activity</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Audit</span><h2>Recent activity</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content"><div id="activity-list" class="activity-list"></div></div>
           <i class="resize-handle"></i>
         </article>
 
         <article class="module hidden-module" data-module="terminal">
-          <header class="module-header drag-handle"><div><span>Console</span><h2>Terminal</h2></div><div class="module-actions"><button type="button" id="terminal-clear" class="term-clear" title="Clear the console">CLR</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Console</span><h2>Terminal</h2></div><div class="module-actions"><button type="button" id="terminal-clear" class="term-clear" title="Clear the console">CLR</button><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content term-body">
             <canvas id="terminal-rain" class="term-rain" aria-hidden="true"></canvas>
             <div id="terminal-log" class="term-log" role="log" aria-live="polite" aria-label="JARVIS console"></div>
@@ -137,7 +137,7 @@
         </article>
 
         <article class="module hidden-module" data-module="quick-commands">
-          <header class="module-header drag-handle"><div><span>Shortcuts</span><h2>Quick commands</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Shortcuts</span><h2>Quick commands</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content quick-grid">
             <button data-command="Morning briefing"><span>START</span>BRIEFING</button>
             <button data-command="Look at my screen"><span>VIEW</span>MY SCREEN</button>
@@ -152,16 +152,31 @@
         </article>
 
         <article class="module hidden-module" data-module="document-viewer">
-          <header class="module-header drag-handle"><div><span>Document intelligence</span><h2 id="document-title">DOCUMENT SUMMARY</h2></div><div class="module-actions"><button id="copy-document-output" title="Copy summary">COPY</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Document intelligence</span><h2 id="document-title">DOCUMENT SUMMARY</h2></div><div class="module-actions"><button id="copy-document-output" title="Copy summary">COPY</button><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content document-content"><pre id="document-output">Ask JARVIS to read or summarize a document.</pre></div>
           <i class="resize-handle"></i>
         </article>
 
         <article class="module hidden-module" data-module="cameras">
-          <header class="module-header drag-handle"><div><span>Surveillance</span><h2>Cameras</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Connect a camera in Settings"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>ADD</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <header class="module-header drag-handle"><div><span>Surveillance</span><h2>Cameras</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Connect a camera in Settings"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>ADD</button><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content cameras-content">
             <div id="camera-systems" class="camera-systems"></div>
             <div id="camera-grid" class="camera-grid"><p class="camera-empty">No cameras yet. Select ＋ ADD to connect one.</p></div>
+          </div>
+          <i class="resize-handle"></i>
+        </article>
+
+        <article class="module hidden-module" data-module="browser">
+          <header class="module-header drag-handle"><div><span>The web</span><h2>Browser</h2></div><div class="module-actions"><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
+          <div class="module-content browser-content">
+            <div id="browser-tabs" class="browser-tabs"><button id="browser-new-tab" type="button" title="New tab">＋</button></div>
+            <form id="browser-address-form" class="browser-address">
+              <button type="button" id="browser-back" title="Back" disabled>‹</button>
+              <button type="button" id="browser-forward" title="Forward" disabled>›</button>
+              <button type="button" id="browser-reload" title="Reload">⟳</button>
+              <input id="browser-address" placeholder="Search or type an address" autocomplete="off">
+            </form>
+            <div id="browser-pages" class="browser-pages"><p class="browser-empty" id="browser-empty">Open a tab to start surfing. Pages live in their own walled-off session — they can't touch JARVIS.</p></div>
           </div>
           <i class="resize-handle"></i>
         </article>
@@ -603,5 +618,7 @@
     <script src="command-center.js"></script>
     <script src="cameras-ui.js"></script>
     <script src="defense-ui.js"></script>
+    <script src="browser-tabs.js"></script>
+    <script src="browser-ui.js"></script>
   </body>
 </html>

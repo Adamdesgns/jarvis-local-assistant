@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RIG · THE BROWSER (stage 1)</title>
+<!--
+  Standalone rig for the Browser module chrome. Loads the REAL tokens, the
+  REAL stylesheet, the REAL browser-tabs.js + browser-ui.js — window.jarvis
+  is faked and webviews are stand-in frames (a real <webview> only exists
+  inside Electron with webviewTag on; the wall itself is main-process code
+  proven by test/browser-guard.test.js). Serve the repo root:
+
+      npx --yes serve . -l 5190
+
+  then open /test/rigs/browser.html. Keep rigs in the repo.
+-->
+<link rel="stylesheet" href="../../src/tokens.css" />
+<link rel="stylesheet" href="../../src/styles.css" />
+<style>
+  body { margin: 0; background: #000; font-family: var(--font); }
+  .rig-bar { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
+  .rig-bar button {
+    font-size: 11px; letter-spacing: .1em; padding: 6px 10px; cursor: pointer;
+    color: var(--text-secondary); background: transparent;
+    border: 1px solid var(--line); border-radius: 4px;
+  }
+  .rig-stage { padding: 24px; }
+  .module { position: relative !important; width: 860px; height: 560px; display: flex; flex-direction: column; }
+  .module-content { flex: 1; min-height: 0; }
+  .browser-rig-frame {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 13px; letter-spacing: .04em;
+    background: repeating-linear-gradient(45deg, #05070a, #05070a 14px, #090d12 14px, #090d12 28px);
+  }
+</style>
+</head>
+<body>
+  <div class="rig-bar">
+    <button id="rig-three-tabs">OPEN 3 TABS</button>
+    <button id="rig-six-tabs">TRY 6 TABS (CAP)</button>
+    <button id="rig-notice">FAKE DOWNLOAD BLOCK</button>
+    <button id="rig-obsidian">OBSIDIAN ACCENT</button>
+  </div>
+
+  <div class="rig-stage">
+    <article class="module" data-module="browser">
+      <header class="module-header drag-handle"><div><span>The web</span><h2>Browser</h2></div><div class="module-actions"><button data-collapse>−</button><button data-hide>×</button></div></header>
+      <div class="module-content browser-content">
+        <div id="browser-tabs" class="browser-tabs"><button id="browser-new-tab" type="button" title="New tab">＋</button></div>
+        <form id="browser-address-form" class="browser-address">
+          <button type="button" id="browser-back" title="Back" disabled>‹</button>
+          <button type="button" id="browser-forward" title="Forward" disabled>›</button>
+          <button type="button" id="browser-reload" title="Reload">⟳</button>
+          <input id="browser-address" placeholder="Search or type an address" autocomplete="off">
+        </form>
+        <div id="browser-pages" class="browser-pages"><p class="browser-empty" id="browser-empty">Open a tab to start surfing. Pages live in their own walled-off session — they can't touch JARVIS.</p></div>
+      </div>
+      <i class="resize-handle"></i>
+    </article>
+  </div>
+
+<script src="../../src/terminal-log.js"></script>
+<script src="../../src/browser-tabs.js"></script>
+<script>
+  window.JarvisBrowserRig = true; // browser-ui builds stand-in frames, not webviews
+  const notices = [];
+  let noticeCb = null;
+  window.showToast = (message) => {
+    const toast = document.createElement('div');
+    toast.className = 'rig-toast';
+    toast.textContent = message;
+    toast.setAttribute('role', 'status');
+    document.body.append(toast);
+    setTimeout(() => toast.remove(), 4000);
+  };
+  window.jarvis = {
+    onBrowserOpenTab: (cb) => {},
+    onBrowserNotice: (cb) => { noticeCb = cb; },
+    onOrbPrefs: (cb) => {}
+  };
+  window.jarvisHologram = { palette: 'gold' };
+</script>
+<style>
+  .rig-toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    padding: 10px 16px; border: 1px solid var(--line-accent); border-radius: 6px;
+    background: rgba(0,0,0,.92); color: var(--text-primary); font-size: 12px; z-index: 99;
+  }
+</style>
+<script src="../../src/browser-ui.js"></script>
+<script>
+  document.getElementById('rig-three-tabs').addEventListener('click', () => {
+    window.JarvisBrowser.openTab('https://www.wlox.com/weather/');
+    window.JarvisBrowser.openTab('https://duckduckgo.com/?q=gulfport%20radar');
+    window.JarvisBrowser.openTab('https://www.sunherald.com');
+  });
+  document.getElementById('rig-six-tabs').addEventListener('click', () => {
+    for (let i = 0; i < 6; i += 1) window.JarvisBrowser.openTab(`https://site${i}.test`);
+  });
+  document.getElementById('rig-notice').addEventListener('click', () => {
+    if (noticeCb) noticeCb({ message: "Downloads are switched off in JARVIS's browser for now." });
+  });
+  document.getElementById('rig-obsidian').addEventListener('click', () => {
+    window.jarvisHologram.palette = 'obsidian';
+    window.JarvisBrowser.openTab('https://obsidian-accent.test');
+  });
+</script>
+</body>
+</html>

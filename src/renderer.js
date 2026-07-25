@@ -26,7 +26,8 @@ const RESET_LAYOUT = {
   memory: { x: 2, y: 54, w: 24, h: 36 }, activity: { x: 74, y: 62, w: 24, h: 32 },
   'quick-commands': { x: 2, y: 54, w: 22, h: 38 }, projects: { x: 74, y: 8, w: 24, h: 38 },
   'file-explorer': { x: 12, y: 6, w: 76, h: 78 }, 'document-viewer': { x: 18, y: 5, w: 64, h: 76 },
-  cameras: { x: 26, y: 8, w: 46, h: 60 }, 'night-shift': { x: 38, y: 8, w: 24, h: 42 }
+  cameras: { x: 26, y: 8, w: 46, h: 60 }, 'night-shift': { x: 38, y: 8, w: 24, h: 42 },
+  terminal: { x: 28, y: 46, w: 44, h: 46 }, browser: { x: 22, y: 8, w: 56, h: 72 }
 };
 const state = {
   settings: {},
@@ -507,6 +508,12 @@ function applyModuleLayout(name) {
   module.style.width = `${layout.w}%`;
   module.style.height = `${layout.h}%`;
   module.style.zIndex = String(layout.z || 1);
+  const maxButton = module.querySelector('[data-maximize]');
+  if (maxButton) {
+    const maximized = Boolean(layout.restore);
+    maxButton.textContent = maximized ? '❐' : '⛶';
+    maxButton.title = maximized ? 'Restore size' : 'Maximize';
+  }
 }
 
 async function renderNightShift() {
@@ -671,13 +678,26 @@ function toggleModule(name, visible) {
   // by the layout engine, it just shows or hides.
   if (shouldShow && state.engine && name !== 'command') {
     const rect = state.layout[name] || RESET_LAYOUT[name] || { x: 30, y: 12, w: 32, h: 44 };
-    const visible = Object.entries(state.layout).filter(([key]) => key !== name && !state.hiddenModules.includes(key)).map(([, value]) => value);
+    // A maximized module (it carries a restore rect) covers the whole
+    // workspace — counting it would shove every newly shown module into a
+    // corner and persist the damage. It doesn't count as "occupying" space.
+    const visible = Object.entries(state.layout).filter(([key, value]) => key !== name && !state.hiddenModules.includes(key) && !value.restore).map(([, value]) => value);
     const covered = visible.reduce((sum, other) => sum + window.JarvisLayout.overlapArea(rect, other), 0);
     if (!state.layout[name] || covered > rect.w * rect.h * 0.6) state.engine.place(name, { w: rect.w, h: rect.h });
   }
   renderModuleVisibility();
   scheduleLayoutSave();
   if (name === 'file-explorer' && shouldShow) showFileRoots();
+  if (name === 'browser') syncBrowserAudio();
+}
+
+// A hidden or collapsed browser module keeps its pages fully alive
+// (display:none neither pauses nor mutes a webview), so mute the guests
+// whenever no pixels of them are on screen and unmute on reveal.
+function syncBrowserAudio() {
+  const module = moduleElement('browser');
+  const silencedNow = state.hiddenModules.includes('browser') || Boolean(module?.classList.contains('collapsed'));
+  window.JarvisBrowser?.setSilenced(silencedNow);
 }
 
 function bindModuleLayout() {
@@ -903,6 +923,9 @@ function startSearchExperience(query = 'local files') {
   const explorer = moduleElement('file-explorer');
   explorer.classList.remove('hidden-module');
   explorer.classList.add('spotlight');
+  // Inline z from the stored layout beats the .spotlight class rule, so a
+  // maximized module would otherwise hide the whole search performance.
+  state.engine?.bringToFront('file-explorer');
   applyModuleLayout('file-explorer');
   document.body.classList.add('searching');
   setCoreState('exploding', 'DISASSEMBLING CORE · FILE SEARCH');
@@ -1785,7 +1808,16 @@ function bindEvents() {
   });
   document.querySelectorAll('[data-toggle-module]').forEach((button) => button.addEventListener('click', () => toggleModule(button.dataset.toggleModule)));
   document.querySelectorAll('[data-hide]').forEach((button) => button.addEventListener('click', () => toggleModule(button.closest('.module').dataset.module, false)));
-  document.querySelectorAll('[data-collapse]').forEach((button) => button.addEventListener('click', () => button.closest('.module').classList.toggle('collapsed')));
+  document.querySelectorAll('[data-collapse]').forEach((button) => button.addEventListener('click', () => {
+    const module = button.closest('.module');
+    module.classList.toggle('collapsed');
+    if (module.dataset.module === 'browser') syncBrowserAudio();
+  }));
+  document.querySelectorAll('[data-maximize]').forEach((button) => button.addEventListener('click', () => {
+    const module = button.closest('.module');
+    module.classList.remove('collapsed'); // a maximized module should show its content
+    state.engine?.maximize(module.dataset.module);
+  }));
   // Closing the command bar leaves voice as the only way in, so say so plainly
   // if the wake word is off. Reopening is always in Modules.
   $('dock-close')?.addEventListener('click', () => {
@@ -1797,7 +1829,9 @@ function bindEvents() {
     }
   });
   $('reset-layout').addEventListener('click', () => {
-    state.hiddenModules = ['performance','memory','activity','quick-commands','projects','file-explorer','document-viewer','cameras'];
+    // Mirrors DEFAULT_SETTINGS.hiddenModules — test/reset-layout-drift.test.js
+    // fails if either this list or RESET_LAYOUT drifts from core/defaults.js.
+    state.hiddenModules = ['performance','memory','activity','quick-commands','projects','file-explorer','document-viewer','cameras','night-shift','terminal','browser'];
     for (const key of Object.keys(state.layout)) delete state.layout[key];
     Object.assign(state.layout, JSON.parse(JSON.stringify(RESET_LAYOUT)));
     renderModuleVisibility(); scheduleLayoutSave(); showToast('Default layout restored.');
