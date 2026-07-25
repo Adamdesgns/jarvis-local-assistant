@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RIG · DEFENSE MODE</title>
+<!--
+  Standalone rig for the defense-mode posture. Loads the REAL tokens, the REAL
+  stylesheet and the REAL defense-ui.js — window.jarvis and the camera tiles
+  are faked. Serve the repo root and open /test/rigs/defense.html.
+
+      npx --yes serve . -l 5190
+
+  Buttons drive the same events the main process would emit, so what you see
+  is what the app does: enter (manual / tornado), pending card, update, exit.
+  Keep rigs in the repo.
+-->
+<link rel="stylesheet" href="../../src/tokens.css" />
+<link rel="stylesheet" href="../../src/styles.css" />
+<style>
+  body { margin: 0; background: #000; font-family: var(--font); min-height: 100vh; }
+  .rig-bar { position: relative; z-index: 80; display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); background: #000; }
+  .rig-bar button {
+    font-size: 11px; letter-spacing: .1em; padding: 6px 10px; cursor: pointer;
+    color: var(--text-secondary); background: transparent;
+    border: 1px solid var(--line); border-radius: 4px;
+  }
+  .rig-stage { padding: 24px; }
+  .rig-desk { border: 1px dashed var(--line); border-radius: 6px; padding: 12px; width: 720px; }
+  .rig-desk h4 { margin: 0 0 8px; color: var(--text-muted); font-size: 11px; letter-spacing: .12em; }
+  /* Fake camera tiles: enough structure for defense-ui to reparent + click. */
+  .camera-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .camera-tile { border: 1px solid var(--line); border-radius: 6px; padding: 0; overflow: hidden; background: #0a0a0a; }
+  .camera-tile .rig-frame { height: 130px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 11px; letter-spacing: .1em; }
+  .camera-tile[data-live="on"] .rig-frame { color: var(--danger); }
+  .camera-tile footer { display: flex; justify-content: space-between; padding: 6px 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--text-primary); }
+  /* The board must keep the rig bar reachable. */
+  .defense-board { top: 42px; }
+</style>
+</head>
+<body>
+  <div class="rig-bar">
+    <button id="rig-manual">ENTER · MANUAL</button>
+    <button id="rig-tornado">ENTER · TORNADO</button>
+    <button id="rig-pending">PENDING CARD</button>
+    <button id="rig-update">UPDATE RAIL</button>
+    <button id="rig-exit">EXIT</button>
+  </div>
+
+  <div class="rig-stage">
+    <div class="rig-desk" id="module-layer-stand-in">
+      <h4>THE NORMAL DESK (the cameras module lives here)</h4>
+      <article class="module" data-module="cameras">
+        <div class="module-content cameras-content">
+          <div id="camera-grid" class="camera-grid"></div>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <section id="defense-board" class="defense-board" hidden>
+    <header class="defense-banner">
+      <span id="defense-banner-label">DEFENSE MODE</span>
+      <button id="defense-exit" type="button" title="Exit defense mode">ESC TO EXIT</button>
+    </header>
+    <div class="defense-body">
+      <div id="defense-wall" class="defense-wall"></div>
+      <aside class="defense-rail">
+        <div class="defense-rail-block">
+          <h3>ACTIVE ALERT</h3>
+          <p id="defense-alert">No active weather alert.</p>
+          <p id="defense-alert-instruction" hidden></p>
+        </div>
+        <div class="defense-rail-block">
+          <h3>LOCAL HEADLINES</h3>
+          <ul id="defense-headlines"><li class="defense-none">No headlines configured.</li></ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <div id="defense-pending" class="defense-pending" hidden>
+    <strong id="defense-pending-reason">Entering defense mode</strong>
+    <span id="defense-pending-count">15</span>
+    <button id="defense-wave-off" type="button">WAVE OFF</button>
+  </div>
+  <button id="defense-button" hidden></button>
+
+<script>
+  // Fake preload bridge: capture the event subscriptions so the rig buttons
+  // can fire them, and turn IPC calls into the events the service would emit.
+  const handlers = {};
+  window.jarvis = {
+    defense: {
+      enter: async () => { fire('enter', manualPayload()); return { ok: true }; },
+      exit: async () => fire('exit', {}),
+      waveOff: async () => fire('pending-cancelled', {}),
+      status: async () => ({ active: false }),
+      zones: async () => ({ ok: true, zones: [] })
+    },
+    onDefenseEnter: (cb) => { handlers.enter = cb; },
+    onDefenseExit: (cb) => { handlers.exit = cb; },
+    onDefensePending: (cb) => { handlers.pending = cb; },
+    onDefensePendingCancelled: (cb) => { handlers['pending-cancelled'] = cb; },
+    onDefenseUpdate: (cb) => { handlers.update = cb; }
+  };
+  function fire(name, payload) { handlers[name] && handlers[name](payload); }
+
+  // Three fake camera tiles with the real class/dataset contract.
+  const grid = document.getElementById('camera-grid');
+  for (const name of ['Front Door', 'Driveway', 'Back Yard']) {
+    const tile = document.createElement('article');
+    tile.className = 'camera-tile';
+    tile.dataset.key = `rig:${name.toLowerCase().replace(/ /g, '-')}`;
+    tile.dataset.live = '';
+    const frame = document.createElement('div');
+    frame.className = 'rig-frame';
+    frame.textContent = 'IDLE';
+    const footer = document.createElement('footer');
+    const label = document.createElement('span');
+    label.textContent = name;
+    const live = document.createElement('button');
+    live.type = 'button';
+    live.className = 'camera-live';
+    live.textContent = 'LIVE';
+    live.addEventListener('click', () => {
+      const on = tile.dataset.live === 'on';
+      tile.dataset.live = on ? '' : 'on';
+      frame.textContent = on ? 'IDLE' : '● LIVE';
+    });
+    footer.append(label, live);
+    tile.append(frame, footer);
+    grid.append(tile);
+  }
+
+  const tornado = {
+    banner: 'DEFENSE MODE · TORNADO WARNING, HARRISON COUNTY · 21:43',
+    reason: { kind: 'weather', event: 'Tornado Warning', area: 'Harrison County' },
+    alert: { properties: { event: 'Tornado Warning', headline: 'Tornado Warning until 10 PM for Harrison County', instruction: 'Take shelter now in a basement or an interior room on the lowest floor.' } },
+    headlines: [
+      { title: 'Tornado confirmed near Gulfport, crews assessing damage', date: 'Fri, 25 Jul 2026 21:10:00 GMT' },
+      { title: 'Shelters open across Harrison County', date: 'Fri, 25 Jul 2026 21:02:00 GMT' }
+    ],
+    read: ''
+  };
+  function manualPayload() {
+    return { banner: 'DEFENSE MODE · MANUAL TRIGGER · 21:43', reason: { kind: 'manual' }, alert: null, headlines: [], read: '' };
+  }
+
+  document.getElementById('rig-manual').addEventListener('click', () => fire('enter', manualPayload()));
+  document.getElementById('rig-tornado').addEventListener('click', () => fire('enter', tornado));
+  document.getElementById('rig-pending').addEventListener('click', () => fire('pending', { reason: tornado.reason, seconds: 15, spoken: '' }));
+  document.getElementById('rig-update').addEventListener('click', () => fire('update', { alert: tornado.alert, headlines: [...tornado.headlines, { title: 'UPDATE: power out for 3,000 homes in Biloxi', date: 'Fri, 25 Jul 2026 21:20:00 GMT' }] }));
+  document.getElementById('rig-exit').addEventListener('click', () => fire('exit', {}));
+</script>
+<script src="../../src/defense-ui.js"></script>
+</body>
+</html>
