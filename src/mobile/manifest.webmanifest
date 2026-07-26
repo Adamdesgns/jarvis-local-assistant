@@ -1,5 +1,5 @@
-{ "name": "JARVIS", "short_name": "JARVIS", "start_url": "/", "display": "standalone",
-  "background_color": "#0a0602", "theme_color": "#0a0602",
+{ "name": "Orb", "short_name": "Orb", "start_url": "/", "display": "standalone",
+  "background_color": "#050409", "theme_color": "#050409",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
