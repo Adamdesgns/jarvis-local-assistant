@@ -15,6 +15,8 @@ const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
 const { ToolService } = require('./core/tool-service');
 const { DocumentService } = require('./core/document-service');
+const { createCommandRunner } = require('./core/command-runner');
+const { classifyCommand } = require('./src/command-guard');
 const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService } = require('./core/local-voice-service');
@@ -72,6 +74,11 @@ let memory;
 let tasks;
 let tools;
 let documents;
+// THE TERMINAL stage 2's runner. Safe to build at module scope: the approved-root
+// check is a closure, so it resolves `documents` at call time, not load time.
+const terminalRunner = createCommandRunner({
+  isAllowed: (target) => Boolean(documents && documents.isAllowed(target))
+});
 let ai;
 let ollama;
 let localVoice;
@@ -549,6 +556,55 @@ function setupIpc() {
     hands?.abortActive('user-interrupt');
   });
   ipcMain.on('screen:drive-stop', () => hands?.abortActive('stop-button'));
+  // THE TERMINAL, stage 2 — user-typed Windows commands.
+  //
+  // Two calls on purpose. The renderer classifies first so it can show the
+  // confirm card for an approve-tier command, then calls run with approved:true
+  // once the human says yes. The runner re-classifies and refuses an
+  // unapproved approve-tier command anyway, so the card cannot be skipped.
+  //
+  // HARD RAIL: nothing here is reachable by the model. There is no
+  // run_command tool in core/tool-registry.js, and a test enforces that. Only
+  // the human's keystrokes in the console reach this handler.
+  ipcMain.handle('terminal:classify', (_event, payload) => {
+    const text = typeof payload === 'string' ? payload : payload?.command;
+    return classifyCommand(text);
+  });
+  ipcMain.handle('terminal:run', async (_event, payload) => {
+    const roots = documents.approvedRoots();
+    if (!roots.length) {
+      return {
+        refused: true,
+        tier: 'free',
+        reason: 'There are no approved folders yet, so there is nowhere safe to run a command. Add one in Settings → FILES.',
+        stdout: '', stderr: '', code: null, timedOut: false, truncated: false
+      };
+    }
+    // cwd is renderer-supplied so `cd` can move around, but it is only ever
+    // honoured inside an approved root — the runner re-checks it too.
+    const requested = payload?.cwd;
+    const cwd = requested && documents.isAllowed(requested) ? requested : roots[0];
+    const result = await terminalRunner.run({
+      command: payload?.command,
+      cwd,
+      approved: payload?.approved === true
+    });
+    // Every command the console runs — and every one it refuses — is on the
+    // record, so "what did I run in there?" has an answer.
+    log.write({
+      type: 'terminal',
+      command: String(payload?.command || '').slice(0, 200),
+      response: result.refused
+        ? `refused (${result.tier}): ${result.reason}`
+        : `exit ${result.code}${result.timedOut ? ' (timed out)' : ''}`,
+      source: 'terminal'
+    });
+    return { ...result, cwd };
+  });
+  ipcMain.handle('terminal:cwd', () => {
+    const roots = documents.approvedRoots();
+    return { cwd: roots[0] || '', roots };
+  });
   ipcMain.handle('approval:resolve', (_event, payload) => router.resolveApproval(payload.id, Boolean(payload.approved)));
   ipcMain.handle('activity:recent', (_event, limit) => log.recent(Math.min(100, Number(limit) || 20)));
   ipcMain.handle('voice:transcribe', (_event, payload) => localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType));

@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('jarvis', {
   telemetry: () => ipcRenderer.invoke('telemetry'),
   submitCommand: (text, project) => ipcRenderer.invoke('command:submit', { text, project }),
   resolveApproval: (id, approved) => ipcRenderer.invoke('approval:resolve', { id, approved }),
+  // THE TERMINAL stage 2. classify first to decide whether a confirm card is
+  // needed, then run with approved:true once the human agrees. Passing
+  // approved:true without having asked is caught in the main process.
+  classifyTerminalCommand: (command) => ipcRenderer.invoke('terminal:classify', { command }),
+  runTerminalCommand: (command, cwd, approved) => ipcRenderer.invoke('terminal:run', { command, cwd, approved }),
+  terminalCwd: () => ipcRenderer.invoke('terminal:cwd'),
   recentActivity: (limit) => ipcRenderer.invoke('activity:recent', limit),
   transcribe: (bytes, mimeType) => ipcRenderer.invoke('voice:transcribe', { bytes, mimeType }),
   voiceStatus: () => ipcRenderer.invoke('voice:status'),

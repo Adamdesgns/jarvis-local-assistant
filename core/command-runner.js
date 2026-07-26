@@ -51,15 +51,25 @@ function createCommandRunner({
   defaultMaxBytes = DEFAULT_MAX_BYTES,
 } = {}) {
 
-  function run({ command, cwd, timeoutMs, maxBytes } = {}) {
+  function run({ command, cwd, timeoutMs, maxBytes, approved } = {}) {
     const text = String(command || '').trim();
     const verdict = classifyCommand(text);
 
     if (!text) {
       return Promise.resolve(refuse('free', 'There was no command to run.', text));
     }
+    // Deny has no card, and no amount of confirmation opens it.
     if (verdict.tier === 'deny') {
       return Promise.resolve(refuse('deny', verdict.reason, text));
+    }
+    // The confirm card is structural, not conventional: an approve-tier command
+    // arriving without an explicit yes is refused here, so a renderer that
+    // forgets to ask cannot become a silent `npm install`.
+    if (verdict.tier === 'approve' && approved !== true) {
+      return Promise.resolve({
+        ...refuse('approve', verdict.reason, text),
+        needsApproval: true,
+      });
     }
 
     // cwd confinement. Ties to documentService.approvedRoots() in the real app,

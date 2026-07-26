@@ -134,11 +134,23 @@ test('an empty command is refused without spawning', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('an approve-tier command still runs — the card is the renderer\'s job, not the runner\'s', async () => {
-  // The runner enforces deny. Holding approve-tier commands for a confirm card
-  // happens upstream; by the time run() is called the human has already said yes.
+test('an approve-tier command without an explicit yes is refused, not run', async () => {
+  // The confirm card must be structurally necessary, not merely conventional.
+  // Same reasoning the repo applies to models: a rule the caller is only asked
+  // to honour is not a control. A renderer bug that forgets to show the card
+  // gets a refusal here rather than a silent `npm install`.
+  const { runner, calls } = harness();
+  const result = await runner.run({ command: 'npm install', cwd: APPROVED });
+
+  assert.equal(result.refused, true);
+  assert.equal(result.tier, 'approve');
+  assert.equal(result.needsApproval, true);
+  assert.equal(calls.length, 0, 'spawn must not be called before the human says yes');
+});
+
+test('an approve-tier command runs once approved:true is passed', async () => {
   const { runner, calls, children } = harness();
-  const promise = runner.run({ command: 'npm install', cwd: APPROVED });
+  const promise = runner.run({ command: 'npm install', cwd: APPROVED, approved: true });
   await tick();
   children[0].emit('close', 0);
   const result = await promise;
@@ -146,6 +158,27 @@ test('an approve-tier command still runs — the card is the renderer\'s job, no
   assert.equal(result.refused, undefined);
   assert.equal(calls.length, 1);
   assert.equal(result.tier, 'approve');
+});
+
+test('approved:true does NOT rescue a denied command', async () => {
+  // No amount of confirmation makes `format c:` acceptable — deny has no card.
+  const { runner, calls } = harness();
+  const result = await runner.run({ command: 'format c:', cwd: APPROVED, approved: true });
+
+  assert.equal(result.refused, true);
+  assert.equal(result.tier, 'deny');
+  assert.equal(calls.length, 0);
+});
+
+test('free-tier commands need no approval flag', async () => {
+  const { runner, calls, children } = harness();
+  const promise = runner.run({ command: 'dir', cwd: APPROVED });
+  await tick();
+  children[0].emit('close', 0);
+  const result = await promise;
+
+  assert.equal(result.refused, undefined);
+  assert.equal(calls.length, 1);
 });
 
 // ---------------------------------------------------------------------------
