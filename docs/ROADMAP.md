@@ -58,6 +58,26 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
 
 ## LATER
 
+- [ ] **THE CREW — a team of agents, JARVIS as lead** *(Adam, 2026-07-26)* — the eight
+      orb souls stop being looks and become **specialists**: a files hand, a night-shift
+      worker, a watcher on the cameras, a researcher. JARVIS stays the lead — you always
+      talk to JARVIS, and JARVIS decides who on the crew takes the job and reports the
+      answer back in his own voice. Cycle the orb on the widget/hologram screen to see who
+      is currently working: the orb wears that crew member's soul while they hold the job,
+      then settles back to JARVIS. Builds directly on **EVERY ORB GETS ITS OWN PERSONALITY**
+      (NEXT) — do that one first; a crew of characters is worthless if the characters
+      aren't written yet.
+      Design questions to settle before any code: is a crew member a *system prompt +
+      voice* (cheap, safe, ships soon) or a *separate tool allowlist + its own agent loop*
+      (real delegation, much bigger)? Does the user pick the specialist, or does JARVIS
+      route silently? What does the orb do when two are working at once?
+      Prerequisite: the **activity-log `actor` field** — the log has to be able to say
+      *which* crew member did a thing before more than one of them can act.
+      HARD RAILS: a crew member is never a way around a permission. Every approval card,
+      approved-folder boundary, and `unattendedSafe: false` guard applies identically to
+      every member — no specialist gets powers JARVIS himself doesn't have, and no crew
+      member may hand a job to another to escape a confirmation. Local mode still works
+      with the whole crew.
 - [ ] **THE BROWSER, stage 3: JARVIS surfs for you** — folded into the Hands v2
       track: plan cards, STOP window, hard blocks on banking/sign-in pages.
 - [ ] **Hands v2** — Chrome behind a dedicated clean profile (CDP), wider app allowlist.
