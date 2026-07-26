@@ -36,6 +36,12 @@ function mergeSettings(defaults, saved) {
   // v9 gives JARVIS his own voice (Kokoro on the GPU). It needs no migration
   // step: ttsEngine/kokoroVoice/kokoroDevice arrive from the defaults spread
   // above, and an old save simply picks them up.
+  // v10 adds first-run naming (retail builds). Any EXISTING install is
+  // stamped as already-named — the naming screen is for a buyer's first
+  // launch, not for a machine that has been running JARVIS for weeks.
+  if (Number(saved?.settingsVersion || 0) > 0 && Number(saved?.settingsVersion || 0) < 10 && !result.assistantNamedAt) {
+    result.assistantNamedAt = new Date().toISOString();
+  }
   //
   // Stamped from the defaults rather than a literal — this line was pinned to
   // `8` and would have silently kept stamping 8 forever after any bump.
@@ -88,7 +94,9 @@ class ConfigStore {
 
   updateSettings(patch) {
     const allowed = [
-      'profileName', 'assistantName', 'aiMode', 'ollamaModel', 'ollamaUrl', 'openaiModel',
+      // assistantNamedAt: the first-run naming stamp (core/onboarding.js).
+      // Setting it is what makes "name him on first install" once-ever.
+      'profileName', 'assistantName', 'assistantNamedAt', 'aiMode', 'ollamaModel', 'ollamaUrl', 'openaiModel',
       'cloudProvider', 'anthropicModel',
       'voiceEnabled', 'localVoiceEnabled', 'localVoiceModel', 'wakeWordEnabled',
       'wakeSensitivity', 'startWithWindows', 'minimizeToOrb', 'orbAlwaysOnTop',

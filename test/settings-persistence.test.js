@@ -18,6 +18,7 @@ const { ConfigStore } = require('../core/config-store');
 // A new key in renderer.js without a sample here fails the completeness test.
 const SAMPLES = {
   profileName: 'Drift Guard',
+  assistantName: 'Kori Test',
   aiMode: 'cloud',
   openaiModel: 'gpt-test',
   anthropicModel: 'claude-test',

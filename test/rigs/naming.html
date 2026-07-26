@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RIG · FIRST-RUN NAMING</title>
+<!--
+  Standalone rig for the first-run naming screen. Loads the REAL tokens, the
+  REAL stylesheet, the REAL onboarding logic (core/onboarding.js is a dual
+  export) — the markup is copied from src/index.html and the backend is faked:
+  `transcribe` maps a canned phrase per RECORD press instead of using a mic,
+  because a rig has no microphone and no faster-whisper.
+
+      npx --yes serve . -l 5193
+      open /test/rigs/naming.html
+
+  The three canned takes cycle: "hey corey" (a phonetic near-miss that MUST
+  pass when you type the name Kori), "banana" (must fail), then silence (must coach).
+-->
+<link rel="stylesheet" href="../../src/tokens.css" />
+<link rel="stylesheet" href="../../src/styles.css" />
+<style>
+  body { margin: 0; background: #000; font-family: var(--font); min-height: 100vh; }
+  .rig-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 300; display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); background: #000; }
+  .rig-bar button { font-size: 11px; letter-spacing: .1em; padding: 6px 10px; cursor: pointer; color: var(--text-secondary); background: transparent; border: 1px solid var(--line); border-radius: 4px; }
+  #rig-state { color: var(--text-muted); font-size: 11px; align-self: center; margin-left: auto; }
+</style>
+</head>
+<body>
+  <div class="rig-bar">
+    <button id="rig-reset">RESET</button>
+    <span id="rig-state">fresh install</span>
+  </div>
+
+  <!-- Copied from src/index.html — keep in sync by hand; the rig exists to
+       look at THIS markup, so drift defeats its purpose. -->
+  <div id="naming-screen" class="naming-screen" hidden>
+    <div class="naming-card">
+      <section id="naming-step-name">
+        <span class="naming-kicker">FIRST RUN</span>
+        <h2>Name your assistant</h2>
+        <p>He'll answer to this, refer to himself by it, and it's how you'll think of him. You can rename him any time in Settings → GENERAL.</p>
+        <input id="naming-input" type="text" maxlength="32" placeholder="JARVIS" autocomplete="off" spellcheck="false" />
+        <div class="naming-actions">
+          <button type="button" id="naming-skip" class="naming-ghost">KEEP “JARVIS”</button>
+          <button type="button" id="naming-continue" class="naming-primary">CONTINUE</button>
+        </div>
+      </section>
+      <section id="naming-step-voice" hidden>
+        <span class="naming-kicker">VOICE CHECK</span>
+        <h2 id="naming-say-title">Now say it out loud</h2>
+        <p id="naming-say-hint">Press the button and say the name, so speech recognition can prove it hears it the way you say it.</p>
+        <div class="naming-meter"><i id="naming-level"></i></div>
+        <p id="naming-verdict" class="naming-verdict"></p>
+        <div class="naming-actions">
+          <button type="button" id="naming-voice-skip" class="naming-ghost">SKIP THIS</button>
+          <button type="button" id="naming-record" class="naming-primary">RECORD · SAY IT</button>
+          <button type="button" id="naming-done" class="naming-primary" hidden>SOUNDS GOOD</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script src="../../core/onboarding.js"></script>
+<script>
+  // core/onboarding.js is CommonJS-shaped; in a plain page `module` is
+  // undefined so it exposes nothing. Re-require via a tiny shim.
+</script>
+<script>
+  // The dual-export in onboarding.js only attaches to window when written to.
+  // It doesn't (it's a node module), so fetch + eval it into a namespace.
+  async function loadOnboarding() {
+    const source = await (await fetch('../../core/onboarding.js')).text();
+    const module = { exports: {} };
+    // core/edition.js is required by onboarding for isRetail; stub retail.
+    const require = (name) => name.includes('edition') ? { isRetail: () => true } : {};
+    new Function('module', 'exports', 'require', source)(module, module.exports, require);
+    return module.exports;
+  }
+
+  const CANNED_TAKES = ['hey corey', 'banana', ''];
+  let take = 0;
+  let settings = {};
+
+  loadOnboarding().then((O) => {
+    const screen = document.getElementById('naming-screen');
+    const verdict = document.getElementById('naming-verdict');
+    const stateLine = document.getElementById('rig-state');
+    let chosenName = '';
+
+    const finish = () => {
+      screen.hidden = true;
+      Object.assign(settings, O.namingPatch(chosenName));
+      stateLine.textContent = `named "${settings.assistantName}" · stamped ${settings.assistantNamedAt} · needsNaming=${O.needsNaming({ edition: 'retail', settings })}`;
+    };
+
+    const showVoiceStep = () => {
+      document.getElementById('naming-step-name').hidden = true;
+      document.getElementById('naming-step-voice').hidden = false;
+      document.getElementById('naming-say-title').textContent = `Now say “Hey ${chosenName || 'JARVIS'}”`;
+    };
+
+    // The rig's RECORD uses canned transcripts through the REAL matcher.
+    const record = () => {
+      const transcript = CANNED_TAKES[take % CANNED_TAKES.length];
+      take += 1;
+      const name = chosenName || 'JARVIS';
+      const heard = O.nameHeardIn(transcript, name);
+      if (heard) {
+        verdict.className = 'naming-verdict good';
+        verdict.textContent = `Heard it: “${transcript}”. Voice recognition knows his name.`;
+        document.getElementById('naming-done').hidden = false;
+        document.getElementById('naming-record').textContent = 'SAY IT AGAIN';
+      } else if (transcript) {
+        verdict.className = 'naming-verdict bad';
+        verdict.textContent = `I heard “${transcript}”, which doesn't sound like ${name}. Try once more — or pick a name that's easier to say.`;
+      } else {
+        verdict.className = 'naming-verdict bad';
+        verdict.textContent = 'The recording worked, but no words were recognized. Try speaking louder.';
+      }
+    };
+
+    document.getElementById('naming-continue').addEventListener('click', () => {
+      chosenName = document.getElementById('naming-input').value.trim();
+      showVoiceStep();
+    });
+    document.getElementById('naming-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { chosenName = document.getElementById('naming-input').value.trim(); showVoiceStep(); }
+    });
+    document.getElementById('naming-skip').addEventListener('click', () => { chosenName = ''; finish(); });
+    document.getElementById('naming-record').addEventListener('click', record);
+    document.getElementById('naming-done').addEventListener('click', finish);
+    document.getElementById('naming-voice-skip').addEventListener('click', finish);
+    document.getElementById('rig-reset').addEventListener('click', () => location.reload());
+
+    screen.hidden = false;
+    document.getElementById('naming-input').focus();
+
+    window.rig = { O, get settings() { return settings; }, get take() { return take; } };
+  });
+</script>
+</body>
+</html>

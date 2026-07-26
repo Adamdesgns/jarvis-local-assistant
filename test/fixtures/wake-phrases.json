@@ -1,0 +1,23 @@
+[
+  { "name": "Kori", "transcript": "hey corey", "expectWake": true, "why": "whisper's phonetic spelling of an invented name" },
+  { "name": "Kori", "transcript": "Hey Cory.", "expectWake": true, "why": "case and punctuation must not matter" },
+  { "name": "Kori", "transcript": "okay cory", "expectWake": true, "why": "greeting variant" },
+  { "name": "Kori", "transcript": "corey", "expectWake": true, "why": "the bare name at the start is an address" },
+  { "name": "Kori", "transcript": "the quarry is closed", "expectWake": false, "why": "similar word mid-sentence must not wake" },
+  { "name": "Kori", "transcript": "hey", "expectWake": false, "why": "a greeting alone is not the name" },
+  { "name": "Max", "transcript": "hey max what's the weather", "expectWake": true, "why": "barrel-through — name then command in one breath" },
+  { "name": "Max", "transcript": "max turn the lights off", "expectWake": true, "why": "no greeting, name first" },
+  { "name": "Max", "transcript": "set the max value to ten", "expectWake": false, "why": "the position rule: name mid-sentence is a word, not an address" },
+  { "name": "Max", "transcript": "to the max", "expectWake": false, "why": "name at the end is not an address" },
+  { "name": "Jarvis", "transcript": "hey jarvis", "expectWake": true, "why": "the matcher itself is mode-agnostic" },
+  { "name": "JARVIS", "transcript": "Jarvis, are you there", "expectWake": true, "why": "bare-name address with a comma" },
+  { "name": "Jarvis", "transcript": "hey travis", "expectWake": false, "why": "a similar-sounding different name stays asleep" },
+  { "name": "Iron Man", "transcript": "hey iron man wake up", "expectWake": true, "why": "multi-word names match as a phrase" },
+  { "name": "Iron Man", "transcript": "hey iron", "expectWake": false, "why": "half the name is not the name" },
+  { "name": "Friday", "transcript": "hey friday", "expectWake": true, "why": "an ordinary-word name works" },
+  { "name": "Friday", "transcript": "see you on friday", "expectWake": false, "why": "the same word mid-sentence does not" },
+  { "name": "Aya", "transcript": "hey aya", "expectWake": true, "why": "vowel-heavy names still wake" },
+  { "name": "Aya", "transcript": "hey aye", "expectWake": true, "why": "KNOWN WEAKNESS documented: vowel-heavy skeletons collapse to one char ('aya' and 'aye' are both 'a'), so near-vowel words match; onboarding accepted the same trade" },
+  { "name": "Max", "transcript": "", "expectWake": false, "why": "empty transcript" },
+  { "name": "", "transcript": "hey max", "expectWake": false, "why": "empty name can never wake" }
+]

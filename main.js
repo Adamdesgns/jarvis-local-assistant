@@ -8,6 +8,8 @@ const {
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
 const { PRO_FEATURES, isPro, gateSettingsPatch, applyLicenseToSettings, featureAllowed } = require('./core/license-gate');
+const { resolveEdition, effectiveLicenseState, defaultAssistantName } = require('./core/edition');
+const { needsNaming, namingPatch, nameHeardIn, normalizeAssistantName } = require('./core/onboarding');
 const { LicenseService } = require('./core/license-service');
 const { ActivityLog } = require('./core/activity-log');
 const { CrashLog, installProcessHandlers } = require('./core/crash-log');
@@ -17,7 +19,7 @@ const { ToolService } = require('./core/tool-service');
 const { DocumentService } = require('./core/document-service');
 const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
-const { LocalVoiceService } = require('./core/local-voice-service');
+const { LocalVoiceService, shouldRestartVoice } = require('./core/local-voice-service');
 const { VoiceService } = require('./core/voice-service');
 const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
 const { CameraService } = require('./core/camera/camera-service');
@@ -496,12 +498,32 @@ function loadMobileDevices() {
 }
 function saveMobileDevices() { config.setSecret('mobileDevices', JSON.stringify(mobileAuth.toJSON())); }
 
+// The edition — resolved once at startup from the build-time stamp, never
+// from settings. The stamp is a plain file electron-builder drops next to the
+// app code (see extraResources in package.json); reading it from resourcesPath
+// keeps it out of the asar and out of settings.json. A missing or unreadable
+// stamp on a packaged build means RETAIL — fail closed, per core/edition.js.
+const EDITION = resolveEdition({
+  packaged: app.isPackaged,
+  stamped: (() => {
+    try { return fs.readFileSync(path.join(process.resourcesPath, 'edition'), 'utf8'); }
+    catch { return ''; }
+  })()
+});
+
+// The licence state every gate consults. Master is always Pro — that's the
+// point of the master build — and retail reads what's persisted. This is the
+// ONLY place the two are combined, so the edition can't leak into disk state.
+function currentLicenseState() {
+  return effectiveLicenseState(EDITION, config.getSettings().license);
+}
+
 // A read-only settings view with unlicensed Pro flags forced off. Services
 // that only consult settings get this instead of the raw config, so the
 // license gate holds even if a Pro flag survives in settings.json.
 function licensedSettings() {
   const settings = config.getSettings();
-  return applyLicenseToSettings(settings, settings.license);
+  return applyLicenseToSettings(settings, currentLicenseState());
 }
 
 async function syncMobileServer() {
@@ -540,9 +562,33 @@ function setupIpc() {
     voiceStatus: localVoice.getStatus(),
     cloudConfigured: Boolean(config.getSecret('openaiKey')),
     anthropicConfigured: Boolean(config.getSecret('anthropicKey')),
-    version: app.getVersion()
+    version: app.getVersion(),
+    edition: EDITION,
+    // Retail, first run only: the renderer shows the naming screen before
+    // anything else. Master never sees it — he already has a name.
+    needsNaming: needsNaming({ edition: EDITION, settings: config.getSettings() })
   }));
   ipcMain.handle('telemetry', collectTelemetry);
+  // Closes first-run naming. Goes through updateSettings like every other
+  // patch — namingPatch() emits exactly two allowlisted keys, and skipping
+  // (empty name) still stamps so the question never returns.
+  ipcMain.handle('onboarding:name', (_event, payload) => {
+    const settings = config.updateSettings(namingPatch(payload?.name));
+    log.write({
+      type: 'system',
+      command: 'first-run-naming',
+      response: `The assistant is named ${settings.assistantName}.`,
+      source: 'onboarding'
+    });
+    return { settings };
+  });
+  // The say-it-back check: the renderer records the buyer saying the name,
+  // transcribes through the same local pipeline as every other utterance,
+  // and this compares phonetically. Coaching, not a gate — skippable.
+  ipcMain.handle('onboarding:heard', async (_event, payload) => {
+    const transcript = await localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType);
+    return { transcript, heard: nameHeardIn(transcript, String(payload?.name || '')) };
+  });
   ipcMain.handle('command:submit', (_event, payload) => {
     const text = typeof payload === 'string' ? payload : payload?.text;
     const project = typeof payload === 'object' && payload ? payload.project : 'general';
@@ -698,12 +744,23 @@ function setupIpc() {
     // The license choke point: an unlicensed attempt to switch a Pro feature
     // on is stripped here, before anything persists, and reported so the UI
     // can explain instead of silently snapping the toggle back.
-    const { patch: gatedPatch, refused } = gateSettingsPatch(previous, patch || {}, previous.license);
+    const { patch: gatedPatch, refused } = gateSettingsPatch(previous, patch || {}, currentLicenseState());
+    // The rename path shares first-run naming's rules: control characters
+    // stripped (the name lands verbatim in every system prompt), capped, and
+    // an emptied field falls back to a real name instead of a broken prompt.
+    // Master keeps JARVIS as the fallback rather than the retail product name.
+    if (Object.prototype.hasOwnProperty.call(gatedPatch, 'assistantName')) {
+      gatedPatch.assistantName = String(gatedPatch.assistantName || '').trim()
+        ? normalizeAssistantName(gatedPatch.assistantName)
+        : defaultAssistantName(EDITION);
+    }
     if (refused.length) sendEverywhere('license:pro-refused', { refused });
     const updated = config.updateSettings(gatedPatch);
     applyLoginSetting(updated.startWithWindows);
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.setAlwaysOnTop(Boolean(updated.orbAlwaysOnTop));
-    if (previous.wakeWordEnabled !== updated.wakeWordEnabled || previous.localVoiceModel !== updated.localVoiceModel) {
+    // assistantName is in this list because the wake MODE depends on it —
+    // renaming him from Jarvis to anything else switches engines entirely.
+    if (shouldRestartVoice(previous, updated)) {
       localVoice.stop();
       setTimeout(() => localVoice.start(), 1700);
     }
@@ -739,7 +796,7 @@ function setupIpc() {
   ipcMain.handle('update:check', () => checkForUpdate(app.getVersion(), updateRepo));
   ipcMain.handle('update:open', (_event, url) => shell.openExternal(String(url || `https://github.com/${updateRepo}/releases/latest`)));
   ipcMain.handle('screen:describe', async (_event, question) => {
-    if (!isPro(config.getSettings().license)) {
+    if (!isPro(currentLicenseState())) {
       return { ok: false, message: 'Looking at your screen is a JARVIS Pro feature. Open Settings → PRO to unlock it.' };
     }
     if (!ai.hasCloudKey()) {
@@ -828,7 +885,10 @@ function setupIpc() {
   // JARVIS Pro licensing. Every network call here is a button the user just
   // pressed — never automatic (see license-service.js).
   ipcMain.handle('license:status', () => ({
-    license: config.getSettings().license,
+    // The PRO tab shows the effective state, so a master build reads
+    // "licensed" instead of asking its own author for money.
+    license: currentLicenseState(),
+    edition: EDITION,
     features: PRO_FEATURES.map((feature) => ({ id: feature.id, label: feature.label })),
     buyUrl: proBuyUrl
   }));
@@ -876,7 +936,7 @@ function setupIpc() {
   // Adding a camera account is the camera module's licensed doorway. Saved
   // accounts are never touched (see license-gate.js on cameraAccounts) — they
   // just stay dormant until cameras.init() runs under a license.
-  const cameraRefusal = () => (featureAllowed('camera', config.getSettings(), config.getSettings().license)
+  const cameraRefusal = () => (featureAllowed('camera', config.getSettings(), currentLicenseState())
     ? null
     : { ok: false, message: 'Cameras are a JARVIS Pro feature. Open Settings → PRO to unlock them.' });
   ipcMain.handle('cameras:add-blink', (_event, payload) => cameraRefusal() || cameras.addBlinkAccount(payload || {}));
@@ -1163,7 +1223,7 @@ app.whenReady().then(async () => {
     const described = await ai.describeCameraFrame(jpegBase64, context.name);
     return described.ok ? described.text : null;
   };
-  if (isPro(config.getSettings().license)) {
+  if (isPro(currentLicenseState())) {
     cameras.init();
     camerasInitialized = true;
   } else if ((config.getSettings().cameraAccounts || []).length) {

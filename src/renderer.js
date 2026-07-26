@@ -78,15 +78,21 @@ function friendlyError(error) {
 // word "stop" — "stop the timer" — still reaches the brain normally.
 const INTERRUPT_PHRASES = ['stop', 'shut up', 'quiet', 'nevermind', 'never mind', 'cancel that'];
 
-function isInterrupt(transcript) {
+function isInterrupt(transcript, assistantName) {
   const normalized = String(transcript || '')
     .toLowerCase()
     .replace(/[.,!?]+/g, '')
     .trim();
   if (!normalized) return false;
   // The wake word is normally consumed before recording starts, but if the
-  // user still addresses him by name ("Jarvis, stop") strip it before matching.
-  const withoutAddress = normalized.replace(/^(?:hey\s+)?jarvis[, ]*/, '').trim();
+  // user still addresses him by name ("Max, stop") strip it before matching.
+  // 'jarvis' stays as an alternative alongside the chosen name — the master
+  // build and whisper's own spellings of "Jarvis" both keep working. The name
+  // is regex-escaped: a buyer can legally name him "C++".
+  const name = String(assistantName ?? state?.settings?.assistantName ?? 'jarvis')
+    .toLowerCase().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const address = new RegExp(`^(?:hey\\s+)?(?:jarvis${name && name !== 'jarvis' ? `|${name}` : ''})[, ]*`);
+  const withoutAddress = normalized.replace(address, '').trim();
   return INTERRUPT_PHRASES.includes(withoutAddress || normalized);
 }
 
@@ -1095,15 +1101,42 @@ function finishSearchExperience(force = false) {
   setCoreState('ready', 'CORE REFORMED');
 }
 
+// The wake phrase is whatever he's named right now — never a hardcoded
+// product name. wakePhrase() is display caps; assistantName() is as typed.
+function assistantName() {
+  return String(state.settings?.assistantName || 'JARVIS').trim() || 'JARVIS';
+}
+
+function wakePhrase() {
+  return `HEY ${assistantName().toUpperCase()}`;
+}
+
+// Static HTML can't know the name, so every baked-in "Hey Jarvis" string is
+// stamped here instead. Runs at boot and again whenever settings change —
+// renaming him updates the whole UI without a restart.
+function applyWakeCopy() {
+  const name = assistantName();
+  $('scan-path').textContent = `Say “Hey ${name}, find…”`;
+  $('command-input').placeholder = `Type a command or say “Hey ${name}”…`;
+  const cc = document.getElementById('cc-command-input');
+  if (cc) cc.placeholder = `TYPE A COMMAND OR SAY “${wakePhrase()}”`;
+  const installNote = $('voice-install-note');
+  if (installNote) installNote.textContent = `This installs the “Hey ${name}” wake word and offline speech recognition directly on your laptop.`;
+  const wakeLabel = $('setting-wake-label');
+  if (wakeLabel) wakeLabel.textContent = wakePhrase();
+  const testButton = $('diag-test-wake');
+  if (testButton && !diagnostics.wakeTimer) testButton.textContent = `TEST “${wakePhrase()}”`;
+}
+
 function renderVoiceStatus(status) {
   state.voiceStatus = status || {};
   const installed = Boolean(status?.installed);
   const running = Boolean(status?.running);
   const wake = Boolean(status?.wakeReady);
   $('voice-dot').style.background = wake ? '#61efb2' : running ? '#ffb21f' : '#ff665c';
-  $('voice-status').textContent = wake ? 'SAY “HEY JARVIS” · LOCAL VOICE READY' : running ? 'PUSH-TO-TALK READY · WAKE WORD STARTING' : 'LOCAL VOICE NEEDS SETUP';
+  $('voice-status').textContent = wake ? `SAY “${wakePhrase()}” · LOCAL VOICE READY` : running ? 'PUSH-TO-TALK READY · WAKE WORD STARTING' : 'LOCAL VOICE NEEDS SETUP';
   $('local-voice-light').style.background = wake ? '#61efb2' : installed ? '#ffb21f' : '#ff665c';
-  $('local-voice-title').textContent = wake ? 'HEY JARVIS IS ACTIVE' : installed ? 'LOCAL VOICE INSTALLED' : 'LOCAL VOICE NOT INSTALLED';
+  $('local-voice-title').textContent = wake ? `${wakePhrase()} IS ACTIVE` : installed ? 'LOCAL VOICE INSTALLED' : 'LOCAL VOICE NOT INSTALLED';
   $('local-voice-detail').textContent = status?.message || 'No API key or credits required.';
 }
 
@@ -1168,7 +1201,7 @@ async function startRecording(trigger = 'manual') {
     }
     state.recording = { recorder, stream, monitor: 0 };
     recorder.start(250);
-    setCoreState('listening', trigger === 'wake' ? 'HEY JARVIS DETECTED' : 'LISTENING LOCALLY');
+    setCoreState('listening', trigger === 'wake' ? `${wakePhrase()} DETECTED` : 'LISTENING LOCALLY');
     monitor();
   } catch (error) {
     const message = friendlyError(error); setResponse(message); showToast(message); setCoreState('error');
@@ -1681,6 +1714,7 @@ function openSettings(tab = 'general') {
   $('setting-anthropic-key').value = '';
   $('setting-cloud-provider').value = state.settings.cloudProvider || 'anthropic';
   $('setting-profile-name').value = state.settings.profileName || 'User';
+  $('setting-assistant-name').value = state.settings.assistantName || '';
   $('setting-voice').checked = Boolean(state.settings.voiceEnabled);
   $('setting-wake').checked = Boolean(state.settings.wakeWordEnabled);
   $('setting-camera-ai').checked = state.settings.cameraAiDescriptions !== false;
@@ -1747,6 +1781,9 @@ async function saveSettings(event) {
   event.preventDefault();
   const patch = {
     profileName: $('setting-profile-name').value.trim() || 'User',
+    // The rename option. main.js normalizes it (same rules as first-run
+    // naming), so an emptied field falls back rather than breaking prompts.
+    assistantName: $('setting-assistant-name').value,
     aiMode: $('setting-ai-mode').value,
     openaiModel: $('setting-openai-model').value,
     anthropicModel: $('setting-anthropic-model').value,
@@ -1799,6 +1836,9 @@ async function saveSettings(event) {
   };
   state.settings = await window.jarvis.saveSettings(patch);
   applyGlass(state.settings.windowGlass);
+  // A rename changes the wake phrase everywhere it appears.
+  applyWakeCopy();
+  renderVoiceStatus(state.voiceStatus);
   $('settings-modal').close();
   showToast('Settings saved locally.');
 }
@@ -1828,7 +1868,7 @@ async function refreshDiagnostics() {
     renderDiagnosticRow('speechModel', Boolean(checks.speechModel?.ok), checks.speechModel?.detail || 'Install Local Voice to download it');
     renderDiagnosticRow('wakeModel', Boolean(checks.wakeModel?.ok), checks.wakeModel?.detail || 'Install Local Voice to download it');
     renderDiagnosticRow('running', Boolean(data.running), data.statusMessage || (data.running ? 'Background service is on' : 'Not running'));
-    renderDiagnosticRow('wakeReady', Boolean(data.wakeReady), data.wakeReady ? 'Say “Hey Jarvis”' : 'Wake word is off or still starting');
+    renderDiagnosticRow('wakeReady', Boolean(data.wakeReady), data.wakeReady ? `Say “Hey ${assistantName()}”` : 'Wake word is off or still starting');
   } catch (error) {
     $('diagnostic-result').textContent = friendlyError(error);
   }
@@ -1899,9 +1939,9 @@ function runWakeTest() {
   }
   let remaining = 15;
   button.disabled = true;
-  const tick = () => { button.textContent = `SAY “HEY JARVIS” · ${remaining}s`; };
+  const tick = () => { button.textContent = `SAY “${wakePhrase()}” · ${remaining}s`; };
   tick();
-  output.textContent = 'Listening… say “Hey Jarvis” out loud.';
+  output.textContent = `Listening… say “Hey ${assistantName()}” out loud, then pause.`;
   diagnostics.wakeCountdown = setInterval(() => { remaining -= 1; tick(); }, 1000);
   diagnostics.wakeTimer = setTimeout(() => finishWakeTest(false), 15000);
 }
@@ -1914,10 +1954,10 @@ function finishWakeTest(detected) {
   diagnostics.wakeCountdown = null;
   const button = $('diag-test-wake');
   button.disabled = false;
-  button.textContent = 'TEST “HEY JARVIS”';
+  button.textContent = `TEST “${wakePhrase()}”`;
   $('diagnostic-result').textContent = detected
-    ? 'Wake word detected. “Hey Jarvis” is working.'
-    : 'I did not hear “Hey Jarvis” in 15 seconds. Speak closer to the microphone, or select Repair Voice.';
+    ? `Wake word detected. “Hey ${assistantName()}” is working.`
+    : `I did not hear “Hey ${assistantName()}” in 15 seconds. Say it, then pause — or speak closer to the microphone, or select Repair Voice.`;
 }
 
 function openVoiceDiagnostics() {
@@ -1976,9 +2016,9 @@ function bindEvents() {
   $('dock-close')?.addEventListener('click', () => {
     toggleModule('command', false);
     if (!state.settings.wakeWordEnabled) {
-      showToast('Command bar closed. “Hey Jarvis” is off, so turn it on in Settings — or reopen the bar from Modules.', 7000);
+      showToast(`Command bar closed. “${wakePhrase()}” is off, so turn it on in Settings — or reopen the bar from Modules.`, 7000);
     } else {
-      showToast('Command bar closed. Say “Hey Jarvis” to talk, or reopen it from Modules.', 5000);
+      showToast(`Command bar closed. Say “Hey ${assistantName()}” to talk, or reopen it from Modules.`, 5000);
     }
   });
   $('reset-layout').addEventListener('click', () => {
@@ -2055,7 +2095,8 @@ function bindEvents() {
     const checks = data.checks || {};
     const label = (ok) => (ok ? 'PASS' : 'FAIL');
     const lines = [
-      'JARVIS VOICE DIAGNOSTIC REPORT',
+      'VOICE DIAGNOSTIC REPORT',
+      `Wake phrase: Hey ${assistantName()}`,
       `App version: ${data.appVersion || 'unknown'} · Python: ${data.python || 'not installed'}`,
       `[${label(data.micPermission === 'granted')}] Microphone permission — ${data.micPermission || 'unknown'}`,
       `[${label(checks.microphone?.ok)}] Microphone device — ${checks.microphone?.detail || 'not checked'}`,
@@ -2259,11 +2300,133 @@ function bindEvents() {
   window.jarvis.onFileComplete((payload) => { $('scan-counter').textContent = `${payload.scannedFolders} FOLDERS · ${payload.files.length} MATCHES`; renderFileRows(payload.files, true); });
 }
 
+// ── first-run naming ────────────────────────────────────────────────────
+// Retail builds only, first launch only; main.js decides (bootstrap.needsNaming)
+// and the stamp makes every exit final. Two steps: pick the name, then say it
+// back so faster-whisper proves it can hear the chosen name — a name the
+// recognizer can't transcribe is a name voice control will fight forever.
+// The say-back is coaching, never a gate: every button here moves forward.
+function runFirstRunNaming() {
+  return new Promise((resolve) => {
+    const screen = $('naming-screen');
+    const verdict = $('naming-verdict');
+    let chosenName = '';
+    let recording = false;
+
+    const finish = async () => {
+      screen.hidden = true;
+      const result = await window.jarvis.onboarding.name(chosenName);
+      state.settings = result.settings;
+      resolve();
+    };
+
+    const showVoiceStep = () => {
+      $('naming-step-name').hidden = true;
+      $('naming-step-voice').hidden = false;
+      $('naming-say-title').textContent = `Now say “Hey ${chosenName || 'JARVIS'}”`;
+    };
+
+    // Same capture pattern as Voice Diagnostics' mic test — record a short
+    // clip, transcribe it through the same local pipeline he'll use daily.
+    const record = async () => {
+      if (recording) return;
+      recording = true;
+      const button = $('naming-record');
+      button.disabled = true;
+      button.textContent = 'LISTENING…';
+      verdict.className = 'naming-verdict';
+      verdict.textContent = '';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+        const mimeType = preferred.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        const context = new AudioContext();
+        const analyser = context.createAnalyser(); analyser.fftSize = 512;
+        context.createMediaStreamSource(stream).connect(analyser);
+        const samples = new Uint8Array(analyser.fftSize);
+        const chunks = [];
+        recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+        const meter = () => {
+          if (!recording) { $('naming-level').style.width = '0%'; return; }
+          analyser.getByteTimeDomainData(samples);
+          let total = 0;
+          for (const sample of samples) { const value = (sample - 128) / 128; total += value * value; }
+          $('naming-level').style.width = `${Math.min(100, Math.sqrt(total / samples.length) * 900)}%`;
+          requestAnimationFrame(meter);
+        };
+        meter();
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((track) => track.stop());
+          await context.close();
+          recording = false;
+          button.textContent = 'CHECKING…';
+          try {
+            const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
+            if (blob.size < 800) {
+              verdict.className = 'naming-verdict bad';
+              verdict.textContent = 'I did not hear anything — check the microphone and try again.';
+              return;
+            }
+            const result = await window.jarvis.onboarding.heard(new Uint8Array(await blob.arrayBuffer()), blob.type, chosenName);
+            if (result.heard) {
+              verdict.className = 'naming-verdict good';
+              verdict.textContent = `Heard it: “${result.transcript}”. Voice recognition knows his name.`;
+              $('naming-done').hidden = false;
+              $('naming-record').textContent = 'SAY IT AGAIN';
+            } else if (result.transcript) {
+              verdict.className = 'naming-verdict bad';
+              verdict.textContent = `I heard “${result.transcript}”, which doesn't sound like ${chosenName}. Try once more — or pick a name that's easier to say.`;
+            } else {
+              verdict.className = 'naming-verdict bad';
+              verdict.textContent = 'The recording worked, but no words were recognized. Try speaking louder.';
+            }
+          } catch (error) {
+            verdict.className = 'naming-verdict bad';
+            verdict.textContent = friendlyError(error);
+          } finally {
+            button.disabled = false;
+            if (button.textContent === 'CHECKING…') button.textContent = 'RECORD · SAY IT';
+          }
+        };
+        recorder.start(250);
+        setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 3000);
+      } catch (error) {
+        recording = false;
+        button.disabled = false;
+        button.textContent = 'RECORD · SAY IT';
+        verdict.className = 'naming-verdict bad';
+        verdict.textContent = friendlyError(error);
+      }
+    };
+
+    $('naming-continue').addEventListener('click', () => {
+      chosenName = $('naming-input').value.trim();
+      showVoiceStep();
+    });
+    $('naming-input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { chosenName = $('naming-input').value.trim(); showVoiceStep(); }
+    });
+    $('naming-skip').addEventListener('click', () => { chosenName = ''; finish(); });
+    $('naming-record').addEventListener('click', record);
+    $('naming-done').addEventListener('click', finish);
+    $('naming-voice-skip').addEventListener('click', finish);
+
+    screen.hidden = false;
+    $('naming-input').focus();
+  });
+}
+
 async function initialize() {
   bindEvents(); bindModuleLayout(); initPasswordReveals(); setCoreState('processing', 'LOCAL BOOT SEQUENCE');
   try {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
+    // Retail first run: he needs a name before anything else happens. Await
+    // it so the greeting below uses whatever the buyer just chose.
+    if (bootstrap.needsNaming) await runFirstRunNaming();
+    // Stamp every baked-in "Hey <name>" string with whatever he's called.
+    applyWakeCopy();
     window.jarvisHologram?.applySettings({ skin: state.settings.orbSkin, color: state.settings.orbColor });
     applyGlass(state.settings.windowGlass);
     applySkin(state.settings.skin || 'classic');

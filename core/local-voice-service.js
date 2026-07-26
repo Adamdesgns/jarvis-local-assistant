@@ -4,6 +4,28 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 
+// The env contract with scripts/local_voice.py — the ONLY channel besides
+// stdin commands. JARVIS_ASSISTANT_NAME decides the wake mode over there:
+// a Jarvis-sounding name keeps the pre-trained openwakeword path, anything
+// else gets the VAD + whisper transcription path so the buyer's chosen name
+// actually wakes him. Pure and exported so tests can pin the contract.
+function buildServiceEnv(settings = {}) {
+  return {
+    JARVIS_WHISPER_MODEL: settings.localVoiceModel || 'small.en',
+    JARVIS_WAKE_ENABLED: settings.wakeWordEnabled === false ? '0' : '1',
+    JARVIS_ASSISTANT_NAME: String(settings.assistantName || 'JARVIS').trim() || 'JARVIS',
+    JARVIS_WAKE_SENSITIVITY: String(Number.isFinite(settings.wakeSensitivity) ? settings.wakeSensitivity : 0.55)
+  };
+}
+
+// Which settings changes require bouncing the python service. assistantName
+// is here because the wake MODE depends on it; sensitivity because it is
+// read once at spawn. Pure and exported for the same reason as above.
+function shouldRestartVoice(previous = {}, updated = {}) {
+  return ['wakeWordEnabled', 'localVoiceModel', 'assistantName', 'wakeSensitivity']
+    .some((key) => previous[key] !== updated[key]);
+}
+
 class LocalVoiceService {
   constructor({ voiceRoot, scriptPath, config, emit }) {
     this.voiceRoot = voiceRoot;
@@ -38,11 +60,7 @@ class LocalVoiceService {
         cwd: this.voiceRoot,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
-        env: {
-          ...process.env,
-          JARVIS_WHISPER_MODEL: settings.localVoiceModel || 'small.en',
-          JARVIS_WAKE_ENABLED: settings.wakeWordEnabled === false ? '0' : '1'
-        }
+        env: { ...process.env, ...buildServiceEnv(settings) }
       });
     } catch (error) {
       // Windows throws synchronously for some spawn failures (bad executable).
@@ -120,7 +138,11 @@ class LocalVoiceService {
       this.status = { installed: true, running: true, wakeReady: Boolean(message.wakeReady), message: message.message || 'Local voice ready' };
       this.emit('voice:status', this.getStatus());
     } else if (message.type === 'wake') {
-      this.emit('wake:detected', { label: 'HEY JARVIS', score: message.score });
+      // The label is whatever he's called now, not a hardcoded product name.
+      // transcript arrives only from transcribe-mode wakes — unused today,
+      // it's the seed for tail-as-command and live captions later.
+      const name = String(this.config.getSettings().assistantName || 'JARVIS');
+      this.emit('wake:detected', { label: `HEY ${name.toUpperCase()}`, score: message.score, transcript: message.transcript || '' });
     } else if (message.type === 'result' || message.type === 'error') {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -157,10 +179,10 @@ class LocalVoiceService {
       const child = spawn(this.pythonPath(), ['-u', this.scriptPath, '--diagnose'], {
         cwd: this.voiceRoot,
         windowsHide: true,
-        env: {
-          ...process.env,
-          JARVIS_WHISPER_MODEL: settings.localVoiceModel || 'small.en'
-        }
+        // The full contract, not just the whisper model: --diagnose needs the
+        // assistant name to report the right wake MODE and check the right
+        // model files for it.
+        env: { ...process.env, ...buildServiceEnv(settings) }
       });
       let output = '';
       let settled = false;
@@ -178,7 +200,7 @@ class LocalVoiceService {
         const line = output.split('\n').reverse().find((item) => item.includes('"diagnostic"'));
         try {
           const parsed = JSON.parse(line);
-          finish({ python: parsed.python, whisperModel: parsed.whisperModel, checks: parsed.checks || {} });
+          finish({ python: parsed.python, whisperModel: parsed.whisperModel, wakeMode: parsed.wakeMode || '', checks: parsed.checks || {} });
         } catch {
           finish({ statusMessage: 'The diagnostic check returned no readable result.' });
         }
@@ -219,22 +241,23 @@ const REPORT_ROWS = [
   ['wakeReady', 'Wake word listening']
 ];
 
-function buildDiagnosticReport(diagnostic = {}) {
+function buildDiagnosticReport(diagnostic = {}, { assistantName = 'JARVIS' } = {}) {
   const checks = diagnostic.checks || {};
   const value = (key) => {
     if (key === 'micPermission') return { ok: diagnostic.micPermission === 'granted', detail: diagnostic.micPermission || 'unknown' };
     if (key === 'installed') return { ok: Boolean(diagnostic.installed), detail: diagnostic.installed ? `Python ${diagnostic.python || ''}`.trim() : 'Run Install / Repair Local Voice' };
     if (key === 'running') return { ok: Boolean(diagnostic.running), detail: diagnostic.statusMessage || '' };
-    if (key === 'wakeReady') return { ok: Boolean(diagnostic.wakeReady), detail: diagnostic.wakeReady ? 'Say Hey Jarvis' : 'Wake word is off or still starting' };
+    if (key === 'wakeReady') return { ok: Boolean(diagnostic.wakeReady), detail: diagnostic.wakeReady ? `Say Hey ${assistantName}` : 'Wake word is off or still starting' };
     return { ok: Boolean(checks[key]?.ok), detail: String(checks[key]?.detail || 'Not checked') };
   };
-  const lines = ['JARVIS VOICE DIAGNOSTIC REPORT', `Generated: ${new Date().toLocaleString()}`, ''];
+  const lines = ['VOICE DIAGNOSTIC REPORT', `Generated: ${new Date().toLocaleString()}`, ''];
   for (const [key, label] of REPORT_ROWS) {
     const { ok, detail } = value(key);
     lines.push(`[${ok ? 'PASS' : 'FAIL'}] ${label}${detail ? ` — ${detail}` : ''}`);
   }
+  if (diagnostic.wakeMode) lines.push('', `Wake mode: ${diagnostic.wakeMode === 'openwakeword' ? 'pre-trained wake model' : 'listening by transcription'}`);
   if (diagnostic.whisperModel) lines.push('', `Speech model setting: ${diagnostic.whisperModel}`);
   return lines.join('\n');
 }
 
-module.exports = { LocalVoiceService, buildDiagnosticReport, REPORT_ROWS };
+module.exports = { LocalVoiceService, buildDiagnosticReport, buildServiceEnv, shouldRestartVoice, REPORT_ROWS };

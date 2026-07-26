@@ -4,3 +4,7 @@ dist/
 *.log
 JARVIS-ROADMAP-AND-CLAUDE-HANDOFF.md
 _git_lock_quarantine/
+
+# Stamped by scripts/stamp-edition.mjs at build time; committing one would pin every build to whatever was stamped last
+build/edition
+__pycache__/
