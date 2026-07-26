@@ -113,7 +113,11 @@ const DEFAULT_SETTINGS = {
     explorer: { command: 'explorer.exe', aliases: ['files', 'file explorer'] },
     chrome: { command: 'chrome.exe', aliases: ['google chrome', 'browser'] },
     'vs code': { command: 'code.cmd', aliases: ['visual studio code', 'code'] },
-    terminal: { command: 'wt.exe', aliases: ['windows terminal'] },
+    // Keyed 'windows terminal', NOT 'terminal': inside JARVIS "the terminal" is
+    // the in-app console module, and once that module can run commands (stage 2)
+    // the bare word must never reach an external shell that sits outside the
+    // confirm card. See test/terminal-name-collision.test.js.
+    'windows terminal': { command: 'wt.exe', aliases: ['wt'] },
     calculator: { command: 'calc.exe', aliases: ['calc'] },
     notepad: { command: 'notepad.exe', aliases: [] },
     claude: { command: 'claude.exe', aliases: ['claude desktop'] }
