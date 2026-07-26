@@ -35,14 +35,17 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
       the module, `bold` at fullscreen, with glowing white heads. `rainStyle()` is
       pure and tested. Guards: closing the console exits fullscreen first, and
       Defense Mode drops it on entry so two fullscreen layers never stack.
-- [ ] **THE TERMINAL, stage 2: real commands** — user-typed Windows commands run in
+- [x] **THE TERMINAL, stage 2: real commands** — user-typed Windows commands run in
       the terminal (user-driven only; the AI still never gets arbitrary shell).
       Confirm-card before anything destructive. Display-only for AI output.
-      **Build notes from the 2026-07-25 research pass — read before starting:**
-      - Scaffolding to reuse, do NOT rebuild: `shellHint()`/`SHELL_WORDS` in
-        `src/terminal-log.js` is the classifier seed and the seam is already cut
-        at the renderer's `submit()`; `showApproval()` + `resolveApproval` is the
-        confirm-card pattern; `core/tool-service.js` is the safe-spawn precedent
+      **BUILT 2026-07-26 across two sessions. 696 tests green.** The renderer half
+      is described at the end of this entry; ⚠️ nobody has clicked it in the real
+      app yet.
+      **Build notes from the 2026-07-25 research pass:**
+      - Scaffolding reused, not rebuilt: `SHELL_WORDS` in `src/terminal-log.js`
+        was the classifier seed and the seam was already cut at the renderer's
+        `submit()`; `showApproval()` + `resolveApproval` is the confirm-card
+        pattern; `core/tool-service.js` is the safe-spawn precedent
         (argv array, `shell:false`); `core/screen-guard.js`'s frozen DENY/APPROVE
         regex tiers are the exact mold for the command classifier.
       - **Settle the name collision first.** `core/defaults.js` registers an app
@@ -73,12 +76,42 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
         `terminal:cwd`, every run and refusal written to the activity log.
         `test/ipc-contract.test.js` checks the seam as text since main.js can't
         be required under node:test.
-      - **STILL TO DO: the renderer half only** — wire `submit()` to classify,
-        show `showApproval()` for approve-tier, render output, track cwd for
-        `cd`. Deferred because `renderer.js`, `index.html`, `styles.css` and
-        `test/core.test.js` are all touched by the unmerged `sphere-reactive`
-        branch (24 lines in renderer.js, so the conflict is small). Do it after
-        that branch lands, or cherry-pick around it.
+      **RENDERER HALF DONE 2026-07-26 (same branch, +38 tests → 696):**
+      - `src/terminal-session.js` — the console's decision logic, kept out of
+        renderer.js so it is testable in plain Node. `createConsoleRunner`
+        (classify → card → run → render), `resolveCd` (Windows path tracking,
+        because each run spawns a fresh process so a child's `cd` dies with it),
+        `formatRun`, and `createCardGate`.
+      - **`sphere-reactive` was not the blocker it looked like.** It is 184
+        commits behind main, dates from 2026-07-15, already conflicts with main
+        on all four files on its own, and its tip commit is a TEMPORARY on-screen
+        FPS readout awaiting Adam's keep/revert call. Waiting on it was waiting
+        on nothing, and merging it would have made a decision that is his. Built
+        on the night branch instead and left it untouched.
+      - **The card is shared, the resolution is not.** THE TERMINAL's confirm has
+        no router-side approval id, so `createCardGate` arbitrates: whoever
+        claims the card owns the answer. `resolveApproval` must claim BEFORE
+        `close()` — guarded by `test/approval-card-order.test.js`, which was
+        proven to fail on the reversed order rather than assumed to.
+      - ⚠️ **Two real bugs found by the rig, not by the tests.** (1) `format c:`
+        never reached the guard at all: its first word is not a SHELL_WORD, so
+        the console handed it to the assistant as English and the deny tier
+        never fired. Fixed by adding the unambiguous admin binaries (diskpart,
+        vssadmin, reg, runas, …) plus three command *shapes* — `format <drive>`,
+        `shutdown /switch`, `net user` — while deliberately keeping "format this
+        document" and "shutdown the computer at ten" as English. (2) `shellHint()`
+        was dead the moment stage 2 shipped and now removed; `looksLikeShell()`
+        is the same decision without the apology.
+      - Rig rewritten for stage 2 (`test/rigs/terminal.html`) with the REAL
+        command-guard, so the verdicts shown are the shipping ones. Verified
+        end-to-end through the real input and form: English → assistant, free →
+        runs, deny → refused with no card, approve → card with the verbatim
+        command, CONFIRM → runs, CANCEL → nothing runs.
+      - ⚠️ **UNVERIFIED: Esc-dismissing the card.** A `<dialog>`'s `close`/`cancel`
+        events are queued on the user-interaction task source, which Chromium
+        does not pump for a page that is not compositing — so in any headless rig
+        they never fire. Neither BUTTON depends on them (resolveApproval claims
+        the card itself), so only Esc is unproven. Needs a real window.
 - [x] **0.18.0 release stamp** — version bump + CHANGELOG entry covering the merged
       pile (orb souls everywhere, tabbed settings, Night Shift, battle mode).
       Done 2026-07-24: package.json was already 0.18.0 via the Pro merge; the

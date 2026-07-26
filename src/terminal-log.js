@@ -12,6 +12,9 @@
     { id: 'you', label: 'YOU' },
     { id: 'jarvis', label: 'JARVIS' },
     { id: 'agent', label: 'AGENT' },
+    // Stage 2: raw output from a command the user ran themselves. Its own
+    // stream so console output never reads as something JARVIS said.
+    { id: 'shell', label: 'SH' },
     { id: 'activity', label: 'LOG' },
     { id: 'night', label: 'NIGHT' },
     { id: 'system', label: 'SYS' },
@@ -78,16 +81,35 @@
     'dir', 'ls', 'cls', 'clear', 'cd', 'pwd', 'ipconfig', 'whoami', 'netstat',
     'systeminfo', 'tasklist', 'taskkill', 'npm', 'npx', 'git', 'node', 'python',
     'pip', 'powershell', 'pwsh', 'cmd', 'winget', 'chmod', 'sudo', 'curl', 'wget',
+
+    // Windows admin binaries. Nobody says these in English, and every one of
+    // them is on command-guard's deny list — so without them here the console
+    // hands "vssadmin delete shadows" to the assistant as conversation and the
+    // refusal the guard exists to give never appears.
+    'diskpart', 'bcdedit', 'fsutil', 'vssadmin', 'wbadmin', 'regedit', 'reg',
+    'schtasks', 'icacls', 'takeown', 'wevtutil', 'netsh', 'msconfig',
+    'certutil', 'mshta', 'rundll32', 'regsvr32', 'runas', 'sc',
   ]);
 
-  const SHELL_MESSAGE =
-    'Raw commands arrive in stage 2. For now, ask me in plain English and I\'ll do it properly.';
+  // Deliberately NOT shell words: 'format', 'shutdown', 'net'. "format this
+  // document", "shutdown the computer at ten" and "net me a coffee" are things
+  // a person says to an assistant. These shapes are not — they carry a drive
+  // letter or a switch that ordinary English never does.
+  const COMMAND_SHAPES = [
+    /^format\s+[a-z]:/i,
+    /^shutdown\s+[-/]/i,
+    /^net\s+(?:user|localgroup|stop|start|share)\b/i,
+  ];
 
-  function shellHint(text) {
+  // The one place that decides "is this shell or is this English". Stage 1
+  // used it to refuse; stage 2 uses it to pick a pipeline. Same narrow list
+  // either way — widening it steals words the assistant needs.
+  function looksLikeShell(text) {
     const trimmed = String(text || '').trim();
-    if (!trimmed) return null;
+    if (!trimmed) return false;
     const first = trimmed.split(/\s+/)[0].toLowerCase();
-    return SHELL_WORDS.has(first) ? SHELL_MESSAGE : null;
+    if (SHELL_WORDS.has(first)) return true;
+    return COMMAND_SHAPES.some((shape) => shape.test(trimmed));
   }
 
   const api = {
@@ -98,8 +120,7 @@
     formatClock,
     createLog,
     accentFor,
-    shellHint,
-    SHELL_MESSAGE,
+    looksLikeShell,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.JarvisTerminal = api;

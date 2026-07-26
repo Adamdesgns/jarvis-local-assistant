@@ -286,7 +286,9 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 .warning > * { transform: rotate(-45deg) }
 .approval-modal > span { color: var(--danger); font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide) }
 .approval-modal h2 { font: 500 var(--text-lg) var(--font-display) }
-.approval-modal p { color: var(--text-secondary); font-size: var(--text-base) }
+/* pre-wrap so the console's card can put the exact command on its own line —
+   a confirmation that reflows the command is a worse confirmation. */
+.approval-modal p { color: var(--text-secondary); font-size: var(--text-base); white-space: pre-wrap }
 .approval-modal > div:last-child { display: flex; justify-content: center; gap: var(--s2) }
 .approval-modal button { width: 124px; height: 38px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--text-secondary); font: 500 var(--text-sm) var(--font) }
 #approval-accept { border-color: var(--danger); color: #ff9992; background: var(--danger-tint) }
@@ -611,6 +613,10 @@ body:not(.terminal-full) .term-exit-hint { display: none; }
 .term-line.term-night .term-tag,
 .term-line.term-night .term-text { color: var(--success); opacity: .9 }
 .term-line.term-system .term-text { color: var(--text-muted); font-style: italic }
+.term-line.term-shell .term-tag { color: var(--text-muted) }
+/* pre-wrap because column layouts (dir, git status) collapse into nonsense
+   under normal HTML whitespace handling. */
+.term-line.term-shell .term-text { color: var(--text-secondary); white-space: pre-wrap }
 
 .term-input-row {
   position: relative; z-index: 1; display: flex; align-items: center; gap: 8px;
