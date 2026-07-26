@@ -8,9 +8,14 @@ function windowsHomeFolder(name) {
 }
 
 const DEFAULT_SETTINGS = {
-  settingsVersion: 9,
+  settingsVersion: 10,
   profileName: 'User',
   assistantName: 'JARVIS',
+  // When the assistant was named on first run ('' = never asked). The stamp,
+  // not the name, is what stops the retail naming screen from re-appearing —
+  // and the v10 migration sets it for every EXISTING install, because a
+  // machine that has been running JARVIS was named in spirit long ago.
+  assistantNamedAt: '',
   aiMode: 'local',
   cloudProvider: 'anthropic',
   openaiModel: 'gpt-5-mini',

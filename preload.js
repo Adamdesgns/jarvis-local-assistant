@@ -12,6 +12,12 @@ contextBridge.exposeInMainWorld('jarvis', {
   submitCommand: (text, project) => ipcRenderer.invoke('command:submit', { text, project }),
   resolveApproval: (id, approved) => ipcRenderer.invoke('approval:resolve', { id, approved }),
   recentActivity: (limit) => ipcRenderer.invoke('activity:recent', limit),
+  // First-run naming (K.O.R.I. retail). name commits the choice; heard runs
+  // the say-it-back mic check on a recorded clip.
+  onboarding: {
+    name: (name) => ipcRenderer.invoke('onboarding:name', { name }),
+    heard: (bytes, mimeType, name) => ipcRenderer.invoke('onboarding:heard', { bytes, mimeType, name })
+  },
   transcribe: (bytes, mimeType) => ipcRenderer.invoke('voice:transcribe', { bytes, mimeType }),
   // Speaking, as opposed to the hearing side above: returns WAV bytes rendered
   // by Kokoro, or { ok:false } meaning "use the system voice".

@@ -1681,6 +1681,7 @@ function openSettings(tab = 'general') {
   $('setting-anthropic-key').value = '';
   $('setting-cloud-provider').value = state.settings.cloudProvider || 'anthropic';
   $('setting-profile-name').value = state.settings.profileName || 'User';
+  $('setting-assistant-name').value = state.settings.assistantName || '';
   $('setting-voice').checked = Boolean(state.settings.voiceEnabled);
   $('setting-wake').checked = Boolean(state.settings.wakeWordEnabled);
   $('setting-camera-ai').checked = state.settings.cameraAiDescriptions !== false;
@@ -1747,6 +1748,9 @@ async function saveSettings(event) {
   event.preventDefault();
   const patch = {
     profileName: $('setting-profile-name').value.trim() || 'User',
+    // The rename option. main.js normalizes it (same rules as first-run
+    // naming), so an emptied field falls back rather than breaking prompts.
+    assistantName: $('setting-assistant-name').value,
     aiMode: $('setting-ai-mode').value,
     openaiModel: $('setting-openai-model').value,
     anthropicModel: $('setting-anthropic-model').value,
@@ -2259,11 +2263,131 @@ function bindEvents() {
   window.jarvis.onFileComplete((payload) => { $('scan-counter').textContent = `${payload.scannedFolders} FOLDERS · ${payload.files.length} MATCHES`; renderFileRows(payload.files, true); });
 }
 
+// ── K.O.R.I. first-run naming ───────────────────────────────────────────
+// Retail builds only, first launch only; main.js decides (bootstrap.needsNaming)
+// and the stamp makes every exit final. Two steps: pick the name, then say it
+// back so faster-whisper proves it can hear the chosen name — a name the
+// recognizer can't transcribe is a name voice control will fight forever.
+// The say-back is coaching, never a gate: every button here moves forward.
+function runFirstRunNaming() {
+  return new Promise((resolve) => {
+    const screen = $('naming-screen');
+    const verdict = $('naming-verdict');
+    let chosenName = '';
+    let recording = false;
+
+    const finish = async () => {
+      screen.hidden = true;
+      const result = await window.jarvis.onboarding.name(chosenName);
+      state.settings = result.settings;
+      resolve();
+    };
+
+    const showVoiceStep = () => {
+      $('naming-step-name').hidden = true;
+      $('naming-step-voice').hidden = false;
+      $('naming-say-title').textContent = `Now say “Hey ${chosenName || 'Kori'}”`;
+    };
+
+    // Same capture pattern as Voice Diagnostics' mic test — record a short
+    // clip, transcribe it through the same local pipeline he'll use daily.
+    const record = async () => {
+      if (recording) return;
+      recording = true;
+      const button = $('naming-record');
+      button.disabled = true;
+      button.textContent = 'LISTENING…';
+      verdict.className = 'naming-verdict';
+      verdict.textContent = '';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+        const mimeType = preferred.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        const context = new AudioContext();
+        const analyser = context.createAnalyser(); analyser.fftSize = 512;
+        context.createMediaStreamSource(stream).connect(analyser);
+        const samples = new Uint8Array(analyser.fftSize);
+        const chunks = [];
+        recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+        const meter = () => {
+          if (!recording) { $('naming-level').style.width = '0%'; return; }
+          analyser.getByteTimeDomainData(samples);
+          let total = 0;
+          for (const sample of samples) { const value = (sample - 128) / 128; total += value * value; }
+          $('naming-level').style.width = `${Math.min(100, Math.sqrt(total / samples.length) * 900)}%`;
+          requestAnimationFrame(meter);
+        };
+        meter();
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((track) => track.stop());
+          await context.close();
+          recording = false;
+          button.textContent = 'CHECKING…';
+          try {
+            const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' });
+            if (blob.size < 800) {
+              verdict.className = 'naming-verdict bad';
+              verdict.textContent = 'I did not hear anything — check the microphone and try again.';
+              return;
+            }
+            const result = await window.jarvis.onboarding.heard(new Uint8Array(await blob.arrayBuffer()), blob.type, chosenName);
+            if (result.heard) {
+              verdict.className = 'naming-verdict good';
+              verdict.textContent = `Heard it: “${result.transcript}”. Voice recognition knows his name.`;
+              $('naming-done').hidden = false;
+              $('naming-record').textContent = 'SAY IT AGAIN';
+            } else if (result.transcript) {
+              verdict.className = 'naming-verdict bad';
+              verdict.textContent = `I heard “${result.transcript}”, which doesn't sound like ${chosenName}. Try once more — or pick a name that's easier to say.`;
+            } else {
+              verdict.className = 'naming-verdict bad';
+              verdict.textContent = 'The recording worked, but no words were recognized. Try speaking louder.';
+            }
+          } catch (error) {
+            verdict.className = 'naming-verdict bad';
+            verdict.textContent = friendlyError(error);
+          } finally {
+            button.disabled = false;
+            if (button.textContent === 'CHECKING…') button.textContent = 'RECORD · SAY IT';
+          }
+        };
+        recorder.start(250);
+        setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 3000);
+      } catch (error) {
+        recording = false;
+        button.disabled = false;
+        button.textContent = 'RECORD · SAY IT';
+        verdict.className = 'naming-verdict bad';
+        verdict.textContent = friendlyError(error);
+      }
+    };
+
+    $('naming-continue').addEventListener('click', () => {
+      chosenName = $('naming-input').value.trim();
+      showVoiceStep();
+    });
+    $('naming-input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { chosenName = $('naming-input').value.trim(); showVoiceStep(); }
+    });
+    $('naming-skip').addEventListener('click', () => { chosenName = ''; finish(); });
+    $('naming-record').addEventListener('click', record);
+    $('naming-done').addEventListener('click', finish);
+    $('naming-voice-skip').addEventListener('click', finish);
+
+    screen.hidden = false;
+    $('naming-input').focus();
+  });
+}
+
 async function initialize() {
   bindEvents(); bindModuleLayout(); initPasswordReveals(); setCoreState('processing', 'LOCAL BOOT SEQUENCE');
   try {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
+    // Retail first run: he needs a name before anything else happens. Await
+    // it so the greeting below uses whatever the buyer just chose.
+    if (bootstrap.needsNaming) await runFirstRunNaming();
     window.jarvisHologram?.applySettings({ skin: state.settings.orbSkin, color: state.settings.orbColor });
     applyGlass(state.settings.windowGlass);
     applySkin(state.settings.skin || 'classic');

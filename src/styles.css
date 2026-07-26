@@ -290,6 +290,27 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 .approval-modal > div:last-child { display: flex; justify-content: center; gap: var(--s2) }
 .approval-modal button { width: 124px; height: 38px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--text-secondary); font: 500 var(--text-sm) var(--font) }
 #approval-accept { border-color: var(--danger); color: #ff9992; background: var(--danger-tint) }
+/* K.O.R.I. first-run naming. Above everything (z 200): nothing else in the
+   app matters until he has a name. [hidden] wins via the global guard. */
+.naming-screen { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(4, 5, 6, .94); backdrop-filter: blur(18px) }
+.naming-card { width: 460px; max-width: calc(100vw - 48px); padding: var(--s7) var(--s6); border: 1px solid var(--line-strong); border-radius: var(--r-lg); background: var(--surface-solid); box-shadow: var(--shadow-deep); text-align: center }
+.naming-kicker { color: var(--accent-bright); font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide) }
+.naming-card h2 { margin: var(--s3) 0 var(--s2); font: 500 var(--text-xl) var(--font-display) }
+.naming-card p { color: var(--text-secondary); font-size: var(--text-base) }
+.naming-card input { width: 100%; margin-top: var(--s4); padding: var(--s3); text-align: center; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: transparent; color: var(--text-primary); font: 500 var(--text-lg) var(--font-display); letter-spacing: .08em }
+.naming-card input:focus { border-color: var(--line-accent); outline: none }
+.naming-actions { display: flex; justify-content: center; gap: var(--s2); margin-top: var(--s5) }
+.naming-actions button { min-width: 130px; height: 38px; padding: 0 var(--s3); border-radius: var(--r-sm); font: 500 var(--text-sm) var(--font); cursor: pointer }
+.naming-primary { border: 1px solid var(--line-accent); background: var(--accent-tint-10); color: var(--accent-bright) }
+.naming-primary:hover { background: var(--accent-tint-20) }
+.naming-ghost { border: 1px solid var(--line); background: transparent; color: var(--text-secondary) }
+.naming-ghost:hover { color: var(--text-primary); border-color: var(--line-strong) }
+.naming-meter { height: 6px; margin-top: var(--s4); border: 1px solid var(--line); border-radius: 3px; overflow: hidden }
+.naming-meter i { display: block; height: 100%; width: 0%; background: var(--accent-bright); transition: width 80ms linear }
+.naming-verdict { min-height: 1.4em; margin-top: var(--s3); font-size: var(--text-base) }
+.naming-verdict.good { color: var(--success) }
+.naming-verdict.bad { color: var(--danger) }
+
 .toast { position: fixed; z-index: 90; left: 50%; bottom: -80px; transform: translateX(-50%); min-width: 290px; max-width: 600px; padding: var(--s3) var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-md); background: rgba(10, 11, 12, .95); backdrop-filter: blur(16px); color: var(--text-primary); font-size: var(--text-base); text-align: center; box-shadow: var(--shadow-deep); transition: bottom var(--dur-med) var(--ease) }
 .toast.show { bottom: 28px }
 
