@@ -290,7 +290,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 .approval-modal > div:last-child { display: flex; justify-content: center; gap: var(--s2) }
 .approval-modal button { width: 124px; height: 38px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--text-secondary); font: 500 var(--text-sm) var(--font) }
 #approval-accept { border-color: var(--danger); color: #ff9992; background: var(--danger-tint) }
-/* K.O.R.I. first-run naming. Above everything (z 200): nothing else in the
+/* First-run naming. Above everything (z 200): nothing else in the
    app matters until he has a name. [hidden] wins via the global guard. */
 .naming-screen { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(4, 5, 6, .94); backdrop-filter: blur(18px) }
 .naming-card { width: 460px; max-width: calc(100vw - 48px); padding: var(--s7) var(--s6); border: 1px solid var(--line-strong); border-radius: var(--r-lg); background: var(--surface-solid); box-shadow: var(--shadow-deep); text-align: center }

@@ -1,5 +1,5 @@
 [
-  { "name": "Kori", "transcript": "hey corey", "expectWake": true, "why": "whisper's phonetic spelling of the retail default" },
+  { "name": "Kori", "transcript": "hey corey", "expectWake": true, "why": "whisper's phonetic spelling of an invented name" },
   { "name": "Kori", "transcript": "Hey Cory.", "expectWake": true, "why": "case and punctuation must not matter" },
   { "name": "Kori", "transcript": "okay cory", "expectWake": true, "why": "greeting variant" },
   { "name": "Kori", "transcript": "corey", "expectWake": true, "why": "the bare name at the start is an address" },

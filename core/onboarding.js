@@ -1,6 +1,6 @@
 'use strict';
 
-// K.O.R.I. first-run onboarding — "what do you want to call him?"
+// First-run onboarding — "what do you want to call him?"
 //
 // Retail only, first install only. The buyer names the assistant; that name
 // becomes how he refers to himself, and the master copy never sees any of it
@@ -20,7 +20,9 @@ const { isRetail } = require('./edition');
 // the console. 32 keeps it a name rather than a paragraph.
 const MAX_NAME_LENGTH = 32;
 
-const PRODUCT_NAME = 'Kori';
+// The fallback when a buyer submits no name. JARVIS while the product stays
+// free under that name; revisit alongside the paid-name decision.
+const PRODUCT_NAME = 'JARVIS';
 
 // Ask only when: retail build AND never stamped. The stamp — not the name —
 // is what makes it once-ever: a buyer who later clears the name field must

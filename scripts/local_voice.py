@@ -1,4 +1,4 @@
-"""Free local wake-word and speech-to-text service for JARVIS / K.O.R.I.
+"""Free local wake-word and speech-to-text service for JARVIS.
 
 Stdout is reserved for newline-delimited JSON events consumed by Electron.
 Diagnostics go to stderr.

@@ -76,9 +76,9 @@ test('normalize truncates rather than rejecting outright', () => {
 test('normalize falls back to the product name rather than returning nothing', () => {
   // An empty assistantName would render "You are , Adam's private desktop
   // assistant" — a broken prompt is worse than a default.
-  assert.equal(normalizeAssistantName(''), 'Kori');
-  assert.equal(normalizeAssistantName('   '), 'Kori');
-  assert.equal(normalizeAssistantName(null), 'Kori');
+  assert.equal(normalizeAssistantName(''), 'JARVIS');
+  assert.equal(normalizeAssistantName('   '), 'JARVIS');
+  assert.equal(normalizeAssistantName(null), 'JARVIS');
 });
 
 test('the naming patch sets the name and stamps it closed', () => {
@@ -91,7 +91,7 @@ test('the patch closes onboarding even when the buyer submits nothing', () => {
   // Skipping is allowed; being asked forever is not. They get the default and
   // the question never comes back.
   const patch = namingPatch('', new Date('2026-07-26T10:00:00.000Z'));
-  assert.equal(patch.assistantName, 'Kori');
+  assert.equal(patch.assistantName, 'JARVIS');
   assert.ok(patch.assistantNamedAt, 'skipping must still stamp, or it re-asks every launch');
   assert.equal(needsNaming({ edition: 'retail', settings: patch }), false);
 });

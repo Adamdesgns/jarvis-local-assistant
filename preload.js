@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   submitCommand: (text, project) => ipcRenderer.invoke('command:submit', { text, project }),
   resolveApproval: (id, approved) => ipcRenderer.invoke('approval:resolve', { id, approved }),
   recentActivity: (limit) => ipcRenderer.invoke('activity:recent', limit),
-  // First-run naming (K.O.R.I. retail). name commits the choice; heard runs
+  // First-run naming (retail builds). name commits the choice; heard runs
   // the say-it-back mic check on a recorded clip.
   onboarding: {
     name: (name) => ipcRenderer.invoke('onboarding:name', { name }),

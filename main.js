@@ -498,7 +498,7 @@ function loadMobileDevices() {
 }
 function saveMobileDevices() { config.setSecret('mobileDevices', JSON.stringify(mobileAuth.toJSON())); }
 
-// K.O.R.I. edition — resolved once at startup from the build-time stamp, never
+// The edition — resolved once at startup from the build-time stamp, never
 // from settings. The stamp is a plain file electron-builder drops next to the
 // app code (see extraResources in package.json); reading it from resourcesPath
 // keeps it out of the asar and out of settings.json. A missing or unreadable

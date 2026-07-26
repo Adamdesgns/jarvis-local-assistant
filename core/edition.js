@@ -1,6 +1,6 @@
 'use strict';
 
-// K.O.R.I. — the edition split. Two artefacts from one tree:
+// The edition split. Two artefacts from one tree:
 //
 //   master — Adam's personal copy. No naming prompt, no licence gate, full
 //            Pro. Unsigned, never distributed. The assistant is JARVIS,
@@ -25,7 +25,7 @@ const EDITIONS = Object.freeze(['master', 'retail']);
 // decorate it, because it never persists — see effectiveLicenseState.
 const MASTER_LICENSE = Object.freeze({
   status: 'active',
-  productName: 'KORI Master',
+  productName: 'Master build',
   customerName: 'Master build',
   activatedAt: '',
   instanceId: 'master-build',
@@ -63,11 +63,13 @@ function effectiveLicenseState(edition, storedState) {
   return storedState;
 }
 
-// The name he answers to before anyone chooses one. Master is JARVIS —
-// Adam's call, permanent. Retail defaults to the product name until the buyer
-// names him on first run.
-function defaultAssistantName(edition) {
-  return isMaster(edition) ? 'JARVIS' : 'Kori';
+// The name he answers to before anyone chooses one. JARVIS in both editions
+// while the product stays free under that name (Adam, 2026-07-26: "leave
+// JARVIS for free while we decide") — a retail buyer still names their own
+// on first run, and a paid product name is a later decision. Bonus: a
+// Jarvis-sounding default keeps the instant pre-trained wake path.
+function defaultAssistantName(_edition) {
+  return 'JARVIS';
 }
 
 module.exports = {

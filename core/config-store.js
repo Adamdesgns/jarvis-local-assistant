@@ -36,7 +36,7 @@ function mergeSettings(defaults, saved) {
   // v9 gives JARVIS his own voice (Kokoro on the GPU). It needs no migration
   // step: ttsEngine/kokoroVoice/kokoroDevice arrive from the defaults spread
   // above, and an old save simply picks them up.
-  // v10 adds first-run naming (K.O.R.I. retail). Any EXISTING install is
+  // v10 adds first-run naming (retail builds). Any EXISTING install is
   // stamped as already-named — the naming screen is for a buyer's first
   // launch, not for a machine that has been running JARVIS for weeks.
   if (Number(saved?.settingsVersion || 0) > 0 && Number(saved?.settingsVersion || 0) < 10 && !result.assistantNamedAt) {

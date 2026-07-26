@@ -10,7 +10,7 @@ const {
   defaultAssistantName,
 } = require('../core/edition');
 
-// K.O.R.I. ships as two artefacts from one tree:
+// The app ships as two artefacts from one tree:
 //   master — Adam's personal copy. No naming prompt, no licence gate, full Pro.
 //            Unsigned, never distributed.
 //   retail — what a buyer installs. Names the assistant on first run, and the
@@ -81,11 +81,12 @@ test('retail passes the stored licence through untouched', () => {
   assert.deepEqual(effectiveLicenseState('retail', active), active);
 });
 
-test('the assistant default differs by edition', () => {
-  // Adam's copy is JARVIS forever. A shipped copy must not carry Marvel's mark
-  // as its default — the buyer names him on first run, and until they do he
-  // answers to the product name.
+test('the assistant default is JARVIS in every edition', () => {
+  // While the product stays free under the JARVIS name (Adam, 2026-07-26),
+  // both editions default to it; a retail buyer still renames on first run.
+  // Revisit alongside the paid product-name decision — a PAID retail default
+  // must not carry Marvel's mark.
   assert.equal(defaultAssistantName('master'), 'JARVIS');
-  assert.equal(defaultAssistantName('retail'), 'Kori');
-  assert.equal(defaultAssistantName('nonsense'), 'Kori', 'unknown edition is retail');
+  assert.equal(defaultAssistantName('retail'), 'JARVIS');
+  assert.equal(defaultAssistantName('nonsense'), 'JARVIS');
 });

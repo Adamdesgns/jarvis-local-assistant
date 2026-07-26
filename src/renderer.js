@@ -2300,7 +2300,7 @@ function bindEvents() {
   window.jarvis.onFileComplete((payload) => { $('scan-counter').textContent = `${payload.scannedFolders} FOLDERS · ${payload.files.length} MATCHES`; renderFileRows(payload.files, true); });
 }
 
-// ── K.O.R.I. first-run naming ───────────────────────────────────────────
+// ── first-run naming ────────────────────────────────────────────────────
 // Retail builds only, first launch only; main.js decides (bootstrap.needsNaming)
 // and the stamp makes every exit final. Two steps: pick the name, then say it
 // back so faster-whisper proves it can hear the chosen name — a name the
@@ -2323,7 +2323,7 @@ function runFirstRunNaming() {
     const showVoiceStep = () => {
       $('naming-step-name').hidden = true;
       $('naming-step-voice').hidden = false;
-      $('naming-say-title').textContent = `Now say “Hey ${chosenName || 'Kori'}”`;
+      $('naming-say-title').textContent = `Now say “Hey ${chosenName || 'JARVIS'}”`;
     };
 
     // Same capture pattern as Voice Diagnostics' mic test — record a short

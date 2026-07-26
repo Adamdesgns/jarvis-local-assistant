@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>RIG · K.O.R.I. FIRST-RUN NAMING</title>
+<title>RIG · FIRST-RUN NAMING</title>
 <!--
   Standalone rig for the first-run naming screen. Loads the REAL tokens, the
   REAL stylesheet, the REAL onboarding logic (core/onboarding.js is a dual
@@ -14,7 +14,7 @@
       open /test/rigs/naming.html
 
   The three canned takes cycle: "hey corey" (a phonetic near-miss that MUST
-  pass for the name Kori), "banana" (must fail), then silence (must coach).
+  pass when you type the name Kori), "banana" (must fail), then silence (must coach).
 -->
 <link rel="stylesheet" href="../../src/tokens.css" />
 <link rel="stylesheet" href="../../src/styles.css" />
@@ -39,9 +39,9 @@
         <span class="naming-kicker">FIRST RUN</span>
         <h2>Name your assistant</h2>
         <p>He'll answer to this, refer to himself by it, and it's how you'll think of him. You can rename him any time in Settings → GENERAL.</p>
-        <input id="naming-input" type="text" maxlength="32" placeholder="Kori" autocomplete="off" spellcheck="false" />
+        <input id="naming-input" type="text" maxlength="32" placeholder="JARVIS" autocomplete="off" spellcheck="false" />
         <div class="naming-actions">
-          <button type="button" id="naming-skip" class="naming-ghost">KEEP “KORI”</button>
+          <button type="button" id="naming-skip" class="naming-ghost">KEEP “JARVIS”</button>
           <button type="button" id="naming-continue" class="naming-primary">CONTINUE</button>
         </div>
       </section>
@@ -96,14 +96,14 @@
     const showVoiceStep = () => {
       document.getElementById('naming-step-name').hidden = true;
       document.getElementById('naming-step-voice').hidden = false;
-      document.getElementById('naming-say-title').textContent = `Now say “Hey ${chosenName || 'Kori'}”`;
+      document.getElementById('naming-say-title').textContent = `Now say “Hey ${chosenName || 'JARVIS'}”`;
     };
 
     // The rig's RECORD uses canned transcripts through the REAL matcher.
     const record = () => {
       const transcript = CANNED_TAKES[take % CANNED_TAKES.length];
       take += 1;
-      const name = chosenName || 'Kori';
+      const name = chosenName || 'JARVIS';
       const heard = O.nameHeardIn(transcript, name);
       if (heard) {
         verdict.className = 'naming-verdict good';
