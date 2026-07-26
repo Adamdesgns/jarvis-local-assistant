@@ -53,6 +53,32 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
       - cwd policy ties to `documentService.approvedRoots()`; needs a real deny
         list (format, `del /f`, reg, bcdedit, vssadmin, net user), a timeout/kill
         for hung processes, and `unattendedSafe: false` (the guard test enforces).
+      **PROGRESS 2026-07-26 (Claude's Night Crew, branch
+      `night/2026-07-26-terminal-commands`) — everything EXCEPT the renderer:**
+      - `src/command-guard.js` (27 tests) — free/approve/deny tiers on
+        screen-guard's mould, frozen denylists. No explicit approve list on
+        purpose: `approve` is what you get by falling through, so an
+        unrecognised command asks instead of running. Splits on every chaining
+        operator and takes the worst segment (`dir && format c:` → deny).
+      - `core/command-runner.js` (18 tests) — argv array, `shell:false`, plus
+        `/d` so a hijacked AutoRun key can't inject ahead of the command.
+        Timeout kills, output capped, cwd clamped to `approvedRoots()`.
+        Approve-tier without an explicit `approved:true` is REFUSED, so the
+        confirm card is structural rather than conventional.
+      - Name collision SETTLED (6 tests): the external app is keyed
+        `windows terminal` (alias `wt`); the bare word no longer reaches
+        `wt.exe`. ⚠️ Defaults only — a settings.json that already carries the
+        old `terminal` key keeps it until someone writes a migration.
+      - `main.js`/`preload.js` — `terminal:classify` / `terminal:run` /
+        `terminal:cwd`, every run and refusal written to the activity log.
+        `test/ipc-contract.test.js` checks the seam as text since main.js can't
+        be required under node:test.
+      - **STILL TO DO: the renderer half only** — wire `submit()` to classify,
+        show `showApproval()` for approve-tier, render output, track cwd for
+        `cd`. Deferred because `renderer.js`, `index.html`, `styles.css` and
+        `test/core.test.js` are all touched by the unmerged `sphere-reactive`
+        branch (24 lines in renderer.js, so the conflict is small). Do it after
+        that branch lands, or cherry-pick around it.
 - [x] **0.18.0 release stamp** — version bump + CHANGELOG entry covering the merged
       pile (orb souls everywhere, tabbed settings, Night Shift, battle mode).
       Done 2026-07-24: package.json was already 0.18.0 via the Pro merge; the
