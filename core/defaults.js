@@ -8,7 +8,7 @@ function windowsHomeFolder(name) {
 }
 
 const DEFAULT_SETTINGS = {
-  settingsVersion: 8,
+  settingsVersion: 9,
   profileName: 'User',
   assistantName: 'JARVIS',
   aiMode: 'local',
@@ -83,6 +83,19 @@ const DEFAULT_SETTINGS = {
     instanceId: '',
     lastValidatedAt: ''
   },
+  // How JARVIS speaks. 'kokoro' is the real voice (Kokoro-82M on the GPU);
+  // 'system' pins him to the Windows SAPI voices, which is also where he falls
+  // back automatically whenever Kokoro is unavailable.
+  ttsEngine: 'kokoro',
+  // bm_daniel: chosen by Adam by ear from the eight-voice audition bench. It is
+  // the lowest-GRADED candidate, which is fine — the grades measure fidelity to
+  // training data, not whether a voice suits JARVIS.
+  kokoroVoice: 'bm_daniel',
+  // Escape hatch. Every fp16 dtype on this GPU renders NaN-filled silence
+  // while reporting success, so a machine whose GPU misbehaves needs a way to
+  // be forced onto the (slower, reliable) CPU path.
+  kokoroDevice: 'auto',
+  // The Windows SAPI voice, used by the fallback path.
   voiceName: '',
   orbBounds: null,
   moduleLayout: {

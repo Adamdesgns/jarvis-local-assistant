@@ -39,6 +39,8 @@ const SAMPLES = {
   heartbeatEnabled: true,
   nightShiftCloudBudgetUsd: 3,
   voiceName: 'Test Voice',
+  ttsEngine: 'system',
+  kokoroVoice: 'am_michael',
   autonomyEnabled: true,
   autonomyRules: { speakDoorbell: true, nightMotionOnly: true, someoneHereCard: true, speakMotion: true },
   autonomyNightStart: 20,

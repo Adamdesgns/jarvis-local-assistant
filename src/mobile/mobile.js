@@ -44,7 +44,40 @@ if ('speechSynthesis' in window) {
   speechSynthesis.addEventListener('voiceschanged', refreshVoices);
 }
 
-function speak(text) {
+let currentSpeech = null;
+
+function stopSpeaking() {
+  if (currentSpeech) {
+    currentSpeech.pause();
+    URL.revokeObjectURL(currentSpeech.src);
+    currentSpeech = null;
+  }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+
+// The phone does not synthesize. The PC renders with Kokoro on its GPU and
+// sends the audio down, so JARVIS sounds identical here and on the desktop —
+// a phone using its own speechSynthesis would be a different assistant with a
+// different voice. That path survives only as the fallback for when the PC
+// cannot render (model still loading, no GPU, laptop asleep).
+async function speak(text) {
+  stopSpeaking();
+  try {
+    const res = await fetch('/api/tts', { method: 'POST', headers: headers(), body: JSON.stringify({ text }) });
+    if (!res.ok) return speakLocally(text);
+    const audio = new Audio(URL.createObjectURL(await res.blob()));
+    currentSpeech = audio;
+    audio.onended = () => { URL.revokeObjectURL(audio.src); if (currentSpeech === audio) currentSpeech = null; };
+    // iOS blocks audio that is not tied to a user gesture. A rejected play()
+    // here is normal on a phone that has been sitting idle, so drop to the
+    // local voice rather than going quiet.
+    await audio.play();
+  } catch {
+    speakLocally(text);
+  }
+}
+
+function speakLocally(text) {
   if (!('speechSynthesis' in window)) return;
   const utter = new SpeechSynthesisUtterance(text);
   const voices = cachedVoices.length ? cachedVoices : speechSynthesis.getVoices();

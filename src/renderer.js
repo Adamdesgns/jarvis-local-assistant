@@ -332,6 +332,37 @@ function selectVoice() {
     || null;
 }
 
+// The Kokoro voice list comes from the model's own metadata rather than a
+// hardcoded table here, so the picker can never drift out of step with what the
+// model actually contains. Grades are shown because they are genuinely useful
+// context — though Adam picked bm_daniel, the lowest-graded of the candidates,
+// by ear, which is the right way to choose a voice.
+async function populateKokoroVoices() {
+  const select = $('setting-kokoro-voice');
+  if (!select) return;
+  const result = await window.jarvis.ttsVoices().catch(() => ({ ok: false, voices: [] }));
+  const chosen = state.settings.kokoroVoice || 'bm_daniel';
+
+  if (!result.ok || !result.voices.length) {
+    // The model loads asynchronously at launch, so an empty list here is a
+    // "not yet", not a failure. Keep the saved voice selectable meanwhile.
+    select.replaceChildren(new Option(`${chosen.toUpperCase()} · LOADING VOICE MODEL…`, chosen));
+    select.value = chosen;
+    return;
+  }
+
+  const british = (voice) => /gb/i.test(voice.language || '');
+  const sorted = result.voices
+    .filter((voice) => /^(a|b)[mf]_/.test(voice.id))
+    .sort((a, b) => (british(b) - british(a)) || String(a.id).localeCompare(String(b.id)));
+
+  select.replaceChildren(...sorted.map((voice) => new Option(
+    `${voice.id.toUpperCase()} · ${british(voice) ? 'BRITISH' : 'AMERICAN'} ${String(voice.gender || '').toUpperCase()} · ${voice.grade || '?'}`,
+    voice.id
+  )));
+  select.value = chosen;
+}
+
 function populateVoiceSelect() {
   const select = $('setting-voice-name');
   if (!select) return;
@@ -351,12 +382,35 @@ function populateVoiceSelect() {
   select.value = state.settings.voiceName || '';
 }
 
+const AUDITION_LINE = 'Good evening. All systems are online and at your service.';
+
+// Auditions must go through whichever engine is actually selected, or the
+// button demonstrates a voice JARVIS will never use.
 function auditionVoice() {
+  stopCurrentSpeech();
+  speechSynthesis?.cancel();
+
+  const kokoroVoice = $('setting-kokoro-voice')?.value;
+  if (state.settings.ttsEngine !== 'system' && kokoroVoice) {
+    window.jarvis.speak(AUDITION_LINE, kokoroVoice).then((result) => {
+      if (!result?.ok) return auditionSystemVoice();
+      const audio = new Audio(URL.createObjectURL(new Blob([result.wav], { type: 'audio/wav' })));
+      audio.volume = .92;
+      currentSpeech = audio;
+      audio.onended = () => { URL.revokeObjectURL(audio.src); if (currentSpeech === audio) currentSpeech = null; };
+      audio.play().catch(auditionSystemVoice);
+    }).catch(auditionSystemVoice);
+    return;
+  }
+  auditionSystemVoice();
+}
+
+function auditionSystemVoice() {
   if (!('speechSynthesis' in window)) return;
   const name = $('setting-voice-name').value;
   const voice = name ? speechSynthesis.getVoices().find((item) => item.name === name) : selectVoice();
   speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance('Good evening. All systems are online and at your service.');
+  const utterance = new SpeechSynthesisUtterance(AUDITION_LINE);
   if (voice) utterance.voice = voice;
   utterance.rate = .98; utterance.pitch = .88; utterance.volume = .92;
   speechSynthesis.speak(utterance);
@@ -442,14 +496,65 @@ function playDriveCue(kind) {
   } catch { /* a missing chime must never break a session */ }
 }
 
-function speak(message, retry = false) {
+// JARVIS's voice, in two tiers. Kokoro (rendered on the GPU by the hidden
+// voice worker) is the real voice; the Windows SAPI voice below is the net it
+// falls into whenever Kokoro cannot be trusted — model still loading, no GPU,
+// synthesis failed, or a render that came back containing no actual sound.
+//
+// Nothing here ever chooses silence: every failure path ends in speech.
+let currentSpeech = null;
+
+function stopCurrentSpeech() {
+  if (currentSpeech) {
+    currentSpeech.pause();
+    URL.revokeObjectURL(currentSpeech.src);
+    currentSpeech = null;
+  }
+}
+
+function speak(message) {
+  if (!state.settings.voiceEnabled || !message) {
+    if (!state.searchActive) setCoreState('ready');
+    return;
+  }
+  stopCurrentSpeech();
+  speakWithKokoro(message).catch((error) => {
+    console.warn(`[JARVIS] Kokoro voice unavailable, using the system voice: ${error?.message || error}`);
+    speakWithSystemVoice(message);
+  });
+}
+
+async function speakWithKokoro(message) {
+  const result = await window.jarvis.speak(message);
+  // An { ok:false } reply is a routine, expected outcome (the model takes a
+  // moment to load on launch), not an error worth showing anyone.
+  if (!result?.ok) { speakWithSystemVoice(message); return; }
+
+  const blob = new Blob([result.wav], { type: 'audio/wav' });
+  const audio = new Audio(URL.createObjectURL(blob));
+  audio.volume = .92;
+  currentSpeech = audio;
+
+  audio.onplay = () => setCoreState('speaking', 'LOCAL VOICE RESPONSE');
+  audio.onended = () => {
+    if (currentSpeech === audio) { URL.revokeObjectURL(audio.src); currentSpeech = null; }
+    if (!state.searchActive) setCoreState('ready');
+  };
+  audio.onerror = () => {
+    if (currentSpeech === audio) currentSpeech = null;
+    speakWithSystemVoice(message);
+  };
+  await audio.play();
+}
+
+function speakWithSystemVoice(message, retry = false) {
   if (!state.settings.voiceEnabled || !message || !('speechSynthesis' in window)) {
     if (!state.searchActive) setCoreState('ready');
     return;
   }
   const voices = speechSynthesis.getVoices();
   if (!voices.length && !retry) {
-    const retrySpeak = () => speak(message, true);
+    const retrySpeak = () => speakWithSystemVoice(message, true);
     speechSynthesis.addEventListener?.('voiceschanged', retrySpeak, { once: true });
     setTimeout(retrySpeak, 500);
     return;
@@ -489,6 +594,8 @@ function speak(message, retry = false) {
 // him off), which is the whole complaint this exists to fix.
 function interruptJarvis() {
   window.jarvis.cancelAI();
+  // Both voices have to be cut: killing only one leaves him still talking.
+  stopCurrentSpeech();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   stopSpeechWatchdog();
   document.body.classList.remove('busy');
@@ -1008,6 +1115,9 @@ async function startRecording(trigger = 'manual') {
     return;
   }
   try {
+    // He stops talking the moment you start — and that has to cut the Kokoro
+    // audio too, or he keeps speaking straight into the open microphone.
+    stopCurrentSpeech();
     speechSynthesis?.cancel();
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
@@ -1605,6 +1715,8 @@ function openSettings(tab = 'general') {
   $('setting-heartbeat').checked = state.settings.heartbeatEnabled === true;
   $('setting-nightshift-budget').value = Number(state.settings.nightShiftCloudBudgetUsd) || 0;
   populateVoiceSelect();
+  $('setting-tts-engine').value = state.settings.ttsEngine || 'kokoro';
+  populateKokoroVoices();
   fillHourSelect($('setting-autonomy-night-start'));
   fillHourSelect($('setting-autonomy-night-end'));
   $('setting-autonomy').checked = state.settings.autonomyEnabled === true;
@@ -1656,6 +1768,8 @@ async function saveSettings(event) {
     heartbeatEnabled: $('setting-heartbeat').checked,
     nightShiftCloudBudgetUsd: Math.max(0, Number($('setting-nightshift-budget').value) || 0),
     voiceName: $('setting-voice-name').value,
+    ttsEngine: $('setting-tts-engine').value || 'kokoro',
+    kokoroVoice: $('setting-kokoro-voice').value || 'bm_daniel',
     autonomyEnabled: $('setting-autonomy').checked,
     autonomyRules: {
       speakDoorbell: $('setting-autonomy-doorbell').checked,

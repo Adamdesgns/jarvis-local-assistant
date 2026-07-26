@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>JARVIS voice bench</title>
+<body>
+<script type="module">
+const log = (...args) => console.log(args.join(' '));
+
+// One line, every voice. Chosen to exercise what flat TTS gets wrong: a
+// greeting, a name, digits read as words, an em-dash beat, and the dry aside
+// JARVIS's personality setting actually calls for.
+const LINE = 'Good evening, Adam. All systems are online and at your service. '
+  + "Your three o'clock is in twenty minutes — and yes, I did remember the coffee.";
+
+const CANDIDATES = [
+  'bm_george', 'bm_fable', 'bm_daniel', 'bm_lewis',   // British male
+  'am_michael', 'am_puck', 'am_fenrir',               // American male
+  'af_bella'                                          // A-grade reference, not a candidate
+];
+
+// Claude cannot hear these files, so validity is established by arithmetic:
+// real speech peaks near full scale and carries real energy, while a broken
+// render is NaN or flat zero. This check is the only thing standing between
+// Adam and an afternoon spent auditioning silence.
+function inspect(audio) {
+  const data = audio.audio;
+  let nan = 0, peak = 0, sum = 0, counted = 0;
+  for (let i = 0; i < data.length; i += 1) {
+    const v = data[i];
+    if (Number.isNaN(v)) { nan += 1; continue; }
+    const a = Math.abs(v);
+    if (a > peak) peak = a;
+    sum += v * v; counted += 1;
+  }
+  const rms = counted ? Math.sqrt(sum / counted) : 0;
+  return { nan, peak, rms, valid: nan === 0 && peak > 0.05 && rms > 0.005 };
+}
+
+async function main() {
+  if (!navigator.gpu) { log('BENCH-DONE no WebGPU'); return; }
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  log(`GPU: ${adapter?.info?.vendor || '?'} ${adapter?.info?.architecture || ''}`);
+
+  const { KokoroTTS } = await import('../../node_modules/kokoro-js/dist/kokoro.web.js');
+
+  // fp32 is the ONLY config that is both fast and real on this GPU. fp16 and
+  // q4f16 both time in at the same RTF and both emit tens of thousands of NaN
+  // samples followed by pure zeros — full-length WAVs containing no sound. The
+  // first version of this bench shipped fp16 and produced eight silent files
+  // that looked correct by every measure except the one that matters.
+  const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
+    dtype: 'fp32', device: 'webgpu'
+  });
+  log('model ready (fp32 / webgpu)\n');
+
+  const rows = [];
+  for (const voice of CANDIDATES) {
+    const meta = tts.voices[voice];
+    if (!meta) { log(`  ${voice}: not in model — skipped`); continue; }
+
+    const started = performance.now();
+    const audio = await tts.generate(LINE, { voice });
+    const ms = performance.now() - started;
+
+    const sec = audio.audio.length / audio.sampling_rate;
+    const check = inspect(audio);
+    const bytes = await window.bench.save(`${voice}.wav`, audio.toWav());
+    rows.push({ voice, meta, sec, ms, bytes, check });
+
+    log(
+      `  ${voice.padEnd(11)} grade ${String(meta.overallGrade).padEnd(3)} `
+      + `${sec.toFixed(1)}s in ${(ms / 1000).toFixed(2)}s  RTF ${((ms / 1000) / sec).toFixed(2)}  `
+      + `peak ${check.peak.toFixed(3)}  rms ${check.rms.toFixed(4)}  `
+      + `${check.valid ? 'OK' : `BROKEN (${check.nan} NaN)`}`
+    );
+  }
+
+  // File size proves nothing: full-length silence weighs exactly as much as
+  // full-length speech. Only the samples themselves settle it.
+  const broken = rows.filter((r) => !r.check.valid);
+  log('');
+  if (broken.length) {
+    log(`WARNING ${broken.length} file(s) contain no usable audio — DO NOT audition these:`);
+    for (const r of broken) log(`   ${r.voice} — peak ${r.check.peak.toFixed(4)}, ${r.check.nan} NaN samples`);
+  } else {
+    log(`OK ${rows.length} voices rendered, all verified as real audio (peak > 0.05, no NaN).`);
+  }
+
+  // Every voice speaks the identical sentence, so wildly different durations
+  // mean a voice is rushing, dragging, or dropping words.
+  const durations = rows.map((r) => r.sec);
+  log(`  duration spread ${Math.min(...durations).toFixed(1)}s - ${Math.max(...durations).toFixed(1)}s`);
+
+  const dir = await window.bench.readme(
+    `JARVIS voice audition\n\nEvery file speaks the same line:\n"${LINE}"\n\n`
+    + `Rendered fp16 on the GPU - the exact path JARVIS will ship on.\n`
+    + `Grades are Kokoro's own overall grades (A best, D worst).\n\n`
+    + rows.map((r) => `${r.voice}.wav  grade ${r.meta.overallGrade}  ${r.meta.language === 'en-gb' ? 'British' : 'American'} ${r.meta.gender}`
+        + (r.voice === 'af_bella' ? '   <- A-grade reference, female, NOT a candidate' : '')).join('\n')
+    + `\n\nThe British males are Kokoro's weak spot (C and D). The American males\n`
+    + `grade higher because they had hours of training data rather than minutes.\n`
+    + `af_bella is included only so you can hear what the model sounds like at\n`
+    + `its best - it is the ceiling, not an option.\n\n`
+    + `Pick one. It becomes JARVIS's voice on both desktop and phone.\n`
+  );
+  log(`\nListen: ${dir}`);
+  log('BENCH-DONE');
+}
+
+main().catch((error) => log('BENCH-DONE crashed:', error.message, error.stack));
+</script>
+</body>

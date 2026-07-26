@@ -33,7 +33,13 @@ function mergeSettings(defaults, saved) {
   // pre-Pro build) stay in the file exactly as they were; the runtime seams
   // refuse to run them until a license is active, and the PRO settings tab
   // explains why. Activating lights everything back up with no reconfiguring.
-  result.settingsVersion = 8;
+  // v9 gives JARVIS his own voice (Kokoro on the GPU). It needs no migration
+  // step: ttsEngine/kokoroVoice/kokoroDevice arrive from the defaults spread
+  // above, and an old save simply picks them up.
+  //
+  // Stamped from the defaults rather than a literal — this line was pinned to
+  // `8` and would have silently kept stamping 8 forever after any bump.
+  result.settingsVersion = defaults.settingsVersion;
   result.cameraAccounts = Array.isArray(result.cameraAccounts) ? result.cameraAccounts : [];
   if (!['local', 'cloud', 'auto'].includes(result.aiMode)) result.aiMode = 'local';
   // Never allow a stale V1 address to redirect the private local Ollama connection.
@@ -91,6 +97,10 @@ class ConfigStore {
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
       'autonomyEnabled', 'schedulesEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
       'skin', 'voiceName', 'orbBounds', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl',
+      // Kokoro voice: engine choice, which voice, and the device escape hatch.
+      // Same silent-reset trap as the keys below — without these the Settings
+      // voice picker would appear to work and quietly revert on save.
+      'ttsEngine', 'kokoroVoice', 'kokoroDevice',
       // Ask-Claude bridge: these existed in defaults but were never in this
       // allowlist, so the Settings toggle and the stored conversation id were
       // silently dropped by updateSettings. Persist them.

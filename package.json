@@ -11,6 +11,7 @@
   "dependencies": {
     "adm-zip": "^0.5.16",
     "fast-xml-parser": "^5.7.0",
+    "kokoro-js": "^1.2.1",
     "mammoth": "^1.11.0",
     "onvif": "^0.8.1",
     "pdf-parse": "^1.1.1",

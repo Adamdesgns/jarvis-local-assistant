@@ -713,7 +713,9 @@ test('v7 migration pulls chrome out of the drive allowlist saved by older instal
     screenControlAllowlist: ['explorer', 'chrome']
   });
   assert.deepEqual(migrated.screenControlAllowlist, ['explorer', 'notepad']);
-  assert.equal(migrated.settingsVersion, 8);
+  // The claim is "merge stamps the save with the current version", not "the
+  // current version is 8" — pinning the literal just re-breaks on every bump.
+  assert.equal(migrated.settingsVersion, DEFAULT_SETTINGS.settingsVersion);
   // A current install's list is left alone.
   const current = mergeSettings(DEFAULT_SETTINGS, {
     settingsVersion: 7,
@@ -794,7 +796,7 @@ test('v8 merge adds the license object and leaves saved Pro flags untouched', ()
     schedulesEnabled: true,
     autonomyEnabled: true
   });
-  assert.equal(migrated.settingsVersion, 8);
+  assert.equal(migrated.settingsVersion, DEFAULT_SETTINGS.settingsVersion);
   assert.equal(migrated.license.status, 'none');
   // The migration promise: nothing the user configured is erased. The runtime
   // seams are what refuse to run these until a license is active.

@@ -18,6 +18,7 @@ const { DocumentService } = require('./core/document-service');
 const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService } = require('./core/local-voice-service');
+const { VoiceService } = require('./core/voice-service');
 const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
 const { CameraService } = require('./core/camera/camera-service');
 const { DefenseService } = require('./core/defense-service');
@@ -53,6 +54,12 @@ const QRCode = require('qrcode');
 // before the app is ready.
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 
+// JARVIS's voice (core/voice-service.js) runs Kokoro on the GPU via WebGPU.
+// On a laptop with switchable graphics Chromium picks the integrated adapter
+// by default to save battery, which measured 3x slower here than the discrete
+// one (RTF 0.50 on Intel vs 0.15 on the RTX). Also set before app ready.
+app.commandLine.appendSwitch('force_high_performance_gpu');
+
 // Last-resort safety net: an error nothing else caught is written to
 // crash.log beside the rest of the user data instead of silently killing the
 // app. Renderer windows report their escaped errors into the same log.
@@ -75,6 +82,7 @@ let documents;
 let ai;
 let ollama;
 let localVoice;
+let voiceService;
 let folderWatch;
 let router;
 let claudeBridge;
@@ -363,7 +371,9 @@ function restoreMainWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 24, height: 24 });
+  // icon-tray.png is the orb rendered at its brightest pose and cropped tighter —
+  // the full-detail icon.png turns to mush once it's downscaled to tray size.
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon-tray.png')).resize({ width: 24, height: 24 });
   tray = new Tray(icon);
   tray.setToolTip('JARVIS — Local Assistant');
   tray.setContextMenu(Menu.buildFromTemplate([
@@ -551,6 +561,17 @@ function setupIpc() {
   ipcMain.on('screen:drive-stop', () => hands?.abortActive('stop-button'));
   ipcMain.handle('approval:resolve', (_event, payload) => router.resolveApproval(payload.id, Boolean(payload.approved)));
   ipcMain.handle('activity:recent', (_event, limit) => log.recent(Math.min(100, Number(limit) || 20)));
+  // Speaking (Kokoro). The renderer gets raw WAV bytes back and plays them; a
+  // { ok:false } reply is its cue to fall back to the system voice rather than
+  // go silent.
+  ipcMain.handle('tts:speak', async (_event, payload) => {
+    const result = await voiceService.synthesize(payload?.text, { voice: payload?.voice });
+    if (!result.ok) return { ok: false, error: result.error, fallback: true };
+    return { ok: true, wav: result.wav, voice: result.voice, cached: Boolean(result.cached) };
+  });
+  ipcMain.handle('tts:voices', () => voiceService.listVoices());
+  ipcMain.handle('tts:status', () => voiceService.status());
+
   ipcMain.handle('voice:transcribe', (_event, payload) => localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType));
   ipcMain.handle('voice:status', () => localVoice.getStatus());
   ipcMain.handle('voice:diagnose', async () => {
@@ -1245,10 +1266,20 @@ app.whenReady().then(async () => {
     config,
     emit: sendEverywhere
   });
+  // JARVIS's speaking voice. localVoice above is the opposite direction —
+  // that one hears (Whisper), this one talks (Kokoro).
+  voiceService = new VoiceService({
+    getSettings: () => config.getSettings(),
+    cacheDir: path.join(app.getPath('userData'), 'voice-cache'),
+    onStatus: (status) => sendEverywhere('tts:status', status)
+  });
   mobileAuth = new MobileAuth({ devices: loadMobileDevices() });
   mobileServer = new MobileServer({
     config, router, auth: mobileAuth, documents,
     transcribe: (buffer, mimeType) => localVoice.transcribe(buffer, mimeType),
+    // The phone does no synthesis: the PC renders and streams it the audio, so
+    // both surfaces come out of the same warm model in the same voice.
+    synthesize: (text, options) => voiceService.synthesize(text, options),
     staticDir: path.join(__dirname, 'src', 'mobile'),
     orbsDir: path.join(__dirname, 'src', 'orbs'),
     onDevicesChanged: saveMobileDevices,
@@ -1269,6 +1300,10 @@ app.whenReady().then(async () => {
   createTray();
   applyLoginSetting(config.getSettings().startWithWindows);
   localVoice.start();
+  // Loading ~326 MB of model takes a moment, so start it now rather than on the
+  // first thing JARVIS says. Until it is ready every caller falls back to the
+  // system voice, so he can talk from the first second either way.
+  voiceService.start();
   folderWatch.start();
   setInterval(checkTaskReminders, 30000);
   setTimeout(() => maybeMorningReport(), 12000);
@@ -1287,6 +1322,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   isQuitting = true;
   localVoice?.stop();
+  voiceService?.stop();
   mobileServer?.stop();
   scheduleService?.stop();
   cameras?.shutdown();

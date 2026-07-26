@@ -423,9 +423,12 @@
                 <label>ORB SKIN<select id="setting-orb-skin"></select></label>
                 <label>ORB COLOR<select id="setting-orb-color"><option value="gold">GOLD</option><option value="obsidian">OBSIDIAN</option></select></label>
                 <label>WINDOW GLASS<select id="setting-glass"></select></label>
-            <label>JARVIS VOICE<select id="setting-voice-name"><option value="">AUTO · BRITISH IF AVAILABLE</option></select></label>
+            <label>VOICE ENGINE<select id="setting-tts-engine"><option value="kokoro">JARVIS VOICE · NEURAL</option><option value="system">WINDOWS VOICES</option></select></label>
+            <label>JARVIS VOICE<select id="setting-kokoro-voice"></select></label>
+            <label>WINDOWS VOICE<select id="setting-voice-name"><option value="">AUTO · BRITISH IF AVAILABLE</option></select></label>
             <button type="button" id="audition-voice" class="outline-action">▶ HEAR THIS VOICE</button>
-            <small>For the classic JARVIS feel, install a UK English voice: Windows Settings → Time &amp; Language → Speech → Add voices → English (United Kingdom), then pick “Ryan” or “George” here.</small>
+            <small id="tts-status-note">JARVIS's own voice runs on this PC's graphics card — nothing is sent anywhere. The first launch downloads the voice model (about 326 MB); until it finishes he speaks with a Windows voice.</small>
+            <small>The Windows voice above is the fallback. For a better one: Windows Settings → Time &amp; Language → Speech → Add voices → English (United Kingdom), then pick “Ryan” or “George”.</small>
           </section>
           <section data-tab="automation">
             <h3>NIGHT SHIFT</h3>

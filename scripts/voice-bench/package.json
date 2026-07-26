@@ -1,0 +1,6 @@
+{
+  "name": "jarvis-voice-bench",
+  "private": true,
+  "description": "Renders every candidate Kokoro voice through the shipping GPU path so Adam can pick one by ear.",
+  "main": "main.js"
+}

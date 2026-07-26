@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('jarvis', {
   resolveApproval: (id, approved) => ipcRenderer.invoke('approval:resolve', { id, approved }),
   recentActivity: (limit) => ipcRenderer.invoke('activity:recent', limit),
   transcribe: (bytes, mimeType) => ipcRenderer.invoke('voice:transcribe', { bytes, mimeType }),
+  // Speaking, as opposed to the hearing side above: returns WAV bytes rendered
+  // by Kokoro, or { ok:false } meaning "use the system voice".
+  speak: (text, voice) => ipcRenderer.invoke('tts:speak', { text, voice }),
+  ttsVoices: () => ipcRenderer.invoke('tts:voices'),
+  ttsStatus: () => ipcRenderer.invoke('tts:status'),
+  onTtsStatus: (callback) => on('tts:status', callback),
   voiceStatus: () => ipcRenderer.invoke('voice:status'),
   diagnoseVoice: () => ipcRenderer.invoke('voice:diagnose'),
   setupLocalVoice: () => ipcRenderer.invoke('voice:setup'),

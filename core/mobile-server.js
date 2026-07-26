@@ -37,8 +37,12 @@ async function readBody(req, limit = 10 * 1024 * 1024) {
 const UPLOAD_BODY_LIMIT = 25 * 1024 * 1024;
 
 class MobileServer {
-  constructor({ config, router, transcribe, auth, staticDir, orbsDir, documents, getCameras, onDevicesChanged = () => {} }) {
+  constructor({ config, router, transcribe, synthesize, auth, staticDir, orbsDir, documents, getCameras, onDevicesChanged = () => {} }) {
     this.config = config; this.router = router; this.transcribe = transcribe;
+    // The phone never synthesizes: the PC renders with Kokoro on its GPU and
+    // streams the WAV down, so both surfaces speak in the same voice. A phone
+    // running its own speechSynthesis would sound like a different assistant.
+    this.synthesize = typeof synthesize === 'function' ? synthesize : null;
     this.auth = auth; this.staticDir = staticDir; this.orbsDir = orbsDir; this.documents = documents; this.onDevicesChanged = onDevicesChanged;
     // Lazy getter: `cameras` may not exist yet at MobileServer construction
     // time (main.js builds it after), or may never exist (no cameras set up
@@ -87,6 +91,21 @@ class MobileServer {
           const transcript = (typeof out === 'string' ? out : out?.text || '').trim();
           if (!transcript) return this.json(res, 422, { error: "I couldn't make that out — try again closer to the mic." });
           return this.#chat(res, device, transcript, transcript);
+        }
+        if (pathname === '/api/tts' && req.method === 'POST') {
+          const body = JSON.parse((await readBody(req)).toString() || '{}');
+          if (!this.synthesize) return this.json(res, 503, { error: 'Voice is not available.' });
+          const result = await this.synthesize(String(body.text || ''), {});
+          // 503 rather than an error page: the phone reads it as "render this
+          // one yourself" and falls back to its own speechSynthesis, so a
+          // still-loading model costs voice quality, never speech.
+          if (!result?.ok) return this.json(res, 503, { error: result?.error || 'Voice is not ready.' });
+          res.writeHead(200, {
+            'Content-Type': 'audio/wav',
+            'Content-Length': result.wav.length,
+            'Cache-Control': 'no-store'
+          });
+          return res.end(result.wav);
         }
         if (pathname === '/api/last') return this.json(res, 200, this.lastReply.get(device.id) || { reply: null });
         if (pathname === '/api/orb-prefs' && req.method === 'GET') {
