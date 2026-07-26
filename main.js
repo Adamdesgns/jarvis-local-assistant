@@ -19,7 +19,7 @@ const { ToolService } = require('./core/tool-service');
 const { DocumentService } = require('./core/document-service');
 const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
-const { LocalVoiceService } = require('./core/local-voice-service');
+const { LocalVoiceService, shouldRestartVoice } = require('./core/local-voice-service');
 const { VoiceService } = require('./core/voice-service');
 const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
 const { CameraService } = require('./core/camera/camera-service');
@@ -758,7 +758,9 @@ function setupIpc() {
     const updated = config.updateSettings(gatedPatch);
     applyLoginSetting(updated.startWithWindows);
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.setAlwaysOnTop(Boolean(updated.orbAlwaysOnTop));
-    if (previous.wakeWordEnabled !== updated.wakeWordEnabled || previous.localVoiceModel !== updated.localVoiceModel) {
+    // assistantName is in this list because the wake MODE depends on it —
+    // renaming him from Jarvis to anything else switches engines entirely.
+    if (shouldRestartVoice(previous, updated)) {
       localVoice.stop();
       setTimeout(() => localVoice.start(), 1700);
     }

@@ -306,7 +306,7 @@
             <div class="setup-status"><i id="local-voice-light"></i><div><b id="local-voice-title">CHECKING INSTALLATION</b><span id="local-voice-detail">No API key or credits required.</span></div></div>
             <button type="button" id="install-local-voice" class="primary-action">INSTALL / REPAIR LOCAL VOICE</button>
             <button type="button" id="open-voice-diagnostics" class="outline-action">VOICE DIAGNOSTICS</button>
-            <small>This installs “Hey Jarvis” and offline speech recognition directly on your laptop.</small>
+            <small id="voice-install-note">This installs the wake word and offline speech recognition directly on your laptop.</small>
           </section>
           <section data-tab="brains">
             <h3>LOCAL BRAIN</h3>
@@ -415,7 +415,7 @@
             <label>YOUR NAME<input id="setting-profile-name" value="User" maxlength="40"></label>
             <label>ASSISTANT NAME<input id="setting-assistant-name" value="" maxlength="32" placeholder="Kori"></label>
             <label class="toggle-row"><span><b>SPOKEN REPLIES</b><small>Use Windows system voices</small></span><input id="setting-voice" type="checkbox"><i></i></label>
-            <label class="toggle-row"><span><b>HEY JARVIS</b><small>Always-listening local wake word</small></span><input id="setting-wake" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b id="setting-wake-label">WAKE WORD</b><small>Always-listening local wake word</small></span><input id="setting-wake" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>MINIMIZE TO ORB</b><small>Keep the sphere working in the background</small></span><input id="setting-orb" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>ALWAYS ON TOP</b><small>Keep the small orb visible</small></span><input id="setting-top" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>START WITH WINDOWS</b><small>Launch automatically at sign-in</small></span><input id="setting-startup" type="checkbox"><i></i></label>
@@ -526,7 +526,7 @@
             <div class="pro-feature-table">
               <div><b>FREE — YOURS FOREVER</b>
                 <ul>
-                  <li>"Hey Jarvis" voice &amp; push-to-talk</li>
+                  <li>Wake-word voice &amp; push-to-talk</li>
                   <li>Tasks, reminders &amp; morning briefing</li>
                   <li>File search &amp; safe organizing</li>
                   <li>Document reading &amp; Q&amp;A with citations</li>
@@ -589,7 +589,7 @@
       </div>
       <div class="diagnostic-actions">
         <button type="button" id="diag-test-mic" class="primary-action">TEST MICROPHONE</button>
-        <button type="button" id="diag-test-wake" class="primary-action">TEST “HEY JARVIS”</button>
+        <button type="button" id="diag-test-wake" class="primary-action">TEST THE WAKE WORD</button>
         <button type="button" id="diag-repair" class="outline-action">REPAIR VOICE</button>
         <button type="button" id="diag-copy" class="outline-action">COPY DIAGNOSTIC REPORT</button>
         <button type="button" id="diag-refresh" class="outline-action">RUN CHECKS AGAIN</button>
@@ -615,7 +615,7 @@
         <section id="naming-step-voice" hidden>
           <span class="naming-kicker">VOICE CHECK</span>
           <h2 id="naming-say-title">Now say it out loud</h2>
-          <p id="naming-say-hint">Press the button and say the name, so speech recognition can prove it hears it the way you say it.</p>
+          <p id="naming-say-hint">Press the button, say the name, then pause — that's exactly how you'll wake him, and this proves speech recognition hears it the way you say it.</p>
           <div class="naming-meter"><i id="naming-level"></i></div>
           <p id="naming-verdict" class="naming-verdict"></p>
           <div class="naming-actions">

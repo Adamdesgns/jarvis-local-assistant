@@ -46,11 +46,13 @@ Write-Host "Installing free local voice components..." -ForegroundColor Cyan
 & $VenvPython -m pip install --upgrade pip
 & $VenvPython -m pip install -r (Join-Path $SourceRoot "local-voice-requirements.txt")
 
-Write-Host "Downloading the local Hey Jarvis and speech models..." -ForegroundColor Cyan
+# This script serves both editions and cannot know the assistant's name,
+# so the copy stays neutral.
+Write-Host "Downloading the wake-word and speech models..." -ForegroundColor Cyan
 & $VenvPython (Join-Path $SourceRoot "local_voice.py") --prepare
 
 Write-Host ""
 Write-Host "LOCAL VOICE IS READY." -ForegroundColor Green
-Write-Host "Restart JARVIS, then say: Hey Jarvis" -ForegroundColor White
+Write-Host "Restart the app, then say your wake phrase." -ForegroundColor White
 Write-Host ""
 if (-not $NoPause) { Read-Host "Press Enter to close" }
