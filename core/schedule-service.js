@@ -110,6 +110,7 @@ class ScheduleService {
         await this.runNow(id, { late: false });
       } catch (error) {
         this.log.write({
+          actor: 'schedule',
           type: 'schedule-error',
           command: 'scheduler-fire',
           response: error && error.message ? error.message : String(error),
@@ -145,6 +146,7 @@ class ScheduleService {
       }
     } catch (error) {
       this.log.write({
+        actor: 'schedule',
         type: 'schedule-error',
         command: 'catch-up',
         response: error && error.message ? error.message : String(error),
@@ -201,7 +203,7 @@ class ScheduleService {
         card: { title: `SCHEDULE — ${item.name}`, body: text }
       });
 
-      this.log.write({ type: 'schedule', command: item.name, response: text, source: 'schedule' });
+      this.log.write({ actor: 'schedule', type: 'schedule', command: item.name, response: text, source: 'schedule' });
     } catch (error) {
       ok = false;
       text = error && error.message ? error.message : String(error);

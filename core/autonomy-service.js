@@ -25,6 +25,7 @@ class AutonomyService {
       for (const action of actions) {
         this.emit('autonomy:event', action);
         this.log.write({
+          actor: 'autonomy',
           type: 'autonomy',
           command: action.rule,
           response: action.speak || action.card?.body || alert.body || '',

@@ -74,7 +74,7 @@ class CameraService {
       let showNotification = true;
       try { showNotification = this.notifyGate({ kind, name, body }) !== false; } catch {}
       if (showNotification) this.notify(`JARVIS · ${kind === 'doorbell' ? 'DOORBELL' : 'MOTION'}`, body);
-      this.log.write({ type: 'camera-alert', command: `${kind} at ${name}`, response: body, source: 'cameras' });
+      this.log.write({ actor: 'cameras', type: 'camera-alert', command: `${kind} at ${name}`, response: body, source: 'cameras' });
       this.emit('cameras:alert', { key, kind, name, body, jpegBase64: shot.ok ? shot.jpegBase64 : undefined, at: new Date().toISOString() });
     } catch {}
   }
@@ -98,7 +98,7 @@ class CameraService {
     this.config.updateSettings({ cameraAccounts: accounts });
     await this.#instantiate(account);
     this.emit('cameras:changed', {});
-    this.log.write({ type: 'camera', command: 'add cameras', response: `Added ${list.length} local camera${list.length === 1 ? '' : 's'} to "${cleanName}".`, source: 'cameras' });
+    this.log.write({ actor: 'cameras', type: 'camera', command: 'add cameras', response: `Added ${list.length} local camera${list.length === 1 ? '' : 's'} to "${cleanName}".`, source: 'cameras' });
     return { ok: true, message: `Added ${list.length} camera${list.length === 1 ? '' : 's'}.` };
   }
 
@@ -120,7 +120,7 @@ class CameraService {
       return { ok: false, message: status.message };
     }
     this.emit('cameras:changed', {});
-    this.log.write({ type: 'camera', command: 'add blink account', response: `Connected Blink account ${cleanEmail}.`, source: 'cameras' });
+    this.log.write({ actor: 'cameras', type: 'camera', command: 'add blink account', response: `Connected Blink account ${cleanEmail}.`, source: 'cameras' });
     return { ok: true, needsPin: status.state === 'verify', accountId: account.id, message: status.message || 'Blink is connected.' };
   }
 
@@ -152,7 +152,7 @@ class CameraService {
         return { ok: false, message: status.message };
       }
       this.emit('cameras:changed', {});
-      this.log.write({ type: 'camera', command: 'add ring account', response: `Connected Ring account ${cleanEmail}.`, source: 'cameras' });
+      this.log.write({ actor: 'cameras', type: 'camera', command: 'add ring account', response: `Connected Ring account ${cleanEmail}.`, source: 'cameras' });
       return { ok: true, message: 'Ring is connected.' };
     } catch (error) {
       return { ok: false, message: error.message };
@@ -184,7 +184,7 @@ class CameraService {
         return { ok: false, message: status.message };
       }
       this.emit('cameras:changed', {});
-      this.log.write({ type: 'camera', command: 'add nest account', response: `Connected Nest project ${project}.`, source: 'cameras' });
+      this.log.write({ actor: 'cameras', type: 'camera', command: 'add nest account', response: `Connected Nest project ${project}.`, source: 'cameras' });
       return { ok: true, message: 'Nest is connected. Nest cameras are live-view only and do not send motion alerts yet.' };
     } catch (error) {
       return { ok: false, message: error.message };
@@ -213,7 +213,7 @@ class CameraService {
       // and Ring arm/disarm would never find the location.
       await driver.setArmed(systemId, Boolean(armed));
       this.emit('cameras:changed', {});
-      this.log.write({ type: 'camera', command: armed ? 'camera arm' : 'camera disarm', response: `${armed ? 'Armed' : 'Disarmed'} system ${systemKey}.`, source: 'cameras' });
+      this.log.write({ actor: 'cameras', type: 'camera', command: armed ? 'camera arm' : 'camera disarm', response: `${armed ? 'Armed' : 'Disarmed'} system ${systemKey}.`, source: 'cameras' });
       return { ok: true, message: armed ? 'System armed.' : 'System disarmed.' };
     } catch (error) {
       return { ok: false, message: `Could not change arming: ${error.message}` };
@@ -272,7 +272,7 @@ class CameraService {
         jpeg = await this.go2rtc.snapshot(streamName(key));
       }
       if (!manual) this.lastAutoSnapshot.set(key, Date.now());
-      this.log.write({ type: 'camera', command: manual ? 'camera snapshot' : 'camera auto refresh', response: `Took a picture from camera ${key}.`, source: 'cameras' });
+      this.log.write({ actor: 'cameras', type: 'camera', command: manual ? 'camera snapshot' : 'camera auto refresh', response: `Took a picture from camera ${key}.`, source: 'cameras' });
       return { ok: true, jpegBase64: jpeg.toString('base64'), takenAt: new Date().toISOString() };
     } catch (error) {
       return { ok: false, message: `Could not get a picture: ${error.message}` };
@@ -287,7 +287,7 @@ class CameraService {
       // offer directly — no local streaming helper involved.
       if (typeof driver.createSdpSession === 'function') {
         this.sdpViews.set(key, { driver, cameraId, session: null });
-        this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
+        this.log.write({ actor: 'cameras', type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
         return { ok: true, mode: 'sdp-bridge', key };
       }
       const source = await driver.getStreamSource(cameraId);
@@ -297,7 +297,7 @@ class CameraService {
       const name = streamName(key);
       await this.go2rtc.setStream(name, source);
       this.liveViews.add(name);
-      this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
+      this.log.write({ actor: 'cameras', type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
       return { ok: true, mode: 'whep', key, whepUrl: this.go2rtc.whepUrl(name) };
     } catch (error) {
       return { ok: false, message: `Could not start live view: ${error.message}` };

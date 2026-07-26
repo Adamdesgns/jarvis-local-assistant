@@ -66,7 +66,7 @@ class HeartbeatService {
               ...(quiet ? {} : { speak: body }),
               card: { title: 'HEARTBEAT', body }
             });
-            this.log.write({ type: 'heartbeat', command: 'check-in', response: body, source: 'heartbeat' });
+            this.log.write({ actor: 'heartbeat', type: 'heartbeat', command: 'check-in', response: body, source: 'heartbeat' });
           }
         } else {
           this.lastAnnounced = '';

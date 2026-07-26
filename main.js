@@ -7,7 +7,7 @@ const {
   Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
-const { ActivityLog } = require('./core/activity-log');
+const { ActivityLog, describeIntegrity } = require('./core/activity-log');
 const { CrashLog, installProcessHandlers } = require('./core/crash-log');
 const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
@@ -507,6 +507,7 @@ function setupIpc() {
   ipcMain.on('screen:drive-stop', () => hands?.abortActive('stop-button'));
   ipcMain.handle('approval:resolve', (_event, payload) => router.resolveApproval(payload.id, Boolean(payload.approved)));
   ipcMain.handle('activity:recent', (_event, limit) => log.recent(Math.min(100, Number(limit) || 20)));
+  ipcMain.handle('activity:verify', () => log.verify());
   ipcMain.handle('voice:transcribe', (_event, payload) => localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType));
   ipcMain.handle('voice:status', () => localVoice.getStatus());
   ipcMain.handle('voice:diagnose', async () => {
@@ -643,7 +644,7 @@ function setupIpc() {
     if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
     if (previous.schedulesEnabled !== updated.schedulesEnabled) {
       scheduleService.start().catch((error) => {
-        log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
+        log.write({ actor: 'system', type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
       });
     }
     if (previous.orbSkin !== updated.orbSkin || previous.orbColor !== updated.orbColor) {
@@ -674,7 +675,7 @@ function setupIpc() {
     }
     // Privacy: tell every window we are viewing the screen, before and after.
     sendEverywhere('screen:viewing', { active: true });
-    log.write({ type: 'screen-view', command: question || 'look at my screen', response: 'Captured the screen for a one-time look.', source: 'vision' });
+    log.write({ actor: 'jarvis', type: 'screen-view', command: question || 'look at my screen', response: 'Captured the screen for a one-time look.', source: 'vision' });
     try {
       const display = screen.getPrimaryDisplay();
       const { width, height } = display.size;
@@ -773,7 +774,7 @@ function setupIpc() {
     if (!described.ok) {
       return { ok: false, message: 'No vision model answered. Install one with "ollama pull gemma3:4b", or allow cloud analysis in Settings.' };
     }
-    log.write({ type: 'camera', command: 'describe camera', response: described.text, source: 'cameras' });
+    log.write({ actor: 'jarvis', type: 'camera', command: 'describe camera', response: described.text, source: 'cameras' });
     return { ok: true, text: described.text, jpegBase64: shot.jpegBase64 };
   });
   ipcMain.handle('cameras:set-armed', (_event, payload) => cameras.setArmed(String(payload?.key || ''), Boolean(payload?.armed)));
@@ -956,17 +957,23 @@ async function maybeMorningReport() {
     const parts = [];
     if (done.length) parts.push(`While you slept I finished ${done.length} job${done.length > 1 ? 's' : ''}: ${done.map((entry) => entry.name).join(', ')}. The drafts are ready for your review.`);
     if (failed.length) parts.push(`${failed.length} job${failed.length > 1 ? 's' : ''} hit trouble — details are in the shift log.`);
+    // The shift ran with nobody watching, so the report says plainly whether
+    // the record of it is still intact. Silent when it is.
+    const integrity = describeIntegrity(log.verify());
+    if (integrity) parts.push(integrity);
     const text = parts.join(' ');
     sendEverywhere('autonomy:event', { speak: text, card: { title: 'NIGHT SHIFT — MORNING REPORT', body: text } });
-    log.write({ type: 'night-shift', command: 'morning-report', response: text, source: 'night-shift' });
+    log.write({ actor: 'night-shift', type: 'night-shift', command: 'morning-report', response: text, source: 'night-shift' });
     if (settings.nightShiftFolder) {
       const stamp = new Date().toISOString().slice(0, 10);
-      const body = `# Morning report — ${stamp}\n\n${pending.map((entry) => `- ${entry.ok ? '✓' : '✗'} ${entry.name} — ${entry.text}`).join('\n')}\n`;
+      const lines = pending.map((entry) => `- ${entry.ok ? '✓' : '✗'} ${entry.name} — ${entry.text}`);
+      const footer = integrity ? `\n\n> ⚠ ${integrity}\n` : '\n\n*Activity log verified intact.*\n';
+      const body = `# Morning report — ${stamp}\n\n${lines.join('\n')}\n${footer}`;
       await documents.createTextFileAt(settings.nightShiftFolder, `${stamp} Morning report`, body, '.md').catch(() => {});
     }
     nightShift.markReported();
   } catch (error) {
-    log.write({ type: 'night-shift', command: 'morning-report-error', response: error && error.message ? error.message : String(error), source: 'night-shift' });
+    log.write({ actor: 'night-shift', type: 'night-shift', command: 'morning-report-error', response: error && error.message ? error.message : String(error), source: 'night-shift' });
   }
 }
 
@@ -1073,7 +1080,7 @@ app.whenReady().then(async () => {
   nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config, ai, documents });
   scheduleService = new ScheduleService({ store: scheduleStore, config, router, nightShift, emit: sendEverywhere, log });
   scheduleService.start().catch((error) => {
-    log.write({ type: 'schedule-error', command: 'boot-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
+    log.write({ actor: 'system', type: 'schedule-error', command: 'boot-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
   });
   heartbeat = new HeartbeatService({
     config,
@@ -1087,7 +1094,7 @@ app.whenReady().then(async () => {
       scheduleService.arm();
       maybeMorningReport();
     } catch (error) {
-      log.write({ type: 'schedule-error', command: 'resume-arm', response: error && error.message ? error.message : String(error), source: 'schedule' });
+      log.write({ actor: 'system', type: 'schedule-error', command: 'resume-arm', response: error && error.message ? error.message : String(error), source: 'schedule' });
     }
   });
   folderWatch = new FolderWatchService({

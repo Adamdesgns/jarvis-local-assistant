@@ -187,7 +187,7 @@ class CommandRouter {
     const security = classifyCommand(text);
     if (security.level === 'blocked') {
       const result = this.#result(security.reason, 'safety', { blocked: true });
-      this.#log(text, result);
+      this.#log(text, result, stream);
       return result;
     }
     if (security.level === 'confirm') {
@@ -213,7 +213,7 @@ class CommandRouter {
     const claudeAsk = text.match(/^(?:jarvis[,\s]*)?ask\s+claude\b[,:]?\s*(.*)$/i);
     if (claudeAsk) {
       const askResult = await this.#askClaude(cleanTarget(claudeAsk[1]), stream);
-      this.#log(text, askResult);
+      this.#log(text, askResult, stream);
       return askResult;
     }
 
@@ -224,7 +224,7 @@ class CommandRouter {
     const screenAsk = /^(?:jarvis[,\s]*)?(?:can you\s+)?(?:read|check)\s+(?:my|the)\s+screen\b|^what(?:'s| is| are)\s+(?:on\s+)?(?:my|the)\s+(?:screen|display)\b|^what\s+windows?\s+(?:are|do i have)\b|^what\s+am\s+i\s+looking\s+at\b/i;
     if (screenAsk.test(text)) {
       const seenResult = await this.#readScreen(stream);
-      this.#log(text, seenResult);
+      this.#log(text, seenResult, stream);
       return seenResult;
     }
 
@@ -240,13 +240,13 @@ class CommandRouter {
       || /^(?:jarvis[,\s]*)?switch\s+to\s+(?:notepad|(?:file\s+)?explorer|files)$/i.test(text);
     if (driveAsk) {
       const driveResult = this.#driveScreen(text, stream);
-      this.#log(text, driveResult);
+      this.#log(text, driveResult, stream);
       return driveResult;
     }
 
     const cameraLook = await this.#cameraLook(text);
     if (cameraLook) {
-      this.#log(text, cameraLook);
+      this.#log(text, cameraLook, stream);
       return cameraLook;
     }
 
@@ -585,7 +585,7 @@ class CommandRouter {
       if (usedTools.includes('remember_note')) extra.memories = this.memory.list(30);
       result = this.#result(aiResult.text, aiResult.source, extra);
     }
-    this.#log(text, result);
+    this.#log(text, result, stream);
     return result;
   }
 
@@ -657,8 +657,19 @@ class CommandRouter {
     }
   }
 
-  #log(command, result) {
-    this.log.write({ type: 'command', command, response: result.response, source: result.source, blocked: Boolean(result.blocked), approvalRequired: Boolean(result.approval) });
+  // `actor` is who was driving: 'jarvis' with you at the desk, 'agent' when the
+  // brain ran it with nobody watching. A caller may name a specific actor
+  // (THE CREW, see docs/ROADMAP.md); otherwise attendance decides.
+  #log(command, result, stream = {}) {
+    this.log.write({
+      type: 'command',
+      actor: stream.actor || (stream.unattended ? 'agent' : 'jarvis'),
+      command,
+      response: result.response,
+      source: result.source,
+      blocked: Boolean(result.blocked),
+      approvalRequired: Boolean(result.approval)
+    });
   }
 }
 

@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   submitCommand: (text, project) => ipcRenderer.invoke('command:submit', { text, project }),
   resolveApproval: (id, approved) => ipcRenderer.invoke('approval:resolve', { id, approved }),
   recentActivity: (limit) => ipcRenderer.invoke('activity:recent', limit),
+  verifyActivity: () => ipcRenderer.invoke('activity:verify'),
   transcribe: (bytes, mimeType) => ipcRenderer.invoke('voice:transcribe', { bytes, mimeType }),
   voiceStatus: () => ipcRenderer.invoke('voice:status'),
   diagnoseVoice: () => ipcRenderer.invoke('voice:diagnose'),
