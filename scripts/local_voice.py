@@ -244,6 +244,12 @@ class VoiceService:
                 without_timestamps=True,
             )
             text = " ".join(segment.text.strip() for segment in segments).strip()
+            # JARVIS_WAKE_DEBUG=1: log every segment's transcript to stderr so
+            # "why didn't it wake" is answerable in the field. Stderr only —
+            # stdout is the JSON protocol, and quiet-by-default is the privacy
+            # posture (a always-on log of everything said in the room is not).
+            if os.environ.get("JARVIS_WAKE_DEBUG") == "1":
+                log(f"wake-debug heard: {text!r} → match={_name_heard_at_start(text, self.assistant_name)}")
             now = time.monotonic()
             if text and _name_heard_at_start(text, self.assistant_name) and now - self.last_wake > 2.2:
                 self.last_wake = now
