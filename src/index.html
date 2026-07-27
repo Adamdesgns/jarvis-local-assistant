@@ -290,7 +290,7 @@
         <button data-toggle-module="quick-commands"><i></i><span><b>Quick Commands</b><small>One-click actions</small></span></button>
         <button data-toggle-module="document-viewer"><i></i><span><b>Document Viewer</b><small>Full summaries and document analysis</small></span></button>
         <button data-toggle-module="terminal"><i></i><span><b>Terminal</b><small>Watch JARVIS think, and type to him</small></span></button>
-        <button data-toggle-module="cameras"><i></i><span><b>Cameras <span class="pro-badge">PRO</span></b><small>Live view and snapshots from your security cameras</small></span></button>
+        <button data-toggle-module="cameras"><i></i><span><b>Cameras</b><small>Live view and snapshots from your security cameras</small></span></button>
         <button data-toggle-module="command"><i></i><span><b>Command Bar</b><small>Type to JARVIS. Close it and just speak to him instead</small></span></button>
       </div>
       <button id="reset-layout" class="drawer-reset">RESET DEFAULT LAYOUT</button>
@@ -433,14 +433,14 @@
           </section>
           <section data-tab="automation">
             <h3>NIGHT SHIFT</h3>
-            <label class="toggle-row"><span><b>NIGHT SHIFT <span class="pro-badge">PRO</span></b><small>Run brain jobs between midnight and 6am — drafts only, never sends</small></span><input id="setting-nightshift" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>NIGHT SHIFT</b><small>Run brain jobs between midnight and 6am — drafts only, never sends</small></span><input id="setting-nightshift" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>HEARTBEAT CHECK-INS</b><small>Every 30 minutes, quietly check tasks and errors; speak only when something needs you</small></span><input id="setting-heartbeat" type="checkbox"><i></i></label>
             <label>CLOUD BUDGET PER NIGHT (USD)<input id="setting-nightshift-budget" type="number" min="0" step="1" value="0"></label>
             <small>0 means night jobs always use the free local brain. Drafts land in Documents\JARVIS Drafts.</small>
           </section>
           <section data-tab="automation">
             <h3>AUTONOMY</h3>
-            <label class="toggle-row"><span><b>AUTONOMY MASTER SWITCH <span class="pro-badge">PRO</span></b><small>Off: JARVIS never speaks or acts on his own</small></span><input id="setting-autonomy" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>AUTONOMY MASTER SWITCH</b><small>Off: JARVIS never speaks or acts on his own</small></span><input id="setting-autonomy" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>SPEAK THE DOORBELL</b><small>Say who is at the door out loud</small></span><input id="setting-autonomy-doorbell" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>"SOMEONE'S HERE" CARD</b><small>Show a doorbell card with the camera picture</small></span><input id="setting-autonomy-card" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>SPOKEN MOTION SUMMARY</b><small>Say motion alerts out loud</small></span><input id="setting-autonomy-motion" type="checkbox"><i></i></label>
@@ -456,17 +456,17 @@
           </section>
           <section class="wide-setting" data-tab="abilities">
             <h3>SCREEN READING</h3>
-            <label class="toggle-row"><span><b>READ MY SCREEN <span class="pro-badge">PRO</span></b><small>Say "read my screen" and JARVIS tells you what window and controls are in front of you.</small></span><input id="setting-screen-control" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>READ MY SCREEN</b><small>Say "read my screen" and JARVIS tells you what window and controls are in front of you.</small></span><input id="setting-screen-control" type="checkbox"><i></i></label>
             <small>Reads only — JARVIS looks at what's on screen and describes it. It never clicks, types, or changes anything. It refuses to read financial, sign-in, or system windows, and it ignores password fields. Scheduled tasks can never use this.</small>
           </section>
           <section class="wide-setting" data-tab="abilities">
             <h3>SCREEN DRIVING (BETA)</h3>
-            <label class="toggle-row"><span><b>LET JARVIS CLICK AND TYPE <span class="pro-badge">PRO</span></b><small>Say "click Save", "type hello into Notepad", "open the File menu" — JARVIS presses named buttons for you.</small></span><input id="setting-screen-drive" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>LET JARVIS CLICK AND TYPE</b><small>Say "click Save", "type hello into Notepad", "open the File menu" — JARVIS presses named buttons for you.</small></span><input id="setting-screen-drive" type="checkbox"><i></i></label>
             <small>File Explorer and Notepad only for now. Every job shows you the full plan first and waits for your OK; anything that saves, sends, or deletes asks again individually. A STOP window stays on top the whole time — press it, hit Escape, or say "stop" to end everything instantly. Financial windows (banks, brokers, anything that spends money) are blocked permanently and that block cannot be turned off. Never works from the phone or on a schedule.</small>
           </section>
           <section class="wide-setting" data-tab="automation">
             <h3>SCHEDULE</h3>
-            <label class="toggle-row"><span><b>SCHEDULED TASKS <span class="pro-badge">PRO</span></b><small>Off: nothing runs on its own, ever.</small></span><input id="setting-schedules" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>SCHEDULED TASKS</b><small>Off: nothing runs on its own, ever.</small></span><input id="setting-schedules" type="checkbox"><i></i></label>
             <label>NAME<input id="schedule-name" type="text" maxlength="80" placeholder="Morning briefing"></label>
             <label>TIME<input id="schedule-time" type="time"></label>
             <label>REPEAT<select id="schedule-repeat">
@@ -496,7 +496,7 @@
           </section>
           <section data-tab="phone">
             <h3>MOBILE</h3>
-            <label class="toggle-row"><span><b>PHONE ACCESS <span class="pro-badge">PRO</span></b><small>Serve JARVIS to your paired phones over Tailscale. Off: no server runs.</small></span><input id="setting-mobile" type="checkbox"><i></i></label>
+            <label class="toggle-row"><span><b>PHONE ACCESS</b><small>Serve JARVIS to your paired phones over Tailscale. Off: no server runs.</small></span><input id="setting-mobile" type="checkbox"><i></i></label>
             <small id="mobile-status"></small>
             <label>MOBILE PORT<input id="setting-mobile-port" type="number" min="1024" max="65535"></label>
             <label>MOBILE PUBLIC URL<input id="setting-mobile-public-url" type="text" placeholder="https://your-machine.your-tailnet.ts.net"></label>
@@ -520,11 +520,10 @@
             <button type="button" id="add-search-root" class="outline-action">＋ ADD SEARCH FOLDER</button>
           </section>
           <section class="wide-setting" data-tab="pro">
-            <h3>JARVIS PRO</h3>
-            <div class="setup-status"><i id="license-light"></i><div><b id="license-title">FREE VERSION</b><span id="license-detail">The core assistant is free forever. Pro unlocks the extras below — one purchase, no subscription.</span></div></div>
-            <div id="license-migration-banner" class="license-banner" hidden>Pro features are switched on in your settings but need a license to run. Activate a key below and they come back to life — nothing you set up was erased.</div>
+            <h3>FEATURES</h3>
+            <div class="setup-status"><i></i><div><b>EVERYTHING INCLUDED — FREE</b><span>JARVIS is completely free. Every feature below is unlocked on this PC — no key, no account, no subscription.</span></div></div>
             <div class="pro-feature-table">
-              <div><b>FREE — YOURS FOREVER</b>
+              <div><b>THE ASSISTANT</b>
                 <ul>
                   <li>Wake-word voice &amp; push-to-talk</li>
                   <li>Tasks, reminders &amp; morning briefing</li>
@@ -534,7 +533,7 @@
                   <li>Ask Claude</li>
                 </ul>
               </div>
-              <div><b>PRO — $29 ONCE</b>
+              <div><b>THE POWER FEATURES</b>
                 <ul>
                   <li>Security cameras (Ring, Blink, Nest, RTSP)</li>
                   <li>Phone companion over Tailscale</li>
@@ -545,13 +544,7 @@
                 </ul>
               </div>
             </div>
-            <label>LICENSE KEY<input id="setting-license-key" type="password" placeholder="Paste the key from your purchase email" autocomplete="off"></label>
-            <button type="button" id="license-activate" class="primary-action">ACTIVATE</button>
-            <button type="button" id="license-buy" class="outline-action">BUY JARVIS PRO · $29</button>
-            <button type="button" id="license-validate" class="outline-action">CHECK LICENSE</button>
-            <button type="button" id="license-deactivate" class="outline-action">DEACTIVATE THIS PC</button>
-            <small id="license-status-line"></small>
-            <small>One key covers up to 3 PCs. Activation contacts Lemon Squeezy once, only when you press the button — after that JARVIS stays licensed even fully offline. Deactivate frees this PC's seat for another machine.</small>
+            <small>Everything runs on this computer and stays yours. Turn features on under their own tabs — each one is off until you say otherwise.</small>
           </section>
           <section data-tab="system">
             <h3>ABOUT &amp; UPDATES</h3>

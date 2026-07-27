@@ -520,10 +520,13 @@ function currentLicenseState() {
 
 // A read-only settings view with unlicensed Pro flags forced off. Services
 // that only consult settings get this instead of the raw config, so the
-// license gate holds even if a Pro flag survives in settings.json.
+// license gate holds even if a Pro flag survives in settings.json. The view
+// also carries the EFFECTIVE licence (not the persisted one) so services
+// that check settings.license themselves — defense mode — see the same state
+// every other gate sees. Never persist this view.
 function licensedSettings() {
-  const settings = config.getSettings();
-  return applyLicenseToSettings(settings, currentLicenseState());
+  const state = currentLicenseState();
+  return { ...applyLicenseToSettings(config.getSettings(), state), license: state };
 }
 
 async function syncMobileServer() {
@@ -1287,9 +1290,12 @@ app.whenReady().then(async () => {
   });
 
   // Defense mode: the camera module's fullscreen posture. Same gated config
-  // discipline as the router — the service checks the Pro license itself at
-  // its single entry seam, and every fetch it makes is allowlist-checked.
-  defense = new DefenseService({ config, ai, cameras, emit: sendEverywhere, log });
+  // discipline as the router — the service checks the licence itself at its
+  // single entry seam, so it must see the EFFECTIVE licence (gatedConfig
+  // carries it), not the persisted one; every fetch it makes is
+  // allowlist-checked. Raw config here once left defense dead on builds that
+  // never activated a key, effective licence or not.
+  defense = new DefenseService({ config: gatedConfig, ai, cameras, emit: sendEverywhere, log });
   defense.start();
   router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands, defense });
   scheduleStore = new ScheduleStore(app.getPath('userData'));

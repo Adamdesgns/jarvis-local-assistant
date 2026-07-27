@@ -73,12 +73,28 @@ test('master stays Pro even with no licence object at all', () => {
   assert.equal(effectiveLicenseState('master', undefined).status, 'active');
 });
 
-test('retail passes the stored licence through untouched', () => {
-  // The gate must keep reading real state on a buyer's machine.
-  const stored = { status: 'none', productName: '', customerName: '' };
-  assert.deepEqual(effectiveLicenseState('retail', stored), stored);
-  const active = { status: 'active', customerName: 'A Buyer' };
-  assert.deepEqual(effectiveLicenseState('retail', active), active);
+test('retail is Pro too — JARVIS is free, everything included', () => {
+  // Adam, 2026-07-26: JARVIS is completely free, permanently — the demo of
+  // what he builds for customers. Every edition reports an active licence,
+  // whatever settings.json says, so every gate downstream stays open.
+  assert.equal(effectiveLicenseState('retail', { status: 'none' }).status, 'active');
+  assert.equal(effectiveLicenseState('retail', null).status, 'active');
+  assert.equal(effectiveLicenseState('retail', undefined).status, 'active');
+  assert.equal(effectiveLicenseState('retail', { status: 'expired' }).status, 'active');
+});
+
+test('an unrecognised edition is free as well — there is no locked tier left', () => {
+  assert.equal(effectiveLicenseState('nonsense', { status: 'none' }).status, 'active');
+});
+
+test('the free licence view is frozen and never the stored object', () => {
+  // Same rule as the master view: the effective state is never persisted, so
+  // a copied settings.json can't carry a forged shape, and nothing downstream
+  // may decorate it.
+  const stored = { status: 'none' };
+  const state = effectiveLicenseState('retail', stored);
+  assert.notEqual(state, stored, 'must not hand back the stored object');
+  assert.ok(Object.isFrozen(state), 'the free view must be frozen');
 });
 
 test('the assistant default is JARVIS in every edition', () => {

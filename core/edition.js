@@ -2,22 +2,23 @@
 
 // The edition split. Two artefacts from one tree:
 //
-//   master — Adam's personal copy. No naming prompt, no licence gate, full
-//            Pro. Unsigned, never distributed. The assistant is JARVIS,
-//            forever — that's his name, not the product's.
-//   retail — what a buyer installs. Names the assistant on first run
-//            (core/onboarding.js), and the Pro gate is real.
+//   master — Adam's personal copy. No naming prompt. Unsigned, never
+//            distributed. The assistant is JARVIS, forever — that's his
+//            name, not the product's.
+//   retail — what anyone else installs. Names the assistant on first run
+//            (core/onboarding.js).
 //
-// THE LOAD-BEARING PROPERTY: the edition is decided at BUILD time — a stamp
-// electron-builder bakes into the packaged app — never by a setting. A
-// settings toggle would make the paywall decorative: anyone could flip it.
+// Since 2026-07-26 the product is COMPLETELY FREE — both editions report an
+// active licence (see effectiveLicenseState), so the split now only decides
+// the naming prompt. The edition is still stamped at BUILD time, and the
+// licence-gate machinery underneath is kept intact and dormant, because the
+// business is paid CUSTOM CLIENT BUILDS — a future paid artefact re-arms the
+// gate by changing effectiveLicenseState, not by rebuilding the plumbing.
 // Pure policy in the license-gate.js mold; main.js consults it at the seams.
 //
-// Fail-closed direction: a PACKAGED build with no stamp (or a mangled one) is
-// RETAIL. If the build script breaks, the failure mode is a buyer copy that
-// asks for a licence — annoying, visible, fixable — never a free full-Pro
-// build quietly handed to everyone. Running unpackaged from source is master,
-// because gating a developer who already has the code protects nothing.
+// Unstamped/mangled packaged builds still resolve to retail — that direction
+// now only costs a naming prompt, and keeping it means the paid-era tests and
+// reasoning stay true if the gate ever re-arms.
 
 const EDITIONS = Object.freeze(['master', 'retail']);
 
@@ -29,6 +30,20 @@ const MASTER_LICENSE = Object.freeze({
   customerName: 'Master build',
   activatedAt: '',
   instanceId: 'master-build',
+  lastValidatedAt: ''
+});
+
+// What every other build reports. JARVIS is completely free (Adam,
+// 2026-07-26) — it's the demo of what he builds for customers; the paid
+// product is custom client builds. Same rules as the master view: frozen,
+// never persisted. The gate machinery underneath stays intact so a future
+// paid client build re-arms by changing effectiveLicenseState alone.
+const FREE_LICENSE = Object.freeze({
+  status: 'active',
+  productName: 'Free for everyone',
+  customerName: '',
+  activatedAt: '',
+  instanceId: 'free-build',
   lastValidatedAt: ''
 });
 
@@ -54,13 +69,15 @@ function isRetail(edition) {
   return !isMaster(edition);
 }
 
-// What the licence seams should treat as the current state. Master is always
-// Pro regardless of settings.json; retail passes the stored state through
-// untouched. NEVER persist the master view — settings.json must keep the real
-// state so a copied file can't seed "active" into a retail install.
-function effectiveLicenseState(edition, storedState) {
+// What the licence seams should treat as the current state. Master keeps its
+// own identity; everything else is FREE_LICENSE — active, always, whatever
+// settings.json says, because the product is free. The stored state is
+// deliberately ignored (a stale 'expired'/'disabled' from the paid era must
+// not lock a free user out). NEVER persist either view — settings.json keeps
+// the real state so this stays a one-line revert if a paid build ever returns.
+function effectiveLicenseState(edition, _storedState) {
   if (isMaster(edition)) return MASTER_LICENSE;
-  return storedState;
+  return FREE_LICENSE;
 }
 
 // The name he answers to before anyone chooses one. JARVIS in both editions
@@ -75,6 +92,7 @@ function defaultAssistantName(_edition) {
 module.exports = {
   EDITIONS,
   MASTER_LICENSE,
+  FREE_LICENSE,
   resolveEdition,
   isMaster,
   isRetail,

@@ -253,72 +253,10 @@ async function connectOpenAI() {
   }
 }
 
-// ---------- JARVIS Pro licensing ----------
-// The lock lives in the main process (license-gate.js); everything here is
-// mirror and messaging. Every Lemon Squeezy call is a button the user pressed.
-
-const PRO_SETTING_KEYS = ['mobileEnabled', 'schedulesEnabled', 'autonomyEnabled', 'screenControlEnabled', 'screenDriveEnabled', 'nightShiftEnabled'];
-
-function renderLicenseSection() {
-  const license = state.settings.license || { status: 'none' };
-  const active = license.status === 'active';
-  const color = active ? '#61efb2' : '#ffb21f';
-  $('license-light').style.background = color;
-  $('license-light').style.boxShadow = `0 0 8px ${color}`;
-  $('license-title').textContent = active ? 'JARVIS PRO — LICENSED' : 'FREE VERSION';
-  $('license-detail').textContent = active
-    ? `Licensed${license.customerName ? ` to ${license.customerName}` : ''}${license.activatedAt ? ` since ${license.activatedAt.slice(0, 10)}` : ''}. Everything is unlocked on this PC.`
-    : (license.status === 'disabled' || license.status === 'expired'
-      ? 'This key is no longer valid (refunded or disabled). The core assistant keeps working free, forever.'
-      : 'The core assistant is free forever. Pro unlocks the extras below — one purchase, no subscription.');
-  $('license-validate').disabled = !active;
-  $('license-deactivate').disabled = !active;
-  $('license-buy').disabled = active;
-  document.querySelectorAll('.pro-badge').forEach((badge) => badge.classList.toggle('locked', !active));
-  const anyProFlagOn = PRO_SETTING_KEYS.some((key) => state.settings[key] === true);
-  $('license-migration-banner').hidden = active || !anyProFlagOn;
-}
-
-async function runLicenseAction(buttonId, workingLabel, restLabel, action) {
-  $(buttonId).disabled = true;
-  $(buttonId).textContent = workingLabel;
-  $('license-status-line').textContent = 'Contacting Lemon Squeezy…';
-  try {
-    const result = await action();
-    if (result.settings) state.settings = result.settings;
-    $('license-status-line').textContent = result.message;
-    renderLicenseSection();
-    return result;
-  } catch (error) {
-    $('license-status-line').textContent = friendlyError(error);
-    return { ok: false };
-  } finally {
-    $(buttonId).disabled = false;
-    $(buttonId).textContent = restLabel;
-    renderLicenseSection();
-  }
-}
-
-async function activateLicense() {
-  const key = $('setting-license-key').value.trim();
-  if (!key) return showToast('Paste your JARVIS Pro license key first.');
-  const result = await runLicenseAction('license-activate', 'ACTIVATING…', 'ACTIVATE', () => window.jarvis.license.activate(key));
-  if (result.ok) {
-    $('setting-license-key').value = '';
-    showToast('JARVIS Pro is unlocked on this PC.', 5500);
-  } else if (result.message) {
-    showToast(result.message, 6000);
-  }
-}
-
-async function validateLicense() {
-  await runLicenseAction('license-validate', 'CHECKING…', 'CHECK LICENSE', () => window.jarvis.license.validate());
-}
-
-async function deactivateLicense() {
-  const result = await runLicenseAction('license-deactivate', 'RELEASING…', 'DEACTIVATE THIS PC', () => window.jarvis.license.deactivate());
-  if (result.ok) showToast(result.message, 6000);
-}
+// ---------- Licensing ----------
+// Gone. JARVIS is completely free (2026-07-26) — every build reports an
+// active licence (core/edition.js), the FEATURES tab is static HTML, and the
+// dormant gate machinery lives entirely in the main process.
 
 function selectVoice() {
   const voices = speechSynthesis.getVoices();
@@ -1770,8 +1708,7 @@ function openSettings(tab = 'general') {
   $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
   populateDefenseSettings();
   updateScheduleFormVisibility();
-  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList(); renderLicenseSection();
-  $('setting-license-key').value = '';
+  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
   if (!state.updateUrl) applyUpdateInfo({ current: state.version });
   selectSettingsTab(tab);
   $('settings-modal').showModal();
@@ -2126,17 +2063,6 @@ function bindEvents() {
     showToast(result.message);
   });
   $('anthropic-keys').addEventListener('click', () => window.jarvis.openAnthropicKeys());
-  $('license-activate').addEventListener('click', activateLicense);
-  $('license-validate').addEventListener('click', validateLicense);
-  $('license-deactivate').addEventListener('click', deactivateLicense);
-  $('license-buy').addEventListener('click', async () => {
-    const result = await window.jarvis.license.buy();
-    if (result && result.ok === false) showToast(result.message, 5000);
-  });
-  window.jarvis.license.onProRefused(({ refused }) => {
-    const labels = (refused || []).map((item) => item.label).join(', ');
-    showToast(`JARVIS Pro required for: ${labels}. See Settings → PRO.`, 6000);
-  });
   $('check-update').addEventListener('click', async () => {
     $('check-update').disabled = true;
     $('check-update').textContent = 'CHECKING…';

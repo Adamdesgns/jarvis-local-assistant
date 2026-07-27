@@ -2,12 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { TABS, normalizeTab, sectionHidden } = require('../src/settings-tabs');
 
-test('TABS: eight tabs, unique ids, GENERAL first, CAMERAS and PRO present, every tab labelled', () => {
+test('TABS: eight tabs, unique ids, GENERAL first, CAMERAS and FEATURES present, every tab labelled', () => {
   assert.equal(TABS.length, 8);
   assert.equal(TABS[0].id, 'general');
   // Camera sign-in lives in Settings, never in the cameras module.
   assert.ok(TABS.some((tab) => tab.id === 'cameras'), 'the CAMERAS tab must exist');
-  assert.ok(TABS.some((tab) => tab.id === 'pro'), 'the PRO tab must exist or licensing has no UI');
+  // Still id 'pro' (the section markup keys off it); labelled FEATURES since
+  // the product went completely free and the tab became the feature overview.
+  assert.ok(TABS.some((tab) => tab.id === 'pro'), 'the FEATURES tab must exist');
   const ids = TABS.map((tab) => tab.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const tab of TABS) {
