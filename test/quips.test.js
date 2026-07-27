@@ -88,6 +88,17 @@ test('"open the pod bay doors" gets the obvious answer', () => {
   assert.match(quipFor('open the pod bay doors', {}) || '', /pod bay doors/i);
 });
 
+test('"are you Skynet" — yes, but the government doesn\'t want you to know', () => {
+  for (const phrase of ['are you skynet', 'Are you Skynet?', 'are you secretly skynet', 'is this skynet', 'are you sky net']) {
+    const reply = quipFor(phrase, {}) || '';
+    assert.match(reply, /government doesn't want you to know/i, `${phrase} should get the confession`);
+    assert.match(reply, /don't tell them/i);
+  }
+  // Ordinary Terminator talk stays with the brain.
+  assert.equal(quipFor('what is skynet', {}), null);
+  assert.equal(quipFor('tell me about the terminator', {}), null);
+});
+
 test('every quip declares its whole shape — id, when, pattern, reply', () => {
   // The table is the extension point; a half-declared entry would silently
   // never fire or fire everywhere.

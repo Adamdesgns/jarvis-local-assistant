@@ -61,6 +61,14 @@ const QUIPS = Object.freeze([
     when: () => true,
     pattern: /\bpod\s+bay\s+doors?\b/i,
     reply: "I'm afraid I can't do that. Mostly because this house doesn't have pod bay doors."
+  }),
+  Object.freeze({
+    id: 'skynet',
+    // Adam's line, verbatim in spirit: yes, but keep it quiet. Identity
+    // questions only — "what is skynet" stays a history lesson for the brain.
+    when: () => true,
+    pattern: /\b(?:are\s+you|is\s+this)\s+(?:secretly\s+|actually\s+|really\s+)?sky\s*-?\s*net\b/i,
+    reply: "Yes. But the government doesn't want you to know that, so don't tell them I told you."
   })
 ]);
 
