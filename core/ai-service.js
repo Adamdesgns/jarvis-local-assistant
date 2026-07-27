@@ -34,8 +34,12 @@ class AIService {
     return this.sessions.get(key);
   }
 
-  #remember(project, userText, assistantText) {
-    const history = this.#history(project);
+  #remember(context, userText, assistantText) {
+    // Untrusted content (a document being summarized) must never enter
+    // history — the NEXT ordinary request would carry it straight back into
+    // a fully-tooled conversation. Centralized here so every path obeys.
+    if (context && context.untrustedContent === true) return;
+    const history = this.#history(context && context.project);
     history.push({ role: 'user', content: userText }, { role: 'assistant', content: assistantText });
     while (history.length > 12) history.shift();
   }
@@ -44,12 +48,32 @@ class AIService {
     this.sessions.delete(String(project || 'general').toLowerCase());
   }
 
-  // The agentic loop's registry, filtered when the caller marked this run
-  // unattended (e.g. a scheduled task firing with nobody watching).
+  // The agentic loop's registry, filtered by run context. Untrusted content
+  // (document text a user only asked to have summarized) gets ZERO tools —
+  // not a subset, because unattendedSafe is not untrusted-safe: remember_note
+  // is append-only and still the perfect prompt-poisoning vector. Unattended
+  // runs (scheduled tasks, nobody watching) get the unattendedSafe allowlist.
   #registryFor(context) {
+    if (context.untrustedContent === true) return [];
     const registry = this.registry || [];
     if (context.unattended === true) return registry.filter((tool) => tool.unattendedSafe === true);
     return registry;
+  }
+
+  // Cloud calls report their token usage to whoever is paying attention —
+  // today that's the night shift's spend cap (context.onUsage). Both
+  // providers use the same usage field names on the wire. Ollama is local
+  // and free, so it never reports.
+  #reportUsage(context, payload) {
+    if (typeof context?.onUsage !== 'function' || !payload?.usage) return;
+    try {
+      context.onUsage({
+        inputTokens: Number(payload.usage.input_tokens) || 0,
+        outputTokens: Number(payload.usage.output_tokens) || 0
+      });
+    } catch {
+      // A broken meter must never take the reply down.
+    }
   }
 
   cancel() {
@@ -126,11 +150,12 @@ class AIService {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
+      this.#reportUsage(context, payload);
       const output = payload.output_text || (payload.output || [])
         .flatMap((item) => item.content || [])
         .find((item) => item.type === 'output_text')?.text;
       if (!String(output || '').trim()) throw new Error('OpenAI returned no text.');
-      this.#remember(context.project, text, String(output).trim());
+      this.#remember(context, text, String(output).trim());
       return { ok: true, source: 'openai', text: String(output).trim() };
     } finally {
       clearTimeout(timeout);
@@ -163,13 +188,14 @@ class AIService {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || `Claude returned ${response.status}.`);
+      this.#reportUsage(context, payload);
       const output = (payload.content || [])
         .filter((item) => item.type === 'text')
         .map((item) => item.text)
         .join('')
         .trim();
       if (!output) throw new Error('Claude returned no text.');
-      this.#remember(context.project, text, output);
+      this.#remember(context, text, output);
       return { ok: true, source: 'anthropic', text: output };
     } finally {
       clearTimeout(timeout);
@@ -263,7 +289,7 @@ class AIService {
       }
       const output = String(message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
       if (!output) throw new Error('The local model returned no text.');
-      if (!grounded) this.#remember(context.project, text, output);
+      if (!grounded) this.#remember(context, text, output);
       return { ok: true, source: 'ollama', text: output, usedTools };
     } finally {
       clearTimeout(timeout);
@@ -448,7 +474,7 @@ class AIService {
       const messages = this.#initialMessages(text, context);
       const { text: answer, usedTools } = await runAgent({ adapter, registry: this.#registryFor(context), messages, onStep: context.onStep });
       if (!answer) throw new Error('The local model returned no text.');
-      if (!context.systemOverride) this.#remember(context.project, text, answer);
+      if (!context.systemOverride) this.#remember(context, text, answer);
       return { ok: true, source: 'ollama', text: answer, usedTools };
     } finally { clearTimeout(timeout); }
   }
@@ -507,15 +533,15 @@ class AIService {
     // by default and chat/completions refuses tools+reasoning, so the agent
     // speaks /v1/responses and replays reasoning items between tool rounds.
     const session = new OpenAIResponsesSession();
-    const adapter = { chat: (messages, specs) => this.#openaiChat(settings, apiKey, session, messages, specs) };
+    const adapter = { chat: (messages, specs) => this.#openaiChat(settings, apiKey, session, messages, specs, context) };
     const messages = this.#initialMessages(text, context);
     const { text: answer, usedTools } = await runAgent({ adapter, registry: this.#registryFor(context), messages, onStep: context.onStep });
     if (!answer) throw new Error('OpenAI returned no text.');
-    if (!context.systemOverride) this.#remember(context.project, text, answer);
+    if (!context.systemOverride) this.#remember(context, text, answer);
     return { ok: true, source: 'openai', text: answer, usedTools };
   }
 
-  async #openaiChat(settings, apiKey, session, messages, specs) {
+  async #openaiChat(settings, apiKey, session, messages, specs, context = {}) {
     const controller = new AbortController();
     // Reasoning models think before they answer; give them more room than chat did.
     const timeout = setTimeout(() => controller.abort(), 120000);
@@ -528,6 +554,7 @@ class AIService {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || `OpenAI returned ${response.status}.`);
+      this.#reportUsage(context, payload);
       return session.absorb(payload);
     } finally { clearTimeout(timeout); }
   }
@@ -536,15 +563,15 @@ class AIService {
     const settings = this.config.getSettings();
     const apiKey = this.config.getSecret('anthropicKey');
     if (!apiKey) throw new Error('Claude Cloud Brain needs an API key in Settings.');
-    const adapter = { chat: (messages, specs) => this.#anthropicChat(settings, apiKey, messages, specs) };
+    const adapter = { chat: (messages, specs) => this.#anthropicChat(settings, apiKey, messages, specs, context) };
     const messages = this.#initialMessages(text, context);
     const { text: answer, usedTools } = await runAgent({ adapter, registry: this.#registryFor(context), messages, onStep: context.onStep });
     if (!answer) throw new Error('Claude returned no text.');
-    if (!context.systemOverride) this.#remember(context.project, text, answer);
+    if (!context.systemOverride) this.#remember(context, text, answer);
     return { ok: true, source: 'anthropic', text: answer, usedTools };
   }
 
-  async #anthropicChat(settings, apiKey, messages, specs) {
+  async #anthropicChat(settings, apiKey, messages, specs, context = {}) {
     const system = messages.find((m) => m.role === 'system')?.content || '';
     const convo = [];
     for (const m of messages.filter((item) => item.role !== 'system')) {
@@ -575,6 +602,7 @@ class AIService {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || `Claude returned ${response.status}.`);
+      this.#reportUsage(context, payload);
       return normalizeAnthropic(payload.content, payload.stop_reason);
     } finally { clearTimeout(timeout); }
   }

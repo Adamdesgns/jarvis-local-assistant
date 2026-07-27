@@ -388,7 +388,10 @@ class CommandRouter {
       } else {
         try {
           const document = await this.documents.readDocument(matches[0].path, 14000);
-          const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`, { unattended: stream.unattended === true });
+          // untrustedContent: the document's text rides in this prompt, so the
+          // brain gets zero tools and the exchange stays out of history — a
+          // planted file must never reach remember_note (TRAP audit, 41a).
+          const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`, { unattended: stream.unattended === true, untrustedContent: true });
           result = this.#result(summary.text, summary.source, { document: matches[0], success: summary.ok, detail: document.truncated ? 'The document was long, so JARVIS summarized the first section.' : '' });
         } catch (error) {
           result = this.#result(`I found the document but couldn't read it. ${error.message}`, 'documents', { success: false });
