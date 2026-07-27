@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Added — JARVIS JR.: the kids edition, its own download
+- A third build: **`npm run dist:kids` produces the JARVIS Jr installer** —
+  its own app id and its own settings folder, so it installs beside grown-up
+  JARVIS without either seeing the other's data.
+- **Grown-ups first:** on first run the parent sets a 4–8 digit PIN before
+  the kid ever names the assistant. The PIN (stored as a salted hash, never
+  the PIN) locks the new **Settings → PARENTS** tab, plus every setting that
+  changes what the assistant can reach — folders, screen help, cloud brains,
+  API keys. Kids keep the fun without it: naming him, voices, skins, colors,
+  layout. Five wrong tries pauses the PIN pad for a minute.
+- **Screen time, kindly:** an optional daily minutes limit (only minutes the
+  kid actually talks to him count) and bedtime quiet hours — he says
+  goodnight instead of just going dark. A kid reaching out about feeling sad
+  or scared is **always answered**, at any hour, with a gentle push toward a
+  trusted grown-up and the 988 line.
+- **Less capable on purpose:** cameras, defense mode, night shift, autonomy,
+  the phone companion, terminal, browser, and the Claude bridge simply do
+  not run in JARVIS Jr. — clamped in code, not hidden in a menu. Screen
+  reading/driving stays available so he can help a stuck kid at the
+  computer, but only a parent can switch it on.
+- **A content filter that knows games:** defeating the Ender Dragon is
+  homework, real-world weapons are refused, adult topics get a gentle
+  grown-up redirect, "free Robux" is called out as the account-stealing
+  trick it is, and questions about strangers online get real safety
+  coaching. Everything asked — and everything blocked — shows in the
+  Activity Timeline for parents.
+- **A gaming genius brain:** the kids build swaps the whole system prompt
+  for a warm, patient coach who plans Minecraft and Roblox builds like an
+  architect — materials list, numbered steps with sizes, a pro tip — knows
+  redstone, obbies, and Roblox Studio basics, and explains homework instead
+  of just answering it. Local brain by default: conversations never leave
+  the computer unless a parent turns the cloud on.
+- The believers' hotline (Santa, the Easter Bunny, the tooth fairy) keeps
+  answering in JARVIS Jr. — that one was always for the kids.
+
 ### Added — THE BROWSER (stage 1): surf inside JARVIS
 - A new **Browser** module (Modules → Browser): tabs (up to five), address bar,
   back/forward/reload, dressed in your skin with the active-tab underline in

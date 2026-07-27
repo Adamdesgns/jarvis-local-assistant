@@ -349,6 +349,40 @@
             <small>When both Claude and OpenAI keys are saved, the Cloud Provider choice below decides which one answers.</small>
             <label>CLOUD PROVIDER<select id="setting-cloud-provider"><option value="anthropic">CLAUDE</option><option value="openai">OPENAI</option></select></label>
           </section>
+          <!-- JARVIS Jr. only: the PARENTS tab exists solely in the kids
+               build (settings-tabs.js tabsFor). Everything here talks to the
+               parental:* IPC, never settings:save — the PIN and the rules
+               live behind ConfigStore.setParentalState. -->
+          <section class="wide-setting" data-tab="parents">
+            <h3>PARENT ZONE</h3>
+            <div id="parental-locked">
+              <p class="camera-hint">Grown-ups only. The PIN unlocks screen-time rules here, plus the grown-up settings everywhere else (folders, screen help, cloud brains). Kids can still change names, voices, and colors without it.</p>
+              <label>PARENT PIN<input id="parental-pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN" autocomplete="off"></label>
+              <button type="button" id="parental-unlock" class="primary-action">UNLOCK</button>
+              <p id="parental-unlock-verdict" class="naming-verdict"></p>
+            </div>
+            <div id="parental-unlocked" hidden>
+              <p class="camera-hint" id="parental-usage-line">—</p>
+              <label>DAILY SCREEN-TIME LIMIT<select id="parental-limit">
+                <option value="0">NO LIMIT</option>
+                <option value="30">30 MINUTES</option>
+                <option value="60">1 HOUR</option>
+                <option value="90">1.5 HOURS</option>
+                <option value="120">2 HOURS</option>
+                <option value="180">3 HOURS</option>
+              </select></label>
+              <label class="toggle-row"><span><b>QUIET HOURS (BEDTIME)</b><small>JARVIS Jr. sleeps between these hours and says so kindly</small></span><input id="parental-quiet" type="checkbox"><i></i></label>
+              <label>QUIET FROM<select id="parental-quiet-start"></select></label>
+              <label>QUIET UNTIL<select id="parental-quiet-end"></select></label>
+              <label class="toggle-row"><span><b>ALLOW CLOUD BRAIN</b><small>Off: conversations never leave this computer. On: your API key and the BRAINS tab settings apply</small></span><input id="parental-cloud" type="checkbox"><i></i></label>
+              <button type="button" id="parental-save" class="primary-action">SAVE PARENT SETTINGS</button>
+              <button type="button" id="parental-relock" class="outline-action">LOCK NOW</button>
+              <label>NEW PIN (4–8 DIGITS)<input id="parental-new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+              <label>CURRENT PIN<input id="parental-current-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+              <button type="button" id="parental-change-pin" class="outline-action">CHANGE PIN</button>
+              <small>Everything your kid asks shows up in the Activity Timeline module — blocked questions are marked. Screen help lives in ABILITIES; folders JARVIS Jr. may see live in GENERAL. Both need this unlock to change.</small>
+            </div>
+          </section>
           <section class="wide-setting" data-tab="cameras">
             <h3>CONNECT A CAMERA</h3>
             <label class="toggle-row"><span><b>AI CAMERA ALERTS</b><small>Describe motion and doorbell pictures with the local vision model</small></span><input id="setting-camera-ai" type="checkbox"><i></i></label>
@@ -589,6 +623,25 @@
         <button type="button" id="diag-refresh" class="outline-action">RUN CHECKS AGAIN</button>
       </div>
     </dialog>
+
+    <!-- JARVIS Jr. first run, screen ONE: the parent sets the PIN before the
+         kid ever names the assistant (bootstrap.needsParentPin). Deliberately
+         no skip button — the PIN is the point of the kids build. -->
+    <div id="parent-pin-screen" class="naming-screen" hidden>
+      <div class="naming-card">
+        <section>
+          <span class="naming-kicker">GROWN-UPS FIRST</span>
+          <h2>Set the parent PIN</h2>
+          <p>JARVIS Jr. is built for kids: grown-up features stay off, conversations stay on this computer, and this PIN protects screen time, folders, and settings. Pick 4–8 digits your kid won't guess — and if it's ever forgotten, reinstalling starts fresh.</p>
+          <input id="parent-pin-1" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN" autocomplete="off" />
+          <input id="parent-pin-2" type="password" inputmode="numeric" maxlength="8" placeholder="Repeat PIN" autocomplete="off" />
+          <p id="parent-pin-verdict" class="naming-verdict"></p>
+          <div class="naming-actions">
+            <button type="button" id="parent-pin-continue" class="naming-primary">SET PIN &amp; HAND OVER</button>
+          </div>
+        </section>
+      </div>
+    </div>
 
     <!-- First-run naming (retail builds only; see core/onboarding.js).
          Two steps: pick the name, then say it back so speech recognition gets

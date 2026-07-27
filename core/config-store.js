@@ -15,6 +15,7 @@ function mergeSettings(defaults, saved) {
   result.autonomyRules = { ...clone(defaults.autonomyRules || {}), ...((saved || {}).autonomyRules || {}) };
   result.license = { ...clone(defaults.license || {}), ...((saved || {}).license || {}) };
   result.defense = { ...clone(defaults.defense || {}), ...((saved || {}).defense || {}) };
+  result.parental = { ...clone(defaults.parental || {}), ...((saved || {}).parental || {}) };
   if (Number(saved?.settingsVersion || 0) < 5) {
     result.hiddenModules = [...new Set([...(result.hiddenModules || []), 'document-viewer'])];
   }
@@ -39,6 +40,9 @@ function mergeSettings(defaults, saved) {
   // v10 adds first-run naming (retail builds). Any EXISTING install is
   // stamped as already-named — the naming screen is for a buyer's first
   // launch, not for a machine that has been running JARVIS for weeks.
+  // v11 adds JARVIS Jr. parental controls. No migration step: 'parental'
+  // arrives from the defaults spread and the nested merge above, and an
+  // adult install simply carries the inert defaults.
   if (Number(saved?.settingsVersion || 0) > 0 && Number(saved?.settingsVersion || 0) < 10 && !result.assistantNamedAt) {
     result.assistantNamedAt = new Date().toISOString();
   }
@@ -85,7 +89,16 @@ class ConfigStore {
   }
 
   publicSettings() {
-    return clone(this.data.settings);
+    const view = clone(this.data.settings);
+    // The renderer never needs the PIN hash material — a 4-8 digit PIN is
+    // cheap to grind offline, so the hash stays main-process-only and the
+    // renderer gets a pinSet boolean instead.
+    if (view.parental) {
+      view.parental = { ...view.parental, pinSet: Boolean(view.parental.pinHash && view.parental.pinSalt) };
+      delete view.parental.pinHash;
+      delete view.parental.pinSalt;
+    }
+    return view;
   }
 
   getSettings() {
@@ -130,6 +143,9 @@ class ConfigStore {
       // 'license' is intentionally NOT in this list: settings:save is
       // renderer-reachable, and license state must only ever be written by
       // the main-process LicenseService through setLicenseState below.
+      // 'parental' is NOT in this list for the same reason — the parent PIN
+      // hash and screen-time rules are only ever written by the main
+      // process through setParentalState, behind a verified PIN.
     ];
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) {
@@ -152,6 +168,30 @@ class ConfigStore {
     }
     if (!next.status) next.status = 'none';
     this.data.settings.license = next;
+    this.#persist();
+    return this.publicSettings();
+  }
+
+  // The only write path for JARVIS Jr. parental state (see the allowlist
+  // note in updateSettings). Field-typed like setLicenseState so a wayward
+  // payload can't smuggle arbitrary settings — or a truthy string where a
+  // boolean gate is expected — through this side door.
+  setParentalState(state) {
+    const current = this.data.settings.parental || {};
+    const next = {
+      pinHash: String(state?.pinHash ?? current.pinHash ?? ''),
+      pinSalt: String(state?.pinSalt ?? current.pinSalt ?? ''),
+      pinSetAt: String(state?.pinSetAt ?? current.pinSetAt ?? ''),
+      dailyLimitMinutes: Number.isFinite(Number(state?.dailyLimitMinutes ?? current.dailyLimitMinutes))
+        ? Number(state?.dailyLimitMinutes ?? current.dailyLimitMinutes) : 0,
+      quietEnabled: (state?.quietEnabled ?? current.quietEnabled) === true,
+      quietStart: Number.isFinite(Number(state?.quietStart ?? current.quietStart))
+        ? Number(state?.quietStart ?? current.quietStart) : 21,
+      quietEnd: Number.isFinite(Number(state?.quietEnd ?? current.quietEnd))
+        ? Number(state?.quietEnd ?? current.quietEnd) : 7,
+      cloudAllowed: (state?.cloudAllowed ?? current.cloudAllowed) === true
+    };
+    this.data.settings.parental = next;
     this.#persist();
     return this.publicSettings();
   }

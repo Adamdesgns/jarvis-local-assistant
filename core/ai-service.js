@@ -21,9 +21,13 @@ function accumulateStreamChunk(state, chunk) {
 }
 
 class AIService {
-  constructor(config, registry = null) {
+  constructor(config, registry = null, options = {}) {
     this.config = config;
     this.registry = registry;
+    // The kids edition swaps the whole system prompt (core/kids-mode.js
+    // buildKidsPrompt) — a full replacement, not an addition, so no
+    // persisted personality text can restyle the kid frame.
+    this.promptOverride = typeof options.promptOverride === 'function' ? options.promptOverride : null;
     // Rolling conversation history per project so follow-up questions work.
     this.sessions = new Map();
   }
@@ -59,6 +63,7 @@ class AIService {
   }
 
   prompt(settings, context = {}) {
+    if (this.promptOverride) return this.promptOverride(settings, context);
     const memories = (context.memories || []).map((item) => `- ${item.text}`).join('\n') || '- None';
     const tasks = (context.tasks || []).map((item) => `- ${item.title} [${item.project}]`).join('\n') || '- None';
     return [

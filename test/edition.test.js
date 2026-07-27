@@ -6,21 +6,24 @@ const {
   resolveEdition,
   isMaster,
   isRetail,
+  isKids,
   effectiveLicenseState,
   defaultAssistantName,
 } = require('../core/edition');
 
-// The app ships as two artefacts from one tree:
+// The app ships as three artefacts from one tree:
 //   master — Adam's personal copy. No naming prompt, no licence gate, full Pro.
 //            Unsigned, never distributed.
 //   retail — what a buyer installs. Names the assistant on first run, and the
 //            Pro gate is real.
+//   kids   — JARVIS Jr., a separate download with the kids clamps and the
+//            parent PIN (core/kids-mode.js, core/parental-controls.js).
 //
 // THE LOAD-BEARING PROPERTY: this is decided at BUILD time, never in settings.
 // A settings toggle would make the paywall decorative — anyone could flip it.
 
-test('EDITIONS: exactly two, and no third slips in', () => {
-  assert.deepEqual([...EDITIONS], ['master', 'retail']);
+test('EDITIONS: exactly three, and no fourth slips in', () => {
+  assert.deepEqual([...EDITIONS], ['master', 'retail', 'kids']);
   assert.throws(() => { EDITIONS.push('trial'); }, 'EDITIONS must be frozen');
 });
 
@@ -51,6 +54,26 @@ test('an unrecognised stamp is retail, not an error', () => {
   assert.equal(resolveEdition({ packaged: true, stamped: 'pro' }), 'retail');
   assert.equal(resolveEdition({}), 'retail');
   assert.equal(resolveEdition(), 'retail');
+});
+
+test('a packaged build is kids only when explicitly stamped so', () => {
+  assert.equal(resolveEdition({ packaged: true, stamped: 'kids' }), 'kids');
+  assert.equal(resolveEdition({ packaged: true, stamped: 'KIDS' }), 'kids');
+  // A kids installer that lost its stamp resolves to retail: it looks like
+  // plain JARVIS, it never becomes a kids build missing its parent gates.
+  assert.equal(resolveEdition({ packaged: true, stamped: 'kid' }), 'retail');
+});
+
+test('isKids: only the kids edition, and kids still counts as retail', () => {
+  assert.equal(isKids('kids'), true);
+  assert.equal(isKids('retail'), false);
+  assert.equal(isKids('master'), false);
+  assert.equal(isKids('nonsense'), false);
+  // Retail semantics (first-run naming, free licence) apply to kids too —
+  // the kids CLAMPS are a separate narrowing layer keyed off isKids.
+  assert.equal(isRetail('kids'), true);
+  assert.equal(isMaster('kids'), false);
+  assert.equal(effectiveLicenseState('kids', { status: 'none' }).status, 'active');
 });
 
 test('isMaster / isRetail are exact opposites', () => {

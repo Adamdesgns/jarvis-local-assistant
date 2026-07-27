@@ -107,6 +107,16 @@ contextBridge.exposeInMainWorld('jarvis', {
     list: (directory) => ipcRenderer.invoke('files:list', directory),
     open: (target) => ipcRenderer.invoke('path:open', target)
   },
+  // JARVIS Jr. parental controls. Probing status is safe in every edition;
+  // the mutating calls only mean anything in the kids build.
+  parental: {
+    status: () => ipcRenderer.invoke('parental:status'),
+    setup: (pin, currentPin) => ipcRenderer.invoke('parental:setup', { pin, currentPin }),
+    unlock: (pin) => ipcRenderer.invoke('parental:unlock', { pin }),
+    lock: () => ipcRenderer.invoke('parental:lock'),
+    save: (patch) => ipcRenderer.invoke('parental:save', patch),
+    onRefused: (callback) => on('parental:refused', callback)
+  },
   license: {
     status: () => ipcRenderer.invoke('license:status'),
     activate: (key) => ipcRenderer.invoke('license:activate', key),

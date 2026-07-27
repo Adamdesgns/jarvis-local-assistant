@@ -1,21 +1,40 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { TABS, normalizeTab, sectionHidden } = require('../src/settings-tabs');
+const { TABS, tabsFor, normalizeTab, sectionHidden } = require('../src/settings-tabs');
 
-test('TABS: eight tabs, unique ids, GENERAL first, CAMERAS and FEATURES present, every tab labelled', () => {
-  assert.equal(TABS.length, 8);
+test('TABS: nine tabs, unique ids, GENERAL first, CAMERAS, FEATURES and PARENTS present, every tab labelled', () => {
+  assert.equal(TABS.length, 9);
   assert.equal(TABS[0].id, 'general');
   // Camera sign-in lives in Settings, never in the cameras module.
   assert.ok(TABS.some((tab) => tab.id === 'cameras'), 'the CAMERAS tab must exist');
   // Still id 'pro' (the section markup keys off it); labelled FEATURES since
   // the product went completely free and the tab became the feature overview.
   assert.ok(TABS.some((tab) => tab.id === 'pro'), 'the FEATURES tab must exist');
+  // JARVIS Jr.'s tab lives in the full list so normalizeTab recognises it —
+  // tabsFor decides which strip actually shows it.
+  assert.ok(TABS.some((tab) => tab.id === 'parents'), 'the PARENTS tab must exist');
   const ids = TABS.map((tab) => tab.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const tab of TABS) {
     assert.ok(tab.id && typeof tab.id === 'string');
     assert.ok(tab.label && typeof tab.label === 'string');
   }
+});
+
+test('tabsFor: adults never see PARENTS; kids never see the clamped subsystems', () => {
+  const adult = tabsFor({ kids: false }).map((tab) => tab.id);
+  assert.deepEqual(adult, ['general', 'brains', 'cameras', 'automation', 'abilities', 'phone', 'pro', 'system']);
+  const kids = tabsFor({ kids: true }).map((tab) => tab.id);
+  assert.deepEqual(kids, ['general', 'brains', 'parents', 'abilities', 'system']);
+  // No context means the adult strip — same shape openSettings always had.
+  assert.deepEqual(tabsFor().map((tab) => tab.id), adult);
+});
+
+test('a PARENTS-tagged section never leaks onto the adult GENERAL tab', () => {
+  // normalizeTab knows 'parents' even though adults can't click it, so the
+  // section stays hidden instead of falling through to the first tab.
+  assert.equal(sectionHidden('parents', 'general'), true);
+  assert.equal(sectionHidden('parents', 'parents'), false);
 });
 
 test('normalizeTab: known ids pass through, anything else lands on general', () => {

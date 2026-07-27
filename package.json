@@ -24,7 +24,8 @@
     "test": "node --test",
     "capture": "node scripts/capture-preview.js",
     "dist": "node scripts/stamp-edition.mjs retail && electron-builder --win nsis",
-    "dist:master": "node scripts/stamp-edition.mjs master && electron-builder --win nsis"
+    "dist:master": "node scripts/stamp-edition.mjs master && electron-builder --win nsis",
+    "dist:kids": "node scripts/stamp-edition.mjs kids && electron-builder --win nsis --config scripts/kids-builder-config.js"
   },
   "devDependencies": {
     "electron": "^43.1.0",

@@ -51,7 +51,10 @@ const state = {
   searchTemporary: false,
   searchActive: false,
   saveTimer: null,
-  schedules: []
+  schedules: [],
+  // JARVIS Jr. (kids build): flag + the latest parental:status payload.
+  kids: false,
+  parental: null
 };
 
 function showToast(message, duration = 3200) {
@@ -1625,12 +1628,16 @@ function selectSettingsTab(id) {
   document.querySelectorAll('#settings-modal .settings-grid > section').forEach((section) => {
     section.hidden = tabs ? tabs.sectionHidden(section.dataset.tab, active) : false;
   });
+  if (active === 'parents') refreshParentalPanel();
 }
 
 function initSettingsTabs() {
   const strip = $('settings-tabs');
   if (!strip || !window.SettingsTabs) return;
-  strip.replaceChildren(...window.SettingsTabs.TABS.map((tab) => {
+  // tabsFor: adult builds see everything but PARENTS; JARVIS Jr. drops the
+  // clamped subsystems' tabs and gains PARENTS. Re-run after bootstrap once
+  // state.kids is known — replaceChildren makes it idempotent.
+  strip.replaceChildren(...window.SettingsTabs.tabsFor({ kids: state.kids }).map((tab) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.tab = tab.id;
@@ -1995,6 +2002,7 @@ function bindEvents() {
   });
 
   initSettingsTabs();
+  bindParentalControls();
   $('settings-button').addEventListener('click', () => openSettings());
   // Cameras module: ＋ ADD sends you to the one place linking happens.
   $('camera-add-toggle')?.addEventListener('click', () => openSettings('cameras'));
@@ -2226,6 +2234,129 @@ function bindEvents() {
   window.jarvis.onFileComplete((payload) => { $('scan-counter').textContent = `${payload.scannedFolders} FOLDERS · ${payload.files.length} MATCHES`; renderFileRows(payload.files, true); });
 }
 
+// ── JARVIS Jr. parental controls ────────────────────────────────────────
+// The PARENTS tab talks only to window.jarvis.parental (its own IPC, never
+// settings:save). The panel has two faces: locked (PIN pad) and unlocked
+// (screen-time rules). Lock state lives in the main process; this only
+// mirrors the latest parental:status payload.
+
+function renderParentalPanel(status) {
+  state.parental = status || state.parental;
+  const parental = state.parental || {};
+  const locked = $('parental-locked');
+  const unlocked = $('parental-unlocked');
+  if (!locked || !unlocked) return;
+  locked.hidden = parental.unlocked === true;
+  unlocked.hidden = parental.unlocked !== true;
+  if (parental.unlocked !== true) return;
+  const used = Number(parental.usedMinutes || 0);
+  const limit = Number(parental.dailyLimitMinutes || 0);
+  $('parental-usage-line').textContent = limit > 0
+    ? `Today: ${used} of ${limit} minutes used. The unlock relocks itself after 5 quiet minutes.`
+    : `Today: ${used} minutes used (no limit set). The unlock relocks itself after 5 quiet minutes.`;
+  const limitSelect = $('parental-limit');
+  const known = [...limitSelect.options].some((option) => option.value === String(limit));
+  limitSelect.value = known ? String(limit) : '0';
+  $('parental-quiet').checked = parental.quietEnabled === true;
+  fillHourSelect($('parental-quiet-start'));
+  fillHourSelect($('parental-quiet-end'));
+  $('parental-quiet-start').value = String(parental.quietStart ?? 21);
+  $('parental-quiet-end').value = String(parental.quietEnd ?? 7);
+  $('parental-cloud').checked = parental.cloudAllowed === true;
+}
+
+async function refreshParentalPanel() {
+  if (!state.kids || !window.jarvis.parental) return;
+  try { renderParentalPanel(await window.jarvis.parental.status()); } catch {}
+}
+
+function bindParentalControls() {
+  if (!$('parental-unlock')) return;
+  const verdict = $('parental-unlock-verdict');
+  const attempt = async () => {
+    const result = await window.jarvis.parental.unlock($('parental-pin-input').value);
+    $('parental-pin-input').value = '';
+    if (result.ok) {
+      verdict.textContent = '';
+      renderParentalPanel(result);
+    } else {
+      verdict.className = 'naming-verdict bad';
+      verdict.textContent = result.message || 'That PIN is not right.';
+    }
+  };
+  $('parental-unlock').addEventListener('click', attempt);
+  $('parental-pin-input').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); attempt(); }
+  });
+  $('parental-save').addEventListener('click', async () => {
+    const result = await window.jarvis.parental.save({
+      dailyLimitMinutes: Number($('parental-limit').value),
+      quietEnabled: $('parental-quiet').checked,
+      quietStart: Number($('parental-quiet-start').value),
+      quietEnd: Number($('parental-quiet-end').value),
+      cloudAllowed: $('parental-cloud').checked
+    });
+    if (result.ok) { renderParentalPanel(result); showToast('Parent settings saved.'); }
+    else { showToast(result.message || 'Could not save — unlock first.'); refreshParentalPanel(); }
+  });
+  $('parental-relock').addEventListener('click', async () => {
+    renderParentalPanel(await window.jarvis.parental.lock());
+    showToast('Parent zone locked.');
+  });
+  $('parental-change-pin').addEventListener('click', async () => {
+    // Changing the PIN always demands the CURRENT one — an unlocked seat a
+    // parent walked away from must not be enough (see parental:setup).
+    const result = await window.jarvis.parental.setup($('parental-new-pin').value, $('parental-current-pin').value);
+    $('parental-new-pin').value = '';
+    $('parental-current-pin').value = '';
+    showToast(result.ok ? 'Parent PIN changed.' : (result.message || 'PIN change failed.'));
+    if (result.ok) renderParentalPanel(result);
+  });
+  window.jarvis.parental.onRefused?.(() => {
+    showToast('That setting needs the parent PIN — open Settings → PARENTS to unlock.');
+  });
+}
+
+// JARVIS Jr. first run, screen one: the parent sets the PIN. No skip — the
+// PIN is the point of the kids build; every path forward sets one.
+function runFirstRunParentPin() {
+  return new Promise((resolve) => {
+    const screen = $('parent-pin-screen');
+    const verdict = $('parent-pin-verdict');
+    const submit = async () => {
+      const first = $('parent-pin-1').value.trim();
+      const second = $('parent-pin-2').value.trim();
+      verdict.className = 'naming-verdict bad';
+      if (!/^\d{4,8}$/.test(first)) { verdict.textContent = 'The PIN needs to be 4 to 8 digits.'; return; }
+      if (first !== second) { verdict.textContent = 'Those two entries do not match — try again.'; return; }
+      const result = await window.jarvis.parental.setup(first);
+      if (!result.ok) { verdict.textContent = result.message || 'Could not set the PIN — try again.'; return; }
+      renderParentalPanel(result);
+      screen.hidden = true;
+      resolve();
+    };
+    $('parent-pin-continue').addEventListener('click', submit);
+    $('parent-pin-2').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { event.preventDefault(); submit(); }
+    });
+    screen.hidden = false;
+    $('parent-pin-1').focus();
+  });
+}
+
+// Modules that do not exist in JARVIS Jr. — their drawer buttons disappear
+// so a kid can't re-show what the build clamped off. Mirrors
+// KIDS_FORCED_HIDDEN_MODULES in core/kids-mode.js.
+const KIDS_HIDDEN_DRAWER_MODULES = ['cameras', 'night-shift', 'terminal', 'browser'];
+
+function applyKidsUi() {
+  if (!state.kids) return;
+  initSettingsTabs();
+  document.querySelectorAll('[data-toggle-module]').forEach((button) => {
+    if (KIDS_HIDDEN_DRAWER_MODULES.includes(button.dataset.toggleModule)) button.hidden = true;
+  });
+}
+
 // ── first-run naming ────────────────────────────────────────────────────
 // Retail builds only, first launch only; main.js decides (bootstrap.needsNaming)
 // and the stamp makes every exit final. Two steps: pick the name, then say it
@@ -2348,9 +2479,15 @@ async function initialize() {
   try {
     const bootstrap = await window.jarvis.bootstrap();
     state.settings = bootstrap.settings;
+    state.kids = bootstrap.kids === true;
+    state.parental = bootstrap.parental || null;
+    // JARVIS Jr. first run: the PARENT sets the PIN before the kid ever
+    // names the assistant. Adult builds never see this screen.
+    if (bootstrap.needsParentPin) await runFirstRunParentPin();
     // Retail first run: he needs a name before anything else happens. Await
     // it so the greeting below uses whatever the buyer just chose.
     if (bootstrap.needsNaming) await runFirstRunNaming();
+    applyKidsUi();
     // Stamp every baked-in "Hey <name>" string with whatever he's called.
     applyWakeCopy();
     window.jarvisHologram?.applySettings({ skin: state.settings.orbSkin, color: state.settings.orbColor });

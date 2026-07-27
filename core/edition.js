@@ -1,12 +1,19 @@
 'use strict';
 
-// The edition split. Two artefacts from one tree:
+// The edition split. Three artefacts from one tree:
 //
 //   master — Adam's personal copy. No naming prompt. Unsigned, never
 //            distributed. The assistant is JARVIS, forever — that's his
 //            name, not the product's.
 //   retail — what anyone else installs. Names the assistant on first run
 //            (core/onboarding.js).
+//   kids   — JARVIS Jr., the children's build. A separate download with its
+//            own installer and its own settings folder. Everything the kids
+//            edition takes AWAY (cameras, defense mode, night shift,
+//            autonomy, phone companion, Claude bridge) and everything it
+//            ADDS (parent PIN, screen-time limits, the content filter, the
+//            gaming-coach brain) is policy in core/kids-mode.js and
+//            core/parental-controls.js — this module only names the split.
 //
 // Since 2026-07-26 the product is COMPLETELY FREE — both editions report an
 // active licence (see effectiveLicenseState), so the split now only decides
@@ -20,7 +27,7 @@
 // now only costs a naming prompt, and keeping it means the paid-era tests and
 // reasoning stay true if the gate ever re-arms.
 
-const EDITIONS = Object.freeze(['master', 'retail']);
+const EDITIONS = Object.freeze(['master', 'retail', 'kids']);
 
 // The one licence state master ever reports. Frozen: nothing downstream may
 // decorate it, because it never persists — see effectiveLicenseState.
@@ -56,7 +63,10 @@ const FREE_LICENSE = Object.freeze({
 function resolveEdition(context) {
   if (context?.packaged === false) return 'master';
   if (context?.packaged !== true) return 'retail';
-  return String(context.stamped || '').trim().toLowerCase() === 'master' ? 'master' : 'retail';
+  const stamped = String(context.stamped || '').trim().toLowerCase();
+  if (stamped === 'master') return 'master';
+  if (stamped === 'kids') return 'kids';
+  return 'retail';
 }
 
 function isMaster(edition) {
@@ -64,9 +74,22 @@ function isMaster(edition) {
 }
 
 // Anything that isn't explicitly master is retail — same direction as
-// resolveEdition, so an unrecognised value can never widen access.
+// resolveEdition, so an unrecognised value can never widen access. The kids
+// edition counts as retail here on purpose: retail semantics (first-run
+// naming, free licence) all apply to kids too; the kids CLAMPS are a
+// separate, narrowing-only layer keyed off isKids.
 function isRetail(edition) {
   return !isMaster(edition);
+}
+
+// The kids build. Only ever used to NARROW what the app does (kids-mode.js
+// clamps, parental-controls.js gates) — an unrecognised edition reading
+// false here therefore fails open to the ADULT feature set, which is the
+// safe direction for adults and unreachable for kids: a kids installer that
+// lost its stamp resolves to retail and simply looks like plain JARVIS,
+// it never becomes a kids build with the parent gates missing.
+function isKids(edition) {
+  return edition === 'kids';
 }
 
 // What the licence seams should treat as the current state. Master keeps its
@@ -96,6 +119,7 @@ module.exports = {
   resolveEdition,
   isMaster,
   isRetail,
+  isKids,
   effectiveLicenseState,
   defaultAssistantName,
 };

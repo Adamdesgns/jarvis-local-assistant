@@ -8,7 +8,7 @@ function windowsHomeFolder(name) {
 }
 
 const DEFAULT_SETTINGS = {
-  settingsVersion: 10,
+  settingsVersion: 11,
   profileName: 'User',
   assistantName: 'JARVIS',
   // When the assistant was named on first run ('' = never asked). The stamp,
@@ -89,6 +89,21 @@ const DEFAULT_SETTINGS = {
     activatedAt: '',
     instanceId: '',
     lastValidatedAt: ''
+  },
+  // JARVIS Jr. parental controls (kids edition only; inert elsewhere).
+  // Written ONLY by ConfigStore.setParentalState from the main process —
+  // deliberately NOT in the settings:save allowlist, same discipline as
+  // 'license', so the renderer can never overwrite the parent PIN hash.
+  // Shape and rules live in core/parental-controls.js.
+  parental: {
+    pinHash: '',
+    pinSalt: '',
+    pinSetAt: '',
+    dailyLimitMinutes: 0,
+    quietEnabled: false,
+    quietStart: 21,
+    quietEnd: 7,
+    cloudAllowed: false
   },
   // How JARVIS speaks. 'kokoro' is the real voice (Kokoro-82M on the GPU);
   // 'system' pins him to the Windows SAPI voices, which is also where he falls

@@ -8,7 +8,15 @@ const {
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
 const { PRO_FEATURES, isPro, gateSettingsPatch, applyLicenseToSettings, featureAllowed } = require('./core/license-gate');
-const { resolveEdition, effectiveLicenseState, defaultAssistantName } = require('./core/edition');
+const { resolveEdition, effectiveLicenseState, defaultAssistantName, isKids } = require('./core/edition');
+const {
+  KIDS_BLOCKED_FLAGS, applyKidsSettings, gateKidsSettingsPatch, gateKidsCommand,
+  buildKidsPrompt, isKidsBlockedChannel, KIDS_CHANNEL_REFUSAL
+} = require('./core/kids-mode');
+const {
+  pinIsSet, makePinRecord, verifyPin, freshLock, isUnlocked, attemptUnlock, relock,
+  sanitizeParentalPatch, publicParentalView, playtimeGate, UsageStore
+} = require('./core/parental-controls');
 const { needsNaming, namingPatch, nameHeardIn, normalizeAssistantName } = require('./core/onboarding');
 const { LicenseService } = require('./core/license-service');
 const { ActivityLog } = require('./core/activity-log');
@@ -61,6 +69,31 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 // by default to save battery, which measured 3x slower here than the discrete
 // one (RTF 0.50 on Intel vs 0.15 on the RTX). Also set before app ready.
 app.commandLine.appendSwitch('force_high_performance_gpu');
+
+// The edition — resolved once at startup from the build-time stamp, never
+// from settings. The stamp is a plain file electron-builder drops next to the
+// app code (see extraResources in package.json); reading it from resourcesPath
+// keeps it out of the asar and out of settings.json. A missing or unreadable
+// stamp on a packaged build means RETAIL — fail closed, per core/edition.js.
+// Resolved HERE, before the crash log, because the kids build must point
+// userData at its own folder before anything touches disk. The env override
+// is for developing the kids build from source ('npm start' resolves to
+// master otherwise) — it can only ever NARROW the app into the kids shape,
+// so it is not a gate anyone profits from flipping.
+const EDITION = process.env.JARVIS_EDITION === 'kids' ? 'kids' : resolveEdition({
+  packaged: app.isPackaged,
+  stamped: (() => {
+    try { return fs.readFileSync(path.join(process.resourcesPath, 'edition'), 'utf8'); }
+    catch { return ''; }
+  })()
+});
+const KIDS = isKids(EDITION);
+
+// JARVIS Jr. keeps its own settings/notes/tasks folder, so it installs
+// beside grown-up JARVIS on the same PC without either seeing the other's
+// data — and so the kids settings.json can be deleted to reset a forgotten
+// parent PIN without touching anyone else's world.
+if (KIDS) app.setPath('userData', path.join(app.getPath('appData'), 'jarvis-jr'));
 
 // Last-resort safety net: an error nothing else caught is written to
 // crash.log beside the rest of the user data instead of silently killing the
@@ -498,19 +531,6 @@ function loadMobileDevices() {
 }
 function saveMobileDevices() { config.setSecret('mobileDevices', JSON.stringify(mobileAuth.toJSON())); }
 
-// The edition — resolved once at startup from the build-time stamp, never
-// from settings. The stamp is a plain file electron-builder drops next to the
-// app code (see extraResources in package.json); reading it from resourcesPath
-// keeps it out of the asar and out of settings.json. A missing or unreadable
-// stamp on a packaged build means RETAIL — fail closed, per core/edition.js.
-const EDITION = resolveEdition({
-  packaged: app.isPackaged,
-  stamped: (() => {
-    try { return fs.readFileSync(path.join(process.resourcesPath, 'edition'), 'utf8'); }
-    catch { return ''; }
-  })()
-});
-
 // The licence state every gate consults. Master is always Pro — that's the
 // point of the master build — and retail reads what's persisted. This is the
 // ONLY place the two are combined, so the edition can't leak into disk state.
@@ -524,9 +544,31 @@ function currentLicenseState() {
 // also carries the EFFECTIVE licence (not the persisted one) so services
 // that check settings.license themselves — defense mode — see the same state
 // every other gate sees. Never persist this view.
+//
+// The kids build narrows the view once more (core/kids-mode.js): grown-up
+// flags read false and aiMode clamps to local unless the parent allowed
+// cloud. Downstream of the licence on purpose — an active licence can never
+// re-open what the kids edition closed.
 function licensedSettings() {
   const state = currentLicenseState();
-  return { ...applyLicenseToSettings(config.getSettings(), state), license: state };
+  const view = { ...applyLicenseToSettings(config.getSettings(), state), license: state };
+  return KIDS ? applyKidsSettings(view) : view;
+}
+
+// JARVIS Jr. runtime state: the usage meter (constructed in whenReady, after
+// userData exists) and the parent-seat lock — in-memory only, so an app
+// restart always starts locked.
+let kidsUsage = null;
+let parentalLock = freshLock();
+
+function parentalStatusPayload() {
+  const parental = config.getSettings().parental;
+  return {
+    kids: KIDS,
+    ...publicParentalView(parental),
+    unlocked: isUnlocked(parentalLock),
+    usedMinutes: kidsUsage ? kidsUsage.minutesUsedToday() : 0
+  };
 }
 
 async function syncMobileServer() {
@@ -567,6 +609,11 @@ function setupIpc() {
     anthropicConfigured: Boolean(config.getSecret('anthropicKey')),
     version: app.getVersion(),
     edition: EDITION,
+    kids: KIDS,
+    // Kids build, first run only: the PARENT sets the PIN before anything
+    // else — before the kid ever names the assistant.
+    needsParentPin: KIDS && !pinIsSet(config.getSettings().parental),
+    parental: parentalStatusPayload(),
     // Retail, first run only: the renderer shows the naming screen before
     // anything else. Master never sees it — he already has a name.
     needsNaming: needsNaming({ edition: EDITION, settings: config.getSettings() })
@@ -687,7 +734,14 @@ function setupIpc() {
   });
   ipcMain.handle('ollama:connect', () => ollama.connect());
   ipcMain.handle('ollama:status', () => ollama.serverStatus());
+  // Cloud keys are money and someone else's terms of service — in the kids
+  // build, saving or removing one is a parent-seat action.
+  const parentSeatOnly = () => (KIDS && !isUnlocked(parentalLock)
+    ? { ok: false, needsParent: true, message: 'Cloud keys are a parent setting in JARVIS Jr. — unlock the PARENTS tab first.' }
+    : null);
   ipcMain.handle('openai:save-key', async (_event, key) => {
+    const refused = parentSeatOnly();
+    if (refused) return refused;
     const value = String(key || '').trim();
     if (!value) return { ok: false, message: 'Paste an OpenAI API key first.' };
     config.setSecret('openaiKey', value);
@@ -696,12 +750,16 @@ function setupIpc() {
     return result;
   });
   ipcMain.handle('openai:remove-key', () => {
+    const refused = parentSeatOnly();
+    if (refused) return refused;
     config.setSecret('openaiKey', '');
     return { ok: true, message: 'OpenAI key removed from this computer.' };
   });
   ipcMain.handle('openai:test', () => ai.testCloud('openai'));
 
   ipcMain.handle('anthropic:save-key', async (_event, key) => {
+    const refused = parentSeatOnly();
+    if (refused) return refused;
     const value = String(key || '').trim();
     if (!value) return { ok: false, message: 'Paste an Anthropic API key first.' };
     config.setSecret('anthropicKey', value);
@@ -710,10 +768,65 @@ function setupIpc() {
     return result;
   });
   ipcMain.handle('anthropic:remove-key', () => {
+    const refused = parentSeatOnly();
+    if (refused) return refused;
     config.setSecret('anthropicKey', '');
     return { ok: true, message: 'Claude key removed from this computer.' };
   });
   ipcMain.handle('anthropic:test', () => ai.testCloud('anthropic'));
+
+  // ── JARVIS Jr. parental controls ──────────────────────────────────────
+  // Registered in every edition (the renderer probes parental:status), but
+  // outside the kids build everything is inert: no PIN is ever set, and the
+  // mutating handlers refuse.
+  ipcMain.handle('parental:status', () => parentalStatusPayload());
+  // First run sets the PIN with no credential; changing it needs the
+  // current PIN — an already-unlocked seat is NOT enough, so a walked-away
+  // unlock can't be turned into a new PIN the parent doesn't know.
+  ipcMain.handle('parental:setup', (_event, payload) => {
+    if (!KIDS) return { ok: false, message: 'Parental controls belong to the JARVIS Jr. build.' };
+    const parental = config.getSettings().parental;
+    if (pinIsSet(parental) && !verifyPin(payload?.currentPin, parental)) {
+      return { ok: false, message: 'That current PIN is not right.' };
+    }
+    const record = makePinRecord(payload?.pin);
+    if (!record) return { ok: false, message: 'The PIN needs to be 4 to 8 digits.' };
+    config.setParentalState(record);
+    // Setting the PIN proves the parent is at the keyboard — open the seat
+    // so first-run setup flows straight into the PARENTS tab.
+    parentalLock = attemptUnlock(freshLock(), config.getSettings().parental, payload?.pin).lock;
+    log.write({ type: 'system', command: 'parental-pin-set', response: 'The parent PIN was set.', source: 'parental' });
+    return { ok: true, ...parentalStatusPayload() };
+  });
+  ipcMain.handle('parental:unlock', (_event, payload) => {
+    if (!KIDS) return { ok: false, message: 'Parental controls belong to the JARVIS Jr. build.' };
+    const outcome = attemptUnlock(parentalLock, config.getSettings().parental, payload?.pin);
+    parentalLock = outcome.lock;
+    if (!outcome.ok) {
+      return {
+        ok: false,
+        lockedOut: outcome.lockedOut,
+        message: outcome.lockedOut
+          ? 'Too many tries — the PIN pad is taking a one-minute break.'
+          : 'That PIN is not right.'
+      };
+    }
+    return { ok: true, ...parentalStatusPayload() };
+  });
+  ipcMain.handle('parental:lock', () => {
+    parentalLock = relock(parentalLock);
+    return { ok: true, ...parentalStatusPayload() };
+  });
+  // The tuning knobs (limits, quiet hours, cloud permission). PIN fields
+  // never ride this path — sanitizeParentalPatch drops them, and the PIN
+  // itself only changes through parental:setup above.
+  ipcMain.handle('parental:save', (_event, patch) => {
+    if (!KIDS) return { ok: false, message: 'Parental controls belong to the JARVIS Jr. build.' };
+    if (!isUnlocked(parentalLock)) return { ok: false, needsParent: true, message: 'Unlock with the parent PIN first.' };
+    config.setParentalState({ ...config.getSettings().parental, ...sanitizeParentalPatch(patch) });
+    log.write({ type: 'system', command: 'parental-settings-saved', response: 'Parental settings were updated.', source: 'parental' });
+    return { ok: true, ...parentalStatusPayload() };
+  });
 
   ipcMain.handle('tasks:list', () => tasks.list());
   ipcMain.handle('tasks:add', (_event, input) => tasks.add(input));
@@ -744,10 +857,19 @@ function setupIpc() {
 
   ipcMain.handle('settings:save', async (_event, patch) => {
     const previous = config.getSettings();
+    // JARVIS Jr. choke point, ahead of the license gate: without the parent
+    // seat unlocked only the kid-safe keys (names, voices, skins, layout)
+    // pass, and the hard-clamped flags are stripped even for a PIN-holder.
+    let effectivePatch = patch || {};
+    if (KIDS) {
+      const kidsGate = gateKidsSettingsPatch(effectivePatch, isUnlocked(parentalLock));
+      effectivePatch = kidsGate.patch;
+      if (kidsGate.refused.length) sendEverywhere('parental:refused', { refused: kidsGate.refused });
+    }
     // The license choke point: an unlicensed attempt to switch a Pro feature
     // on is stripped here, before anything persists, and reported so the UI
     // can explain instead of silently snapping the toggle back.
-    const { patch: gatedPatch, refused } = gateSettingsPatch(previous, patch || {}, currentLicenseState());
+    const { patch: gatedPatch, refused } = gateSettingsPatch(previous, effectivePatch, currentLicenseState());
     // The rename path shares first-run naming's rules: control characters
     // stripped (the name lands verbatim in every system prompt), capped, and
     // an emptied field falls back to a real name instead of a broken prompt.
@@ -851,6 +973,10 @@ function setupIpc() {
     }
   });
   ipcMain.handle('backup:import', async () => {
+    // Importing rewrites approved folders and routines — parent seat only
+    // in the kids build (same gate as the cloud-key handlers above).
+    const refused = parentSeatOnly();
+    if (refused) return refused;
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Import a JARVIS backup', properties: ['openFile'],
       filters: [{ name: 'JARVIS backup', extensions: ['json'] }]
@@ -1178,6 +1304,14 @@ app.whenReady().then(async () => {
 
   config = new ConfigStore(app.getPath('userData'), safeStorage);
   log = new ActivityLog(app.getPath('userData'));
+  if (KIDS) {
+    // Belt to the view's braces: services that read the RAW config
+    // (heartbeat, mobile sync, night-shift setup) must agree with the
+    // clamped view, so the blocked flags are persisted false once per boot.
+    // A settings.json copied in from grown-up JARVIS is de-fanged here too.
+    config.updateSettings(Object.fromEntries(KIDS_BLOCKED_FLAGS.map((key) => [key, false])));
+    kidsUsage = new UsageStore(app.getPath('userData'));
+  }
   licenseService = new LicenseService({ config });
   // Gated view: Pro flags read false until licensed. Explicit delegation, not
   // a subclass — ConfigStore keeps its private fields and its write paths.
@@ -1192,7 +1326,18 @@ app.whenReady().then(async () => {
   // below, and `ai` cannot be passed to its own registry before `new
   // AIService(...)` returns. Both closures resolve once the module-level
   // `let` bindings are assigned, without reordering construction.
-  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai }));
+  // The kids brain reads the CLAMPED settings view (so aiMode can never
+  // reach the cloud unless the parent allowed it) and swaps the system
+  // prompt for the kid frame + gaming coach. Adult builds pass the raw
+  // config exactly as before.
+  const aiConfig = KIDS
+    ? { getSettings: licensedSettings, getSecret: (name) => config.getSecret(name) }
+    : config;
+  ai = new AIService(
+    aiConfig,
+    buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai }),
+    KIDS ? { promptOverride: buildKidsPrompt } : {}
+  );
   ollama = new OllamaService({ config, emit: sendEverywhere });
   go2rtc = new Go2RtcManager({
     binaryPath: app.isPackaged
@@ -1226,7 +1371,10 @@ app.whenReady().then(async () => {
     const described = await ai.describeCameraFrame(jpegBase64, context.name);
     return described.ok ? described.text : null;
   };
-  if (isPro(currentLicenseState())) {
+  if (KIDS) {
+    // Cameras never run in JARVIS Jr. — the module is hidden, the IPC
+    // answers with a refusal, and init is never called.
+  } else if (isPro(currentLicenseState())) {
     cameras.init();
     camerasInitialized = true;
   } else if ((config.getSettings().cameraAccounts || []).length) {
@@ -1296,8 +1444,20 @@ app.whenReady().then(async () => {
   // allowlist-checked. Raw config here once left defense dead on builds that
   // never activated a key, effective licence or not.
   defense = new DefenseService({ config: gatedConfig, ai, cameras, emit: sendEverywhere, log });
-  defense.start();
-  router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands, defense });
+  if (!KIDS) defense.start();
+  router = new CommandRouter({
+    config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras,
+    claude: claudeBridge, screen: screenReader, hands, defense: KIDS ? null : defense,
+    // The kids gate (core/kids-mode.js): distress first, then
+    // bedtime/screen-time from the parent's rules, then the content filter.
+    kids: KIDS ? {
+      gate: (text) => gateKidsCommand({
+        text,
+        playtime: playtimeGate(config.getSettings().parental, kidsUsage.minutesUsedToday())
+      }),
+      recordUse: () => kidsUsage.recordUse()
+    } : null
+  });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
   nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config: gatedConfig, ai, documents });
   scheduleService = new ScheduleService({ store: scheduleStore, config: gatedConfig, router, nightShift, emit: sendEverywhere, log });
@@ -1310,7 +1470,7 @@ app.whenReady().then(async () => {
     emit: sendEverywhere,
     log
   });
-  heartbeat.start();
+  if (!KIDS) heartbeat.start();
   powerMonitor.on('resume', () => {
     try {
       scheduleService.arm();
@@ -1361,7 +1521,19 @@ app.whenReady().then(async () => {
     if (device?.deviceString) gpuLabel = device.deviceString;
   } catch {}
 
+  // JARVIS Jr.: every IPC channel belonging to a clamped subsystem answers
+  // one refusal instead of reaching its service. Registration is wrapped
+  // (and immediately unwrapped) rather than each handler edited, so a
+  // channel added to cameras:/defense:/mobile:/schedule:/nightshift: later
+  // is blocked by default instead of quietly reachable in the kids build.
+  const realHandle = ipcMain.handle;
+  if (KIDS) {
+    ipcMain.handle = (channel, handler) => realHandle.call(
+      ipcMain, channel, isKidsBlockedChannel(channel) ? () => KIDS_CHANNEL_REFUSAL : handler
+    );
+  }
   setupIpc();
+  ipcMain.handle = realHandle;
   createMainWindow();
   createTray();
   applyLoginSetting(config.getSettings().startWithWindows);

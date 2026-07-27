@@ -64,7 +64,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense, kids }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -77,6 +77,9 @@ class CommandRouter {
     this.screen = screen || null;
     this.hands = hands || null;
     this.defense = defense || null;
+    // JARVIS Jr. only: { gate(text), recordUse() } from main.js, built on
+    // core/kids-mode.js + core/parental-controls.js. Null in adult builds.
+    this.kids = kids || null;
     this.pending = new Map();
   }
 
@@ -205,10 +208,31 @@ class CommandRouter {
       });
     }
 
+    // JARVIS Jr.: the kids gate runs right after the safety classifier and
+    // before every other branch. Order lives in gateKidsCommand — distress
+    // is answered first at any hour, then bedtime/screen-time, then the
+    // content filter. A command that passes marks a minute on the meter, so
+    // idle time at the desk never counts against the limit.
+    if (this.kids) {
+      const gate = this.kids.gate(text);
+      if (gate) {
+        const gateResult = this.#result(gate.reply, 'kids', {
+          blocked: gate.blocked === true,
+          category: gate.category,
+          success: gate.blocked !== true
+        });
+        this.#log(text, gateResult);
+        return gateResult;
+      }
+      this.kids.recordUse?.();
+    }
+
     // The sense of humor gets first crack once safety has had its say. A quip
     // may only replace an answer JARVIS couldn't give anyway (see quips.js) —
-    // today that's the 911 house line while defense mode is up.
-    const quip = quipFor(text, { defenseActive: this.defense?.status?.().active === true });
+    // today that's the 911 house line while defense mode is up. JARVIS Jr.
+    // keeps only the kidsSafe rows: the believers' hotline was BUILT for
+    // kids; the skynet joke was built for Adam's house.
+    const quip = quipFor(text, { defenseActive: this.defense?.status?.().active === true, kids: Boolean(this.kids) });
     if (quip) {
       const quipResult = this.#result(quip, 'local-core');
       this.#log(text, quipResult);
