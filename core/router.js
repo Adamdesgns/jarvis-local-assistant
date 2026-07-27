@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const { classifyCommand } = require('./security');
 const { isBattleRequest, buildBattlePrompt } = require('./battle-mode');
 const { isDefenseRequest, isStandDown } = require('./defense-mode');
+const { quipFor } = require('./quips');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
 
 // An approved drive plan must be exactly what was shown on the card — frozen
@@ -202,6 +203,16 @@ class CommandRouter {
       return this.#result(`Confirm ${action}.`, 'safety', {
         approval: { id, title: `${action.toUpperCase()} COMPUTER`, detail: security.reason, risk: 'HIGH' }
       });
+    }
+
+    // The sense of humor gets first crack once safety has had its say. A quip
+    // may only replace an answer JARVIS couldn't give anyway (see quips.js) —
+    // today that's the 911 house line while defense mode is up.
+    const quip = quipFor(text, { defenseActive: this.defense?.status?.().active === true });
+    if (quip) {
+      const quipResult = this.#result(quip, 'local-core');
+      this.#log(text, quipResult);
+      return quipResult;
     }
 
     const lower = text.toLowerCase();
