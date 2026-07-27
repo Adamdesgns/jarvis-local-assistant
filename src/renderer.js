@@ -454,6 +454,75 @@ function stopCurrentSpeech() {
     URL.revokeObjectURL(currentSpeech.src);
     currentSpeech = null;
   }
+  endSpeechVisuals();
+}
+
+// ---------- He comes alive ----------
+// His own voice drives the orb — the same RMS curve the microphone path uses,
+// so he moves to his voice exactly the way he moves to yours — and his words
+// caption live under the sphere while he speaks. The math lives in
+// orb-voice.js; this block owns only the WebAudio plumbing and the caption
+// element. Rule one: the visuals must never cost him his voice — if the
+// audio context won't run, he speaks unadorned.
+let speechAudioContext = null;
+let speechVisualFrame = 0;
+
+function orbCaption(text) {
+  const reply = $('orb-reply');
+  if (!reply) return;
+  clearTimeout(orbReplyTimer);
+  clearTimeout(orbReplyFade);
+  reply.classList.remove('fading');
+  reply.textContent = text;
+  reply.hidden = !text;
+}
+
+function endSpeechVisuals(fullText) {
+  cancelAnimationFrame(speechVisualFrame);
+  speechVisualFrame = 0;
+  window.jarvisHologram?.setAudioLevel(0);
+  window.JarvisDefense?.setOrbAudioLevel?.(0);
+  const reply = $('orb-reply');
+  if (!reply || reply.hidden) return;
+  if (fullText) reply.textContent = fullText;
+  // With the command bar hidden the words linger the usual nine seconds;
+  // with it visible the response dock already holds them, so fade sooner.
+  orbReplyTimer = setTimeout(() => {
+    reply.classList.add('fading');
+    orbReplyFade = setTimeout(() => {
+      reply.hidden = true;
+      reply.classList.remove('fading');
+    }, 700);
+  }, state.hiddenModules.includes('command') ? 9000 : 2200);
+}
+
+async function startSpeechVisuals(audio, message) {
+  try {
+    const context = speechAudioContext || (speechAudioContext = new AudioContext());
+    if (context.state !== 'running') await context.resume();
+    // A media element can only ever be wired into WebAudio once, and a wired
+    // element plays THROUGH the context — so if the context isn't actually
+    // running, wiring it would silence him. Skip the visuals instead.
+    if (context.state !== 'running' || currentSpeech !== audio) return;
+    const source = context.createMediaElementSource(audio);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    analyser.connect(context.destination);
+    const samples = new Uint8Array(analyser.fftSize);
+    const tick = () => {
+      if (currentSpeech !== audio || audio.ended) return;
+      analyser.getByteTimeDomainData(samples);
+      const level = window.OrbVoice.levelFromSamples(samples);
+      window.jarvisHologram?.setAudioLevel(level);
+      window.JarvisDefense?.setOrbAudioLevel?.(level);
+      if (audio.duration > 0) orbCaption(window.OrbVoice.captionSlice(message, audio.currentTime / audio.duration));
+      speechVisualFrame = requestAnimationFrame(tick);
+    };
+    speechVisualFrame = requestAnimationFrame(tick);
+  } catch (error) {
+    console.warn(`[JARVIS] Voice visuals unavailable: ${error?.message || error}`);
+  }
 }
 
 function speak(message) {
@@ -462,6 +531,9 @@ function speak(message) {
     return;
   }
   stopCurrentSpeech();
+  // Captions build word by word from silence — clear any full reply that
+  // setResponse just parked under the orb so the words arrive as he says them.
+  orbCaption('');
   speakWithKokoro(message).catch((error) => {
     console.warn(`[JARVIS] Kokoro voice unavailable, using the system voice: ${error?.message || error}`);
     speakWithSystemVoice(message);
@@ -479,12 +551,17 @@ async function speakWithKokoro(message) {
   audio.volume = .92;
   currentSpeech = audio;
 
-  audio.onplay = () => setCoreState('speaking', 'LOCAL VOICE RESPONSE');
+  audio.onplay = () => {
+    setCoreState('speaking', 'LOCAL VOICE RESPONSE');
+    startSpeechVisuals(audio, message);
+  };
   audio.onended = () => {
+    endSpeechVisuals(message);
     if (currentSpeech === audio) { URL.revokeObjectURL(audio.src); currentSpeech = null; }
     if (!state.searchActive) setCoreState('ready');
   };
   audio.onerror = () => {
+    endSpeechVisuals();
     if (currentSpeech === audio) currentSpeech = null;
     speakWithSystemVoice(message);
   };
@@ -512,9 +589,17 @@ function speakWithSystemVoice(message, retry = false) {
   utterance.pitch = .88;
   utterance.volume = .92;
   utterance.onstart = () => setCoreState('speaking', 'LOCAL VOICE RESPONSE');
-  utterance.onend = () => { stopSpeechWatchdog(); if (!state.searchActive) setCoreState('ready'); };
+  // The system voice reports real word timings — captions ride them. No
+  // amplitude data exists on this path, so the orb keeps its speaking
+  // animation without the per-syllable pulse.
+  utterance.onboundary = (event) => {
+    if (event.name && event.name !== 'word') return;
+    orbCaption(window.OrbVoice.boundarySlice(utterance.text, event.charIndex));
+  };
+  utterance.onend = () => { stopSpeechWatchdog(); endSpeechVisuals(utterance.text); if (!state.searchActive) setCoreState('ready'); };
   utterance.onerror = (event) => {
     stopSpeechWatchdog();
+    endSpeechVisuals();
     const reason = event.error || 'unknown speech error';
     console.warn(`[JARVIS] Spoken reply failed: ${reason}`);
     // "canceled"/"interrupted" are expected — speak() itself calls cancel()
