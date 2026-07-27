@@ -645,6 +645,36 @@ body:not(.terminal-full) .term-exit-hint { display: none; }
 }
 .term-clear:hover { color: var(--term-accent); border-color: var(--line-accent) }
 
+/* ========================= SELF-DESTRUCT (a joke) =========================
+   Four seconds of red alert before he admits he's kidding. A fixed overlay
+   above everything (including defense mode) plus a red wash on the whole
+   window, so it reads from across the room. Pure CSS — the klaxon is
+   synthesized in renderer.js. */
+
+body.self-destruct::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 900; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, .18) 0%, rgba(190, 0, 0, .55) 100%);
+  animation: self-destruct-flash .8s steps(1, end) infinite;
+}
+body.self-destruct::after {
+  content: 'SELF-DESTRUCT SEQUENCE ACTIVE';
+  position: fixed; top: 0; left: 0; right: 0; z-index: 901; pointer-events: none;
+  padding: 10px 0; text-align: center;
+  background: rgba(150, 0, 0, .92);
+  color: #fff; font: 600 var(--text-sm)/1 var(--font); letter-spacing: .34em;
+  box-shadow: 0 0 40px rgba(255, 40, 40, .8);
+  animation: self-destruct-flash .8s steps(1, end) infinite;
+}
+body.self-destruct .topbar,
+body.self-destruct .workspace { filter: hue-rotate(-38deg) saturate(2.4) brightness(.85); }
+
+@keyframes self-destruct-flash {
+  0% { opacity: 1 }
+  50% { opacity: .45 }
+  100% { opacity: 1 }
+}
+
 /* ============================== DEFENSE MODE ==============================
    A posture, not a panel. body.defense hides the normal desk; the board is a
    fixed fullscreen layer. The REAL #camera-grid is reparented into the wall,

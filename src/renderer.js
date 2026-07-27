@@ -440,6 +440,53 @@ function playDriveCue(kind) {
   } catch { /* a missing chime must never break a session */ }
 }
 
+// ---------- Staged quips: the self-destruct scene ----------
+// A quip may stage a scene instead of just saying a line (core/quips.js).
+// Self-destruct: the whole room goes red, a two-tone klaxon runs for four
+// seconds, and only then does he admit he's kidding. Everything here is
+// synthesized or CSS — no asset ships, and every failure path still ends in
+// the punchline being said, because the gag failing silently is worse than
+// no gag at all.
+let alarmContext = null;
+let alarmStop = null;
+
+function startAlarm(seconds) {
+  try {
+    alarmContext = alarmContext || new (window.AudioContext || window.webkitAudioContext)();
+    const context = alarmContext;
+    const gain = context.createGain();
+    gain.gain.value = 0.14;
+    gain.connect(context.destination);
+    const oscillator = context.createOscillator();
+    oscillator.type = 'square';
+    const start = context.currentTime;
+    // Alternating two-tone klaxon: 620 Hz / 440 Hz, swapping every 0.4s.
+    for (let step = 0; step * 0.4 < seconds; step += 1) {
+      oscillator.frequency.setValueAtTime(step % 2 ? 440 : 620, start + step * 0.4);
+    }
+    oscillator.connect(gain);
+    oscillator.start(start);
+    oscillator.stop(start + seconds);
+    return () => { try { oscillator.stop(); } catch {} };
+  } catch {
+    return () => {};
+  }
+}
+
+function runSelfDestruct(effect) {
+  const seconds = Math.max(0.5, Number(effect?.ms || 4000) / 1000);
+  const punchline = String(effect?.punchline || '');
+  if (alarmStop) alarmStop();
+  document.body.classList.add('self-destruct');
+  alarmStop = startAlarm(seconds);
+  setTimeout(() => {
+    document.body.classList.remove('self-destruct');
+    if (alarmStop) { alarmStop(); alarmStop = null; }
+    if (punchline) { setResponse(punchline); speak(punchline); }
+    else setCoreState('ready');
+  }, seconds * 1000);
+}
+
 // JARVIS's voice, in two tiers. Kokoro (rendered on the GPU by the hidden
 // voice worker) is the real voice; the Windows SAPI voice below is the net it
 // falls into whenever Kokoro cannot be trusted — model still loading, no GPU,
@@ -1482,6 +1529,9 @@ async function executeCommand(command) {
     if (result.defense === 'enter') { /* the read has the floor */ }
     else if (!result.approval && !state.searchActive) speak(result.response);
     else if (!result.approval && result.openedFile) speak(result.response);
+    // A staged quip runs after he says his opening line — the alarm and the
+    // red alert play over it, and the punchline lands when the noise stops.
+    if (result.effect?.kind === 'self-destruct') runSelfDestruct(result.effect);
   } catch (error) {
     const message = friendlyError(error); setResponse(message); showToast(message); setCoreState('error', 'LOCAL COMMAND FAILED');
     if (state.searchActive) setTimeout(() => finishSearchExperience(), 1200);
