@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { quipFor, QUIPS } = require('../core/quips');
+const { quipFor, matchQuip, QUIPS } = require('../core/quips');
 const { CommandRouter } = require('../core/router');
 
 // JARVIS's sense of humor. Quips are canned one-liners that beat the brain
@@ -79,9 +79,11 @@ test('believer questions that are not reality checks go to the brain', () => {
 
 // ---- Impossible-request easter eggs ------------------------------------
 
-test('"self destruct" gets a joke, armed or not', () => {
-  assert.match(quipFor('self destruct', {}) || '', /kidding/i);
-  assert.match(quipFor('initiate self-destruct sequence', { defenseActive: true }) || '', /kidding/i);
+test('"self destruct" is heard in every phrasing, armed or not', () => {
+  // The joke itself moved into effect.punchline when this became a staged
+  // scene (red alert → alarm → "I'm kidding"); see the effect tests below.
+  assert.match(quipFor('self destruct', {}) || '', /self-destruct sequence/i);
+  assert.match(quipFor('initiate self-destruct sequence', { defenseActive: true }) || '', /self-destruct sequence/i);
 });
 
 test('"open the pod bay doors" gets the obvious answer', () => {
@@ -97,6 +99,68 @@ test('"are you Skynet" — yes, but the government doesn\'t want you to know', (
   // Ordinary Terminator talk stays with the brain.
   assert.equal(quipFor('what is skynet', {}), null);
   assert.equal(quipFor('tell me about the terminator', {}), null);
+});
+
+test('the Skynet quip survives speech recognition mangling the word', () => {
+  // Live 2026-07-27: Adam asked out loud and faster-whisper transcribed it
+  // "Are you SkyDot" — the pattern missed and the real brain answered "No.
+  // I'm JARVIS." Consonant skeletons don't rescue this (sknt vs skdt: d/n
+  // is not a folded pair), so the quip matches the SHAPE "are you sky-<short
+  // mangle>" instead of trying to spell every rendering of the word.
+  for (const phrase of [
+    'Are you SkyDot',
+    'are you sky dot',
+    'are you sky-net',
+    'are you skynett',
+    'are you sky not',
+    'are you skynut',
+    'is this sky node',
+    'are you Skye Net'
+  ]) {
+    assert.match(quipFor(phrase, {}) || '', /government doesn't want you to know/i, `${phrase} should still get the confession`);
+  }
+});
+
+test('sky-words that are ordinary questions stay with the brain', () => {
+  for (const phrase of ['are you skydiving tomorrow', 'is this skyline drive', 'are you sky high']) {
+    assert.equal(quipFor(phrase, {}), null, `${phrase} must not trigger the Skynet quip`);
+  }
+});
+
+// ---- Effects: a quip may stage a scene, not just say a line -------------
+
+test('matchQuip returns the whole entry so the router can carry an effect', () => {
+  const entry = matchQuip('self destruct', {});
+  assert.ok(entry, 'self destruct must match');
+  assert.equal(typeof entry.reply, 'string');
+  assert.equal(entry.id, 'self-destruct');
+  assert.equal(matchQuip('what time is it', {}), null);
+});
+
+test('self destruct stages the full scene: red alert, 4 seconds, then the punchline', () => {
+  // Adam, 2026-07-27: "should turn everything red and have an alarm for
+  // about 4 seconds then he says I'm kidding."
+  const entry = matchQuip('self destruct', {});
+  assert.ok(entry.effect, 'self destruct carries an effect');
+  assert.equal(entry.effect.kind, 'self-destruct');
+  assert.equal(entry.effect.ms, 4000);
+  assert.match(entry.effect.punchline, /kidding/i, 'the punchline lands after the alarm');
+  // The line shown during the alarm must NOT give the joke away early.
+  assert.doesNotMatch(entry.reply, /kidding/i);
+  assert.match(entry.reply, /self-destruct/i);
+});
+
+test('every effect declares a kind, a duration and a punchline', () => {
+  for (const quip of QUIPS.filter((item) => item.effect)) {
+    assert.ok(quip.effect.kind && typeof quip.effect.kind === 'string');
+    assert.ok(Number.isFinite(quip.effect.ms) && quip.effect.ms > 0);
+    assert.ok(quip.effect.punchline && typeof quip.effect.punchline === 'string');
+  }
+});
+
+test('quips without an effect carry none — a plain line stages nothing', () => {
+  assert.equal(matchQuip('is santa real', {}).effect, undefined);
+  assert.equal(matchQuip('dial 911', { defenseActive: true }).effect, undefined);
 });
 
 test('every quip declares its whole shape — id, when, pattern, reply', () => {

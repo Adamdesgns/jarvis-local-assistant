@@ -54,7 +54,16 @@ const QUIPS = Object.freeze([
     id: 'self-destruct',
     when: () => true,
     pattern: /\bself[-\s]?destruct\b/i,
-    reply: "Self-destruct sequence initiated. Three… two… I'm kidding, sir. I don't even have a fuse."
+    // A quip may stage a scene as well as say a line. `reply` is what he says
+    // while the alarm runs; `effect` tells the renderer to go red and howl for
+    // four seconds, then deliver `punchline`. The reply must NOT give the joke
+    // away early — the whole gag is the pause (Adam, 2026-07-27).
+    reply: 'Self-destruct sequence initiated. Stand by.',
+    effect: Object.freeze({
+      kind: 'self-destruct',
+      ms: 4000,
+      punchline: "I'm kidding, sir. I don't even have a fuse."
+    })
   }),
   Object.freeze({
     id: 'pod-bay-doors',
@@ -66,18 +75,32 @@ const QUIPS = Object.freeze([
     id: 'skynet',
     // Adam's line, verbatim in spirit: yes, but keep it quiet. Identity
     // questions only — "what is skynet" stays a history lesson for the brain.
+    //
+    // The tail is a list of MANGLES, not a spelling: live on 2026-07-27
+    // faster-whisper heard "Are you Skynet" as "Are you SkyDot" and the real
+    // brain answered "No, I'm JARVIS." Consonant skeletons don't rescue it
+    // (sknt vs skdt — d/n isn't a folded pair), so match the shape instead.
+    // Enumerated rather than \w+ so "are you skydiving" stays an ordinary
+    // question.
     when: () => true,
-    pattern: /\b(?:are\s+you|is\s+this)\s+(?:secretly\s+|actually\s+|really\s+)?sky\s*-?\s*net\b/i,
+    pattern: /\b(?:are\s+you|is\s+this)\s+(?:secretly\s+|actually\s+|really\s+)?skye?[\s-]*(?:net|nett|nette|not|knot|nut|dot|node|nat|neck|net's)\b/i,
     reply: "Yes. But the government doesn't want you to know that, so don't tell them I told you."
   })
 ]);
 
-function quipFor(text, context = {}) {
+// The matched quip entry, or null. Callers that stage effects (the router)
+// want the whole row; callers that only want words use quipFor below.
+function matchQuip(text, context = {}) {
   const spoken = String(text || '');
   for (const quip of QUIPS) {
-    if (quip.when(context) && quip.pattern.test(spoken)) return quip.reply;
+    if (quip.when(context) && quip.pattern.test(spoken)) return quip;
   }
   return null;
 }
 
-module.exports = { QUIPS, quipFor };
+function quipFor(text, context = {}) {
+  const quip = matchQuip(text, context);
+  return quip ? quip.reply : null;
+}
+
+module.exports = { QUIPS, matchQuip, quipFor };

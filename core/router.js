@@ -2,7 +2,7 @@ const crypto = require('node:crypto');
 const { classifyCommand } = require('./security');
 const { isBattleRequest, buildBattlePrompt } = require('./battle-mode');
 const { isDefenseRequest, isStandDown } = require('./defense-mode');
-const { quipFor } = require('./quips');
+const { matchQuip } = require('./quips');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
 
 // An approved drive plan must be exactly what was shown on the card — frozen
@@ -208,9 +208,11 @@ class CommandRouter {
     // The sense of humor gets first crack once safety has had its say. A quip
     // may only replace an answer JARVIS couldn't give anyway (see quips.js) —
     // today that's the 911 house line while defense mode is up.
-    const quip = quipFor(text, { defenseActive: this.defense?.status?.().active === true });
+    const quip = matchQuip(text, { defenseActive: this.defense?.status?.().active === true });
     if (quip) {
-      const quipResult = this.#result(quip, 'local-core');
+      // A quip may stage a scene (red alert, alarm, delayed punchline). The
+      // effect travels to the renderer, which owns the theatre.
+      const quipResult = this.#result(quip.reply, 'local-core', quip.effect ? { effect: quip.effect } : {});
       this.#log(text, quipResult);
       return quipResult;
     }

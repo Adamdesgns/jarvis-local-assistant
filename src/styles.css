@@ -44,7 +44,9 @@ button { cursor: pointer; }
 .workspace { position: relative; height: calc(100vh - 62px); overflow: hidden; }
 .jarvis-stage { position: absolute; inset: 0 0 132px; transition: all var(--dur-slow) var(--ease); }
 #hologram { width: 100%; height: 100%; display: block; transition: transform .72s var(--ease), opacity .45s, filter .45s; }
-.central-copy { position: absolute; left: 50%; top: 49%; width: 280px; transform: translate(-50%, -50%); text-align: center; pointer-events: none; transition: .4s ease; }
+/* Below the sphere, not on it (Adam, 2026-07-27) — the orb stays clean and
+   the state text reads underneath, with his live-caption words under that. */
+.central-copy { position: absolute; left: 50%; bottom: 10.5%; width: 280px; transform: translateX(-50%); text-align: center; pointer-events: none; transition: .4s ease; }
 .central-copy > span { display: block; color: var(--accent-bright); font: 500 var(--text-xs)/1 var(--font); letter-spacing: var(--track-wide); margin-bottom: var(--s2); text-transform: uppercase; }
 .central-copy > strong { display: block; color: var(--text-primary); font: 300 var(--text-display)/1.1 var(--font-display); letter-spacing: .14em; margin-left: .14em; text-shadow: 0 0 30px rgba(255, 178, 31, .35); }
 .audio-bars { height: 27px; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: var(--s2); }
@@ -68,7 +70,7 @@ button { cursor: pointer; }
 .searching .search-flight { opacity: 1; }
 .searching .flight-line { animation: flight .75s cubic-bezier(.1, .8, .25, 1) forwards; }
 .searching #hologram { transform: scale(1.5); opacity: .08; filter: blur(4px); }
-.searching .central-copy { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+.searching .central-copy { opacity: 0; transform: translateX(-50%) scale(1.4); }
 .reforming #hologram { animation: reform .8s var(--ease); }
 
 /* ---------- floating modules ---------- */
@@ -184,7 +186,7 @@ button { cursor: pointer; }
 .response-dock:hover .dock-close, .dock-close:focus-visible { opacity: 1 }
 .dock-close:hover { color: var(--text-primary); background: rgba(255, 255, 255, .07) }
 /* What he said, floating under him, when there is no bar to put it in. */
-.orb-reply { position: absolute; z-index: 6; left: 50%; bottom: 16%; transform: translateX(-50%); margin: 0; width: min(620px, 76%); text-align: center; color: var(--text-primary); font: 400 var(--text-md)/1.6 var(--font); text-shadow: 0 2px 14px rgba(0, 0, 0, .9); text-wrap: pretty; pointer-events: none; transition: opacity var(--dur-med) var(--ease) }
+.orb-reply { position: absolute; z-index: 6; left: 50%; bottom: 3.5%; transform: translateX(-50%); margin: 0; width: min(620px, 76%); text-align: center; color: var(--text-primary); font: 400 var(--text-md)/1.6 var(--font); text-shadow: 0 2px 14px rgba(0, 0, 0, .9); text-wrap: pretty; pointer-events: none; transition: opacity var(--dur-med) var(--ease) }
 .orb-reply.fading { opacity: 0 }
 .orb-reply[hidden] { display: none }
 .response-line { height: 42px; display: grid; grid-template-columns: 72px 1fr; align-items: center; padding: 0 var(--s4); border-bottom: 1px solid var(--line) }
@@ -642,6 +644,36 @@ body:not(.terminal-full) .term-exit-hint { display: none; }
   border-radius: 3px; padding: 2px 6px; cursor: pointer;
 }
 .term-clear:hover { color: var(--term-accent); border-color: var(--line-accent) }
+
+/* ========================= SELF-DESTRUCT (a joke) =========================
+   Four seconds of red alert before he admits he's kidding. A fixed overlay
+   above everything (including defense mode) plus a red wash on the whole
+   window, so it reads from across the room. Pure CSS — the klaxon is
+   synthesized in renderer.js. */
+
+body.self-destruct::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 900; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, .18) 0%, rgba(190, 0, 0, .55) 100%);
+  animation: self-destruct-flash .8s steps(1, end) infinite;
+}
+body.self-destruct::after {
+  content: 'SELF-DESTRUCT SEQUENCE ACTIVE';
+  position: fixed; top: 0; left: 0; right: 0; z-index: 901; pointer-events: none;
+  padding: 10px 0; text-align: center;
+  background: rgba(150, 0, 0, .92);
+  color: #fff; font: 600 var(--text-sm)/1 var(--font); letter-spacing: .34em;
+  box-shadow: 0 0 40px rgba(255, 40, 40, .8);
+  animation: self-destruct-flash .8s steps(1, end) infinite;
+}
+body.self-destruct .topbar,
+body.self-destruct .workspace { filter: hue-rotate(-38deg) saturate(2.4) brightness(.85); }
+
+@keyframes self-destruct-flash {
+  0% { opacity: 1 }
+  50% { opacity: .45 }
+  100% { opacity: 1 }
+}
 
 /* ============================== DEFENSE MODE ==============================
    A posture, not a panel. body.defense hides the normal desk; the board is a
