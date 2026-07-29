@@ -357,21 +357,27 @@ class CommandRouter {
       lines.push(`PC status: ${usedGb} GB memory in use, up ${Math.floor(os.uptime() / 3600)} hours. Calendar is not connected yet.`);
       result = this.#result(lines.join('\n'), 'tasks', { tasks: this.tasks.list({ status: 'open' }) });
     } else if (/\bdashboard\b/i.test(text) && this.#dashboardProject(text, settings)) {
-      const name = this.#dashboardProject(text, settings);
-      const openTasks = this.tasks.list({ status: 'open', project: name });
-      const notes = this.memory.list(1000).filter((m) => (m.project || 'general').toLowerCase() === name);
-      const folder = (settings.projects || {})[name];
-      let files = [];
-      if (folder && this.tools.listDirectory) {
-        try { files = (await this.tools.listDirectory(folder)).filter((f) => f.type === 'file').slice(0, 6); } catch {}
+      // Lists directories and hands back file names — a files-off checklist
+      // must never leak that, so gate before touching this.tools at all.
+      if (!this.profile.files) {
+        result = this.#jrGate('Project dashboards');
+      } else {
+        const name = this.#dashboardProject(text, settings);
+        const openTasks = this.tasks.list({ status: 'open', project: name });
+        const notes = this.memory.list(1000).filter((m) => (m.project || 'general').toLowerCase() === name);
+        const folder = (settings.projects || {})[name];
+        let files = [];
+        if (folder && this.tools.listDirectory) {
+          try { files = (await this.tools.listDirectory(folder)).filter((f) => f.type === 'file').slice(0, 6); } catch {}
+        }
+        const lines = [`${name.toUpperCase()} dashboard.`];
+        lines.push(openTasks.length ? `${openTasks.length} open task${openTasks.length === 1 ? '' : 's'}.` : 'No open tasks.');
+        for (const task of openTasks.slice(0, 4)) lines.push(`• ${task.title}${task.dueAt ? ` (due ${new Intl.DateTimeFormat([], { month: 'short', day: 'numeric' }).format(new Date(task.dueAt))})` : ''}`);
+        if (notes.length) lines.push(`${notes.length} note${notes.length === 1 ? '' : 's'}. Latest: ${notes[0].text}`);
+        if (!folder) lines.push('No folder assigned yet — set one in Settings.');
+        else if (!files.length) lines.push('No recent files in the project folder.');
+        result = this.#result(lines.join('\n'), 'tasks', { tasks: openTasks, files, memories: notes.slice(0, 10) });
       }
-      const lines = [`${name.toUpperCase()} dashboard.`];
-      lines.push(openTasks.length ? `${openTasks.length} open task${openTasks.length === 1 ? '' : 's'}.` : 'No open tasks.');
-      for (const task of openTasks.slice(0, 4)) lines.push(`• ${task.title}${task.dueAt ? ` (due ${new Intl.DateTimeFormat([], { month: 'short', day: 'numeric' }).format(new Date(task.dueAt))})` : ''}`);
-      if (notes.length) lines.push(`${notes.length} note${notes.length === 1 ? '' : 's'}. Latest: ${notes[0].text}`);
-      if (!folder) lines.push('No folder assigned yet — set one in Settings.');
-      else if (!files.length) lines.push('No recent files in the project folder.');
-      result = this.#result(lines.join('\n'), 'tasks', { tasks: openTasks, files, memories: notes.slice(0, 10) });
     } else if (/^(?:show|list|what are|what(?:'s| is))\s+(?:on\s+)?my tasks|what do i need to do/i.test(text)) {
       const taskList = this.tasks.list({ status: 'open' });
       result = taskList.length
@@ -591,28 +597,44 @@ class CommandRouter {
       if (stream.unattended) {
         result = this.#result(`The ${name} routine needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
       } else {
-        const opened = [];
-        const failed = [];
-        for (const appName of routine.apps || []) {
-          const action = await this.tools.openApplication(appName);
-          (action.ok ? opened : failed).push(appName);
+        // Gate on what this specific routine actually does, not on a blanket
+        // "routines" flag: a routine that only opens folders must not be
+        // blocked by the apps checklist row, and vice versa. A routine with
+        // neither part blocked runs untouched.
+        const hasApps = (routine.apps || []).length > 0;
+        const hasFolders = (routine.folders || []).length > 0;
+        if (hasApps && !this.profile.apps) {
+          result = this.#jrGate('Routines that open programs');
+        } else if (hasFolders && !this.profile.files) {
+          result = this.#jrGate('Routines that open folders');
+        } else {
+          const opened = [];
+          const failed = [];
+          for (const appName of routine.apps || []) {
+            const action = await this.tools.openApplication(appName);
+            (action.ok ? opened : failed).push(appName);
+          }
+          for (const folder of routine.folders || []) {
+            const target = (settings.projects || {})[folder] || folder;
+            const action = await this.tools.openPath(target);
+            (action.ok ? opened : failed).push(folder);
+          }
+          result = this.#result(
+            opened.length
+              ? `${name} routine: opened ${opened.join(', ')}${failed.length ? `. Could not open ${failed.join(', ')} — check Settings.` : '.'}`
+              : `The ${name} routine is saved but nothing could be opened. Assign its folders and apps in Settings.`,
+            'windows',
+            { success: opened.length > 0 }
+          );
         }
-        for (const folder of routine.folders || []) {
-          const target = (settings.projects || {})[folder] || folder;
-          const action = await this.tools.openPath(target);
-          (action.ok ? opened : failed).push(folder);
-        }
-        result = this.#result(
-          opened.length
-            ? `${name} routine: opened ${opened.join(', ')}${failed.length ? `. Could not open ${failed.join(', ')} — check Settings.` : '.'}`
-            : `The ${name} routine is saved but nothing could be opened. Assign its folders and apps in Settings.`,
-          'windows',
-          { success: opened.length > 0 }
-        );
       }
     } else if (/\b(?:activate|start|enter|turn on)\s+focus mode\b/i.test(text)) {
       if (stream.unattended) {
         result = this.#result(`Focus mode needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
+      } else if (!this.profile.apps) {
+        // Focus mode opens every settings.focusApps app — same capability as
+        // opening apps directly, so it is gated the same way.
+        result = this.#jrGate('Focus mode');
       } else {
         const action = await this.tools.openFocusMode();
         result = this.#result(action.message, 'windows', { success: action.ok });
@@ -693,6 +715,10 @@ class CommandRouter {
     } else if (/^(?:close|quit|exit)\s+(.+)/i.test(text)) {
       if (stream.unattended) {
         result = this.#result(`Closing applications needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
+      } else if (!this.profile.apps) {
+        // A parent who turned apps off controls app state in both
+        // directions — closing is still touching an app.
+        result = this.#jrGate('Closing apps');
       } else {
         const target = cleanTarget(text.match(/^(?:close|quit|exit)\s+(.+)/i)[1]);
         const action = await this.tools.closeApplication(target);
@@ -706,6 +732,13 @@ class CommandRouter {
       // the router only ever asks.
       if (stream.unattended) {
         result = this.#result(`Defense mode needs you at the desk, sir — I've left it for you.`, 'defense', { success: false });
+      } else if (!this.profile.defense) {
+        // Double-layer, matching the claudeBridge/screenDrive branches: the
+        // profile gate sits right alongside the existing "not set up" check
+        // below rather than replacing it — a standard build with no defense
+        // service still gets the honest "not set up" message, while JR (whose
+        // profile.defense is always false — see variant.js) gets the gate.
+        result = this.#jrGate('Defense mode');
       } else if (!this.defense) {
         result = this.#result('Defense mode is not set up on this PC.', 'defense', { success: false });
       } else {

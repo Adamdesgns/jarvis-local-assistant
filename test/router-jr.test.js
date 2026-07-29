@@ -107,3 +107,38 @@ test('standard profile: behaviour unchanged — no guard, no gates', async () =>
   const result = await router.handle('how do I make a bomb'); // classifyCommand owns this in standard
   assert.notEqual(result.source, 'jr-guard');
 });
+
+// Task 5 review holes: routines, focus mode, dashboard, close, and defense
+// mode all reached a real service with every JR control switched off. Reuses
+// the jrRouter() helper's throwing-proxy services (mine()) — if a gate is
+// missing, the branch reaches a proxy and the test fails with a BOOBY TRAP
+// rejection instead of a clean assertion failure.
+test('gate holes closed: routines, focus mode, dashboard, close, defense', async () => {
+  const router = jrRouter(Object.fromEntries(Object.keys(DEFAULT_CONTROLS).map((k) => [k, false])));
+  router.config = {
+    getSettings: () => ({
+      kidName: 'Kid', personality: 'Witty, composed.', searchRoots: [], applications: {},
+      projects: { anvil: 'C:\\anvil' },
+      routines: { 'start work': { apps: ['chrome'], folders: ['anvil'] } },
+      focusApps: ['chrome']
+    })
+  };
+  for (const phrase of ['start work', 'turn on focus mode', 'anvil dashboard', 'close chrome', 'defense mode']) {
+    const result = await router.handle(phrase);
+    assert.match(result.source, /jr-gate|safety|local-core/, phrase);
+  }
+  // the throwing proxies prove no service was touched: reaching one throws, failing the test
+});
+
+test('routine with only folders needs files, not apps', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, apps: true });
+  router.config = {
+    getSettings: () => ({
+      kidName: 'Kid', personality: 'Witty, composed.', searchRoots: [], applications: {},
+      projects: {},
+      routines: { 'start work': { apps: [], folders: ['anvil'] } }
+    })
+  };
+  const result = await router.handle('start work');
+  assert.equal(result.source, 'jr-gate');
+});
