@@ -76,6 +76,19 @@ says something that sounds like they're in danger, JARVIS JR answers with
 care and points them to a trusted adult (and 988, in the US) without ever
 writing that moment to the log, on purpose.
 
+**Games:** two built-in games, tic tac toe and rock paper scissors, played
+by typing "play tic tac toe" or "play rock paper scissors" and then tapping
+— boards, chips, and difficulty are all taps, never voice. The kid picks
+easy, normal, or hard before each game. Difficulty here is honest, not
+decorative: on easy, JARVIS deliberately plays worse so a kid can actually
+win; on hard, it plays close to its best and reads a repeated pattern
+(throw rock five times in a row and don't be surprised when it starts
+answering with paper). Wins, losses, draws, and best streak live in JARVIS
+JR's own scores file and survive a restart. Games are gated by the same
+checklist as everything else — turn Games off in the parent panel and
+"play tic tac toe" is just an ordinary sentence again, no overlay, no
+special refusal.
+
 ## Install
 
 1. Download **JARVIS-FREE-SETUP.exe** from [Releases](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest) and run it.

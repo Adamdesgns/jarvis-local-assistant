@@ -26,6 +26,24 @@
   countdown) lets a parent revisit the checklist or change the PIN
   anytime after setup.
 
+### Added — JARVIS JR games: tic tac toe and rock paper scissors
+- **"play tic tac toe" or "play rock paper scissors"** opens a game
+  overlay — board, chips, and difficulty are all taps, never voice.
+  The kid picks easy, normal, or hard before every game.
+- **Difficulty is honest, not decorative:** easy makes JARVIS play
+  deliberately worse so a kid can actually win; hard plays close to
+  its best and reads a repeated pattern (five rocks in a row and it
+  starts answering with paper).
+- **The reveal orb morphs into the throw** — countdown, three bounces,
+  a polar-shape morph into rock/paper/scissors, a hold, then a morph
+  back — same orb, no separate sprite.
+- Wins, losses, draws, and best streak live in JARVIS JR's own scores
+  file (`%APPDATA%\jarvis-jr`) and survive a restart.
+- **Gated by the same checklist as everything else:** turn Games off
+  in the parent panel and "play tic tac toe" goes back to being an
+  ordinary sentence — no overlay, no special refusal, and the game
+  IPC channels are structurally absent, not just hidden.
+
 ### Added — THE BROWSER (stage 1): surf inside JARVIS
 - A new **Browser** module (Modules → Browser): tabs (up to five), address bar,
   back/forward/reload, dressed in your skin with the active-tab underline in
