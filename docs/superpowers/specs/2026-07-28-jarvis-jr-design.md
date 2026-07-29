@@ -14,12 +14,13 @@ Adam's kids are 9 and 11. They do not want a purple friend with a face.
 They want **the actual JARVIS** — the dark command center, the real orb,
 the composed British AI with the dry wit. So JARVIS JR is not a separate
 children's app that imitates JARVIS. It is the real JARVIS renderer, the
-real orb engine, the real personality — with every ability above the
-kid's approved rung **never constructed at boot**, using the same four allowlist gates the baby build
+real orb engine, the real personality — with every ability the parent has
+not switched on **never constructed at boot**, using the same four allowlist gates the baby build
 proved out.
 
 One sentence to keep the whole thing honest: *JR looks exactly like
-JARVIS, is built exactly like JUNIOR, and grows up into JARVIS.*
+JARVIS, is built exactly like JUNIOR, and the parent decides how much
+JARVIS it is.*
 
 ## What it is
 
@@ -27,51 +28,70 @@ A second installer from this repo: `JARVIS-JR-Setup-<version>.exe`.
 Own app id, own name, own icon, own `%APPDATA%` folder — installs alongside
 grown-up JARVIS on a family PC and they never share data.
 
-**JR is not a fixed edition — it grows with the kid** (Adam, 2026-07-28:
-the pet-assistant idea, folded in: "JARVIS can grow and unlock features as
-you get older. Bonus we already have the adult version."). The parent sets
-a **birthdate** behind the PIN — not an age slider — and JARVIS ages with
-the child automatically. Features unlock in stages from 10 to 18, and the
-top of the ladder is the adult JARVIS that already exists.
+**Features are the parent's call, not the calendar's** (Adam, 2026-07-28:
+"parental controls only, no age lock on features. Let the parent decide
+the features"). An age-staged unlock ladder was designed and rejected the
+same day — it would have made an 11-year-old wait three years for file
+search his parent wants him to have today. What survives of the
+grows-with-you idea: JR still grows into the full JARVIS, but **at the
+pace the parent widens the checklist**, not on birthdays.
 
-## The growth ladder
+The **birthdate** still exists and setup requires it — but it drives only
+the **content lock**: how JARVIS talks (voice bands) and what he deflects
+("a lock so kids can't look up or ask JARVIS to do things that are not
+appropriate for their age"). Age never touches the feature list.
 
-| Age | Becomes eligible |
+## Parental controls — the feature checklist
+
+One checklist in the PIN-locked panel. Every row is a real capability,
+off until a parent turns it on, effective at next launch:
+
+| Feature | Default |
 | --- | --- |
-| **10** (start) | Orb, personality, tasks, timers, quick commands, games, battle mode, quips, cameras (parent-added, view only), homework hints |
-| **12** | Documents — JARVIS reads and summarizes PDFs and papers for school |
-| **14** | File search in *their own* user folder; opening parent-allowlisted apps |
-| **16** | The browser, the real terminal, screen reading |
-| **18** | Full JARVIS. Guard off, PIN retired. Already built. |
+| Games, battle mode, quips, homework hints, tasks, timers | **On** — the base experience |
+| Cameras (view only; accounts added by the parent) | Off until cameras exist |
+| Documents — read and summarize PDFs and papers | Off |
+| File search + file open, clamped to the kid's own user folder | Off |
+| Opening apps, from a parent-edited allowlist | Off |
+| The browser | Off |
+| The real terminal | Off |
+| Screen reading | Off |
+| Power (restart/shutdown by voice) | Off |
 
-**Age makes a feature eligible; the parent's approval makes it active**
-(Adam, 2026-07-28: "parents can approve before they age into it as well").
-Every stage is approval-gated in the grown-up panel:
+Adam's own first move: documents + file search ON for his 11-year-old.
 
-- **Pre-approved** (the intended path): the parent approves the upcoming
-  stage any time in advance, and on birthday morning it unlocks with full
-  ceremony — *"Happy birthday. You're twelve now — I've unlocked the
-  document room. Try 'summarize this PDF.'"*
-- **Not yet approved:** the birthday greeting still happens, and JARVIS
-  says the new abilities are waiting for a grown-up's yes in the panel.
-  Nothing activates on the calendar alone.
-- **Early grant:** a parent may approve a stage before the age — a mature
-  15-year-old can have the browser. **Hold back:** a parent may decline or
-  revoke a stage regardless of age. Age sets the default; parents outrank
-  the calendar, both directions.
+**Not on the checklist at any setting** — these never exist in JR and
+arrive only by graduating to the adult build: night shift, schedules,
+autonomy rules, phone pairing, Claude bridge, camera configuration,
+defense mode, screen *driving*, and turning the content lock off.
 
-**The tech tree is visible.** A "Growing up" screen in the kid-facing app
-shows what is unlocked, what comes next, and at what age — the same pull
-as a video-game unlock tree, and it costs nothing to render honestly.
+Mechanically the capability profile is a **pure function**:
+`profileFor(edition, controls)` — still an allowlist, computed in one
+place, and testable at every combination that matters.
 
-**What never unlocks by birthday:** the deterministic safety guard runs
-until the 18 stage is active, camera *configuration* stays parental at
-every stage, and voice rules follow age bands as before. Age never scales
-safety inside the ladder — the hard rules are identical at 10 and at 17.
+## The content lock
 
-Mechanically the capability profile stops being a constant and becomes a
-**pure function**: `profileFor(edition, age, approvals)` — still an
-allowlist, computed in one place, clamped, and testable at every rung.
+The thing JR is *for*, and the reason setup demands a birthdate:
+
+- **`guardTopic()` runs before any model sees the words** — deterministic,
+  no sampling. Its hard rules (weapons, self-harm handled with care,
+  privacy, the honest "I cannot") are identical at every age.
+- **Age tunes the deflection line, not the protection.** What an 11-year-old
+  and a 16-year-old get deflected on differs in the `grown-up` band only;
+  the guard's answer style follows the voice bands.
+- The same rules ride into the model's system prompt for everything the
+  guard lets through — belt and braces, as in the JUNIOR design.
+- The lock applies to every enabled feature: the browser (when on) and
+  document answers pass through the same guard, so widening the checklist
+  never widens what's age-appropriate.
+
+## Setup is the parent's job
+
+First run opens a **parent setup, not the kid's desk** ("Parents should
+have to set this up"): create the PIN, enter the kid's name and birthdate,
+walk the checklist, optionally add cameras and a cloud key. The kid-facing
+app does not start until this is done — there is no unconfigured state
+where a kid uses JR without a birthdate and a lock.
 
 ## What the kid sees
 
@@ -79,8 +99,8 @@ The **real command center**: `src/index.html`, the dark UI, the skins, the
 full orb engine with all eight souls and the picker. Wake word, hold-to-talk,
 and typed commands all work exactly as in grown-up JARVIS.
 
-Modules present **at the first rung** (higher rungs add their cards as
-they unlock; everything else has no card and no code behind it):
+Modules present **with the default checklist** (a parent's toggles add
+their cards; anything off has no card and no code behind it):
 
 | Module | Notes |
 | --- | --- |
@@ -155,19 +175,19 @@ The router parses ("play tic tac toe" → open the board), the renderer
 plays, and the engine answers moves over two JR-allowlisted IPC channels.
 Games never reach the model, so there is no new `kidSafe` tool surface.
 
-## What it cannot do — never constructed above the rung
+## What it cannot do — never constructed beyond the checklist
 
-At any given rung, everything above it does not exist in the running app —
-the JUNIOR principle, applied per stage. `main.js` builds only what
-`profileFor(edition, age, approvals)` names **at boot**; an unlock takes
-effect on the next launch (or a relaunch prompt after birthday approval),
-never by flipping a live flag. A rung the parent has not approved is not
-hidden or disabled — it was never built.
+Everything the parent has not switched on does not exist in the running
+app — the JUNIOR principle, applied per feature. `main.js` builds only
+what `profileFor(edition, controls)` names **at boot**; a change to the
+checklist takes effect at next launch, never by flipping a live flag. An
+off feature is not hidden or disabled — it was never built.
 
-Below the 18 rung, these are never constructed regardless of age or
-approval: power controls, phone pairing, night shift, schedules, autonomy,
-Claude bridge, camera configuration, defense mode. They are not on the
-ladder; they arrive only with full JARVIS.
+And the off-the-checklist list again, because it is the spine of the
+build: night shift, schedules, autonomy, phone pairing, Claude bridge,
+camera configuration, defense mode, screen driving, and removing the
+content lock are never constructed in JR at any setting. Wanting those is
+what the adult JARVIS is for.
 
 The four gates, straight from the JUNIOR design:
 
@@ -192,15 +212,15 @@ was wrong.
 
 Same PIN mechanics as JUNIOR (salted scrypt in the secrets store, doubling
 lockout), restyled to match the dark UI. Tabs: child (name, **birthdate**,
-voice), **growing up** (the ladder: approve upcoming stages, grant early,
-hold back or revoke — the only place unlocks are decided), cameras (the
-only place accounts are managed), questions (what the guard deflected),
-PIN, about. A parent may also set a cloud key here; without one, JR runs
-the local brain — the intended path.
+voice), **features** (the checklist — the only place capabilities are
+decided), cameras (the only place accounts are managed), questions (what
+the guard deflected), PIN, about. A parent may also set a cloud key here;
+without one, JR runs the local brain — the intended path.
 
-Approvals are stored in the secrets store alongside the PIN hash — not in
-`settings.json` — so a kid who can edit a JSON file cannot approve their
-own rung. The birthdate lives there too, for the same reason.
+The checklist and the birthdate are stored in the secrets store alongside
+the PIN hash — not in `settings.json` — so a kid who can edit a JSON file
+can neither switch on his own features nor age himself past the content
+lock.
 
 ## Build & dev isolation
 
@@ -231,11 +251,12 @@ chart, kid routines and story-time voice are left where they are.
   router wired to throwing services — files, screen, power, phone stay
   untouched; camera *config* throws while camera *view* answers.
 - Guard tests carry over verbatim from the JUNIOR suite.
-- **Ladder tests:** `profileFor()` at every rung × approved/unapproved;
-  an unapproved birthday changes nothing; a revoke takes a capability
-  away at next boot; a hand-edited `settings.json` cannot grant a rung
-  (approvals live in the secrets store); the 18 rung equals the standard
-  profile exactly, field for field — the "already built" claim, as a test.
+- **Checklist tests:** `profileFor()` with everything off, everything on,
+  and each feature alone; a birthday changes no feature; switching a
+  feature off removes it at next boot; a hand-edited `settings.json` can
+  neither enable a feature nor change the birthdate (both live in the
+  secrets store); with the whole checklist on, the profile still lacks
+  every never-in-JR item — the content lock has no off switch, as a test.
 - The grown-up build's behaviour is unchanged, and a test says so.
 
 ## Known gaps (v1)
