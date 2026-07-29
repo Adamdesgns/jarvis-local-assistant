@@ -166,6 +166,18 @@ test('games OFF: "play tic tac toe" never reaches the jr-game branch', async () 
   assert.notEqual(rps.source, 'jr-game');
 });
 
+test('standard profile: play tic tac toe reaches the model, not the jr-game branch', async () => {
+  let aiCalled = false;
+  const router = jrRouter(DEFAULT_CONTROLS, async (prompt, context) => {
+    aiCalled = true;
+    return { ok: true, text: 'x', source: 'local' };
+  });
+  router.profile = { ...STANDARD_PROFILE };
+  const result = await router.handle('play tic tac toe');
+  assert.notEqual(result.source, 'jr-game', 'standard build should not take the jr-game branch');
+  assert.equal(aiCalled, true, 'model should have been called');
+});
+
 // Task 5 review holes: routines, focus mode, dashboard, close, and defense
 // mode all reached a real service with every JR control switched off. Reuses
 // the jrRouter() helper's throwing-proxy services (mine()) — if a gate is

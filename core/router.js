@@ -262,7 +262,8 @@ class CommandRouter {
     // is no jr-gate refusal to hand back: an unmatched or gated game phrase
     // is harmless small talk and simply falls through to the ordinary reply
     // branch at the bottom of this method.
-    if (this.profile.games) {
+    // Games are a JR-only feature; the standard build's model answers instead.
+    if (this.profile.games && this.profile.contentLock) {
       const detectedGame = detectGame(text);
       if (detectedGame) {
         const gameResult = this.#result(
