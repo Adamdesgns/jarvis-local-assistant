@@ -24,6 +24,8 @@
         <button id="modules-button" class="hud-button"><b>＋</b> Modules</button>
         <button id="defense-button" class="hud-button" title="Defense mode — every camera live, one key to exit"><b>⛨</b> Defense</button>
         <button id="layout-button" class="hud-button"><b>⌘</b> Edit layout</button>
+        <!-- JARVIS JR: shown instead of Settings when this build is JR; see src/jr-parent-ui.js -->
+        <button id="jr-parent-button" class="hud-button" title="Parent panel — PIN required" hidden><b>🔒</b> Parent</button>
         <button id="settings-button" class="icon-button" title="Settings">⚙</button>
         <button class="window-button" data-window="minimize">—</button>
         <button class="window-button" data-window="maximize">□</button>
@@ -239,6 +241,8 @@
         <div class="cc-top-right">
           <div class="clock"><strong id="cc-time">--:--</strong><small id="cc-date">SYSTEM CLOCK</small></div>
           <div class="cc-actions">
+            <!-- JARVIS JR: shown instead of Settings when this build is JR; see src/jr-parent-ui.js -->
+            <button id="jr-parent-button-cc" class="cc-icon tip-below jr-parent-launch" data-tip="Parent panel — PIN required" aria-label="Parent panel" hidden>🔒</button>
             <button id="cc-settings" class="cc-icon tip-below" data-tip="Settings — switch skin, voice, folders" aria-label="Settings">⚙</button>
             <button class="cc-icon tip-below" data-window="minimize" data-tip="Minimize" aria-label="Minimize">—</button>
             <button class="cc-icon tip-below" data-window="maximize" data-tip="Maximize" aria-label="Maximize">▢</button>
@@ -633,6 +637,44 @@
     <div id="action-timeline" class="action-timeline" aria-label="Recent JARVIS actions"></div>
     <div id="toast" class="toast"></div>
     <div class="term-exit-hint" aria-hidden="true">ESC TO EXIT</div>
+
+    <!-- JARVIS JR: parent setup (blocking, first run) + parent panel.
+         Both stay hidden and inert on the standard build — see
+         src/jr-parent-ui.js, which only ever runs when jr:status says jr:true. -->
+    <div id="jr-setup" class="jr-overlay" hidden>
+      <div class="jr-sheet">
+        <h2>PARENT SETUP</h2>
+        <p class="jr-note">JARVIS JR doesn't start until a parent sets it up. Kids: go get one.</p>
+        <label>Kid's name <input id="jr-setup-name" maxlength="24" autocomplete="off"></label>
+        <label>Birthdate <input id="jr-setup-birthdate" type="date"></label>
+        <label>Create a PIN (4–8 numbers) <input id="jr-setup-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+        <div id="jr-setup-controls" class="jr-checklist"></div>
+        <p class="jr-note">Everything OFF stays not-built — not hidden, not disabled. Change it any time behind the PIN; changes apply at next launch.</p>
+        <button type="button" id="jr-setup-go">START JARVIS JR</button>
+        <p id="jr-setup-error" class="jr-error" hidden></p>
+      </div>
+    </div>
+    <div id="jr-parent" class="jr-overlay" hidden>
+      <div class="jr-sheet">
+        <h2>PARENT PANEL</h2>
+        <label>PIN <input id="jr-parent-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+        <button type="button" id="jr-parent-unlock">Unlock</button>
+        <div id="jr-parent-body" hidden>
+          <div id="jr-parent-controls" class="jr-checklist"></div>
+          <button type="button" id="jr-parent-save-controls">Save changes</button>
+          <p class="jr-note" id="jr-parent-relaunch" hidden>Saved. Changes apply the next time JARVIS JR starts.</p>
+          <details>
+            <summary>Change PIN</summary>
+            <label>New PIN <input id="jr-new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+            <button type="button" id="jr-pin-save">Save PIN</button>
+            <p id="jr-pin-note" class="jr-note" hidden></p>
+          </details>
+        </div>
+        <p id="jr-parent-error" class="jr-error" hidden></p>
+        <button type="button" id="jr-parent-close">Close</button>
+      </div>
+    </div>
+
     <script src="orbs/orb-engine.js"></script>
     <script src="orbs/plasma.js"></script>
     <script src="orbs/neural.js"></script>
@@ -650,6 +692,7 @@
     <script src="terminal-log.js"></script>
     <script src="terminal-ui.js"></script>
     <script src="terminal-session.js"></script>
+    <script src="jr-parent-ui.js"></script>
     <script src="renderer.js"></script>
     <script src="command-center.js"></script>
     <script src="cameras-ui.js"></script>

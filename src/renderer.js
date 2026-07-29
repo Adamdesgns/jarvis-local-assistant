@@ -2595,6 +2595,11 @@ async function initialize() {
   bindEvents(); bindModuleLayout(); initPasswordReveals(); setCoreState('processing', 'LOCAL BOOT SEQUENCE');
   try {
     const bootstrap = await window.jarvis.bootstrap();
+    // JARVIS JR: safe to await on every build — jrStatus exists in the
+    // standard build too and always answers { jr: false } there, never
+    // throws, so this stays a no-op except in JR. See src/jr-parent-ui.js.
+    const jrStatus = await window.jarvis.jrStatus?.().catch(() => null);
+    if (jrStatus?.jr && window.JrParentUI) window.JrParentUI.init(jrStatus);
     state.settings = bootstrap.settings;
     // Retail first run: he needs a name before anything else happens. Await
     // it so the greeting below uses whatever the buyer just chose.

@@ -174,5 +174,16 @@ contextBridge.exposeInMainWorld('jarvis', {
   onUIState: (callback) => on('ui:state', callback),
   onAgentStep: (callback) => on('agent:step', callback),
   setSkin: (skin) => ipcRenderer.send('ui:skin', skin),
-  onSkin: (callback) => on('ui:skin', callback)
+  onSkin: (callback) => on('ui:skin', callback),
+  // JARVIS JR: parent-lock surface. jr:status is safe to call on every build —
+  // the standard build's handler always answers { jr: false }, never throws —
+  // so the renderer can await it unconditionally and no-op when it isn't JR.
+  jrStatus: () => ipcRenderer.invoke('jr:status'),
+  jrSetupComplete: (payload) => ipcRenderer.invoke('jr:setup:complete', payload),
+  jrParentVerify: (pin) => ipcRenderer.invoke('jr:parent:verify', { pin }),
+  jrParentControls: (pin, patch) => ipcRenderer.invoke('jr:parent:controls', { pin, patch }),
+  jrParentPin: (oldPin, newPin) => ipcRenderer.invoke('jr:parent:pin', { oldPin, newPin }),
+  // Camera CONFIG's one doorway in JR — never the bare cameras:add-* channels,
+  // which are not allowlisted in the JR build (see core/variant.js).
+  jrParentCameras: (pin, action, payload) => ipcRenderer.invoke('jr:parent:cameras', { pin, action, payload })
 });
