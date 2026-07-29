@@ -4,6 +4,8 @@ const { isBattleRequest, buildBattlePrompt } = require('./battle-mode');
 const { isDefenseRequest, isStandDown } = require('./defense-mode');
 const { matchQuip } = require('./quips');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
+const { STANDARD_PROFILE } = require('./variant');
+const { guardTopic, buildJrPromptRules } = require('./kid-mode');
 
 // An approved drive plan must be exactly what was shown on the card — frozen
 // all the way down before it is stored, so nothing between approval and
@@ -64,7 +66,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense, profile, jrAge }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -78,6 +80,12 @@ class CommandRouter {
     this.hands = hands || null;
     this.defense = defense || null;
     this.pending = new Map();
+    // The JARVIS JR capability profile. Every existing caller (and every
+    // existing test) omits this and gets STANDARD_PROFILE — the full,
+    // ungated build — so this file's behaviour is unchanged unless main.js
+    // explicitly hands it a jr profile.
+    this.profile = profile || { ...STANDARD_PROFILE };
+    this.jrAge = jrAge || (() => 11);
   }
 
   // "Who's at the front door?" — match a camera by name, grab a fresh frame,
@@ -193,7 +201,29 @@ class CommandRouter {
       this.#log(text, result);
       return result;
     }
+
+    // JR's content lock: deterministic, no model involved, and checked
+    // before anything else gets a turn — including the power confirm below
+    // and the quips further down. Only ever active when contentLock is on
+    // (jr profiles only); standard's flag is false, so this block is a
+    // no-op there and nothing about standard's order changes.
+    if (this.profile.contentLock) {
+      const guard = guardTopic(text, this.jrAge());
+      if (guard) {
+        const guarded = this.#result(guard.reply, 'jr-guard', { guard: guard.kind, guardId: guard.id, success: true });
+        // A kid in distress is answered, not filed — see kid-mode.js. Care
+        // rows are never written to the parent's log.
+        if (guard.parentVisible) {
+          this.log.write({ type: 'jr-guard', command: text, response: guard.reply, source: 'jr-guard', guard: guard.id });
+        }
+        return guarded;
+      }
+    }
+
     if (security.level === 'confirm') {
+      if (!this.profile.power) {
+        return this.#result('Power is a grown-up control on this build. Ask a parent.', 'jr-gate', { success: false });
+      }
       const action = /\b(restart|reboot)\b/i.test(text) ? 'restart' : 'shutdown';
       if (stream.unattended) {
         return this.#result(`${action === 'restart' ? 'Restarting' : 'Shutting down'} the computer needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
@@ -208,7 +238,9 @@ class CommandRouter {
     // The sense of humor gets first crack once safety has had its say. A quip
     // may only replace an answer JARVIS couldn't give anyway (see quips.js) —
     // today that's the 911 house line while defense mode is up.
-    const quip = matchQuip(text, { defenseActive: this.defense?.status?.().active === true });
+    const quip = this.profile.quips
+      ? matchQuip(text, { defenseActive: this.defense?.status?.().active === true })
+      : null;
     if (quip) {
       // A quip may stage a scene (red alert, alarm, delayed punchline). The
       // effect travels to the renderer, which owns the theatre.
@@ -227,7 +259,9 @@ class CommandRouter {
     // "ask Claudia ..." stays a normal request.
     const claudeAsk = text.match(/^(?:jarvis[,\s]*)?ask\s+claude\b[,:]?\s*(.*)$/i);
     if (claudeAsk) {
-      const askResult = await this.#askClaude(cleanTarget(claudeAsk[1]), stream);
+      const askResult = this.profile.claudeBridge
+        ? await this.#askClaude(cleanTarget(claudeAsk[1]), stream)
+        : this.#jrGate('Ask Claude');
       this.#log(text, askResult);
       return askResult;
     }
@@ -238,7 +272,9 @@ class CommandRouter {
     // brain branches so the phrasing is never answered by anything else.
     const screenAsk = /^(?:jarvis[,\s]*)?(?:can you\s+)?(?:read|check)\s+(?:my|the)\s+screen\b|^what(?:'s| is| are)\s+(?:on\s+)?(?:my|the)\s+(?:screen|display)\b|^what\s+windows?\s+(?:are|do i have)\b|^what\s+am\s+i\s+looking\s+at\b/i;
     if (screenAsk.test(text)) {
-      const seenResult = await this.#readScreen(stream);
+      const seenResult = this.profile.screenRead
+        ? await this.#readScreen(stream)
+        : this.#jrGate('Reading the screen');
       this.#log(text, seenResult);
       return seenResult;
     }
@@ -254,12 +290,27 @@ class CommandRouter {
       || /^(?:jarvis[,\s]*)?select\s+.+\s+in\s+(?:file\s+)?explorer$/i.test(text)
       || /^(?:jarvis[,\s]*)?switch\s+to\s+(?:notepad|(?:file\s+)?explorer|files)$/i.test(text);
     if (driveAsk) {
-      const driveResult = this.#driveScreen(text, stream);
+      // Screen DRIVING (as opposed to reading) is never available in JR at
+      // any checklist setting — see variant.js's profileFor(). Gating on
+      // the flag rather than the variant keeps this one rule in one place.
+      const driveResult = this.profile.screenDrive
+        ? this.#driveScreen(text, stream)
+        : this.#jrGate('Driving the screen');
       this.#log(text, driveResult);
       return driveResult;
     }
 
-    const cameraLook = await this.#cameraLook(text);
+    // #cameraLook's own patterns are narrow ("show me the front door
+    // camera"), so a bare "show the cameras" with cameras off would slip
+    // past it and reach the model. When the feature is off, catch the
+    // looser shape here instead; when it's on, behaviour is byte-for-byte
+    // the original call.
+    let cameraLook = null;
+    if (this.profile.cameras) {
+      cameraLook = await this.#cameraLook(text);
+    } else if (/\bcamera(s)?\b/i.test(text) && /\b(?:who|what|show|check)\b/i.test(text)) {
+      cameraLook = this.#jrGate('Cameras');
+    }
     if (cameraLook) {
       this.#log(text, cameraLook);
       return cameraLook;
@@ -357,143 +408,183 @@ class CommandRouter {
         ? this.#result(memories.map((item) => item.text).join(' • '), 'memory', { memories })
         : this.#result(`I don’t have a saved memory matching “${query}” yet.`, 'memory');
     } else if (this.documents && /^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)|^according to my (?:documents?|files?|docs)[,:]?\s+(.+)/i.test(text)) {
-      const match = text.match(/^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)|^according to my (?:documents?|files?|docs)[,:]?\s+(.+)/i);
-      const question = match[1] || match[2];
-      const passages = await this.documents.gatherPassages(question);
-      if (!passages.length) {
-        result = this.#result(`I couldn’t find anything about “${question}” in your approved documents.`, 'documents', { files: [] });
+      if (!this.profile.documents) {
+        result = this.#jrGate('Asking documents questions');
       } else {
-        const aiResult = await this.ai.answerFromDocuments(question, passages, { project, onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
-        // Turn the cited passages into clickable file rows the user can open.
-        const seen = new Set();
-        const files = (aiResult.sources || []).filter((s) => { if (seen.has(s.path)) return false; seen.add(s.path); return true; })
-          .map((s) => ({ name: s.name, path: s.path, type: 'file' }));
-        const legend = (aiResult.sources || [])
-          .map((s) => `[${s.n}] ${s.name}${s.page ? ` (p.${s.page})` : s.section ? ` (section ${s.section})` : ''}`)
-          .join('  ·  ');
-        const answerText = aiResult.ok === false ? aiResult.text : `${aiResult.text}\n\nSources: ${legend}`;
-        result = this.#result(answerText, aiResult.ok !== false ? 'documents' : aiResult.source, {
-          files, query: question, sources: aiResult.sources, detail: aiResult.detail, success: aiResult.ok !== false
-        });
+        const match = text.match(/^(?:ask|question)\s+(?:my\s+)?(?:documents?|files?|docs)\s*:?,?\s+(.+)|^according to my (?:documents?|files?|docs)[,:]?\s+(.+)/i);
+        const question = match[1] || match[2];
+        const passages = await this.documents.gatherPassages(question);
+        if (!passages.length) {
+          result = this.#result(`I couldn’t find anything about “${question}” in your approved documents.`, 'documents', { files: [] });
+        } else {
+          const aiResult = await this.ai.answerFromDocuments(question, passages, { project, onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
+          // Turn the cited passages into clickable file rows the user can open.
+          const seen = new Set();
+          const files = (aiResult.sources || []).filter((s) => { if (seen.has(s.path)) return false; seen.add(s.path); return true; })
+            .map((s) => ({ name: s.name, path: s.path, type: 'file' }));
+          const legend = (aiResult.sources || [])
+            .map((s) => `[${s.n}] ${s.name}${s.page ? ` (p.${s.page})` : s.section ? ` (section ${s.section})` : ''}`)
+            .join('  ·  ');
+          const answerText = aiResult.ok === false ? aiResult.text : `${aiResult.text}\n\nSources: ${legend}`;
+          result = this.#result(answerText, aiResult.ok !== false ? 'documents' : aiResult.source, {
+            files, query: question, sources: aiResult.sources, detail: aiResult.detail, success: aiResult.ok !== false
+          });
+        }
       }
     } else if (this.documents && /^(?:search|find|look)\s+(?:inside|through)\s+(?:my\s+)?documents?\s+(?:for\s+)?(.+)/i.test(text)) {
-      const query = text.match(/^(?:search|find|look)\s+(?:inside|through)\s+(?:my\s+)?documents?\s+(?:for\s+)?(.+)/i)[1];
-      const files = await this.documents.searchContents(query);
-      result = files.length
-        ? this.#result(`I found ${files.length} document${files.length === 1 ? '' : 's'} containing “${query}.”`, 'documents', { files, query, needsChoice: files.length > 1 })
-        : this.#result(`I couldn't find “${query}” inside your approved documents.`, 'documents', { files: [], query });
-    } else if (this.documents && /^(?:read|summarize|review|tell me (?:what is|what's) in)\s+(?:the\s+)?(.+)/i.test(text)) {
-      const query = text.match(/^(?:read|summarize|review|tell me (?:what is|what's) in)\s+(?:the\s+)?(.+)/i)[1];
-      const matches = (await this.tools.searchFiles(query)).filter((item) => item.type === 'file' && this.documents.supports(item.path));
-      if (!matches.length) {
-        result = this.#result(`I couldn't find a readable document matching “${query}.”`, 'documents');
+      if (!this.profile.documents) {
+        result = this.#jrGate('Searching documents');
       } else {
-        try {
-          const document = await this.documents.readDocument(matches[0].path, 14000);
-          // untrustedContent: the document's text rides in this prompt, so the
-          // brain gets zero tools and the exchange stays out of history — a
-          // planted file must never reach remember_note (TRAP audit, 41a).
-          const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`, { unattended: stream.unattended === true, untrustedContent: true });
-          result = this.#result(summary.text, summary.source, { document: matches[0], success: summary.ok, detail: document.truncated ? 'The document was long, so JARVIS summarized the first section.' : '' });
-        } catch (error) {
-          result = this.#result(`I found the document but couldn't read it. ${error.message}`, 'documents', { success: false });
+        const query = text.match(/^(?:search|find|look)\s+(?:inside|through)\s+(?:my\s+)?documents?\s+(?:for\s+)?(.+)/i)[1];
+        const files = await this.documents.searchContents(query);
+        result = files.length
+          ? this.#result(`I found ${files.length} document${files.length === 1 ? '' : 's'} containing “${query}.”`, 'documents', { files, query, needsChoice: files.length > 1 })
+          : this.#result(`I couldn't find “${query}” inside your approved documents.`, 'documents', { files: [], query });
+      }
+    } else if (this.documents && /^(?:read|summarize|review|tell me (?:what is|what's) in)\s+(?:the\s+)?(.+)/i.test(text)) {
+      if (!this.profile.documents) {
+        result = this.#jrGate('Reading documents');
+      } else {
+        const query = text.match(/^(?:read|summarize|review|tell me (?:what is|what's) in)\s+(?:the\s+)?(.+)/i)[1];
+        const matches = (await this.tools.searchFiles(query)).filter((item) => item.type === 'file' && this.documents.supports(item.path));
+        if (!matches.length) {
+          result = this.#result(`I couldn't find a readable document matching “${query}.”`, 'documents');
+        } else {
+          try {
+            const document = await this.documents.readDocument(matches[0].path, 14000);
+            // untrustedContent: the document's text rides in this prompt, so the
+            // brain gets zero tools and the exchange stays out of history — a
+            // planted file must never reach remember_note (TRAP audit, 41a).
+            const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`, { unattended: stream.unattended === true, untrustedContent: true });
+            result = this.#result(summary.text, summary.source, { document: matches[0], success: summary.ok, detail: document.truncated ? 'The document was long, so JARVIS summarized the first section.' : '' });
+          } catch (error) {
+            result = this.#result(`I found the document but couldn't read it. ${error.message}`, 'documents', { success: false });
+          }
         }
       }
     } else if (this.documents && /^create\s+(?:a\s+)?folder(?:\s+(?:called|named))?\s+(.+?)\s+in\s+(.+)$/i.test(text)) {
-      const [, name, location] = text.match(/^create\s+(?:a\s+)?folder(?:\s+(?:called|named))?\s+(.+?)\s+in\s+(.+)$/i);
-      if (stream.unattended) {
-        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+      if (!this.profile.files) {
+        result = this.#jrGate('Creating folders');
       } else {
-        try {
-          const created = await this.documents.createFolder(location, name);
-          result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
-        } catch (error) {
-          result = this.#result(error.message, 'documents', { success: false });
-        }
-      }
-    } else if (this.documents && /^create\s+(?:a\s+)?(?:note|text file)(?:\s+(?:called|named))?\s+(.+?)\s+(?:that says|saying|with)\s+(.+)$/i.test(text)) {
-      const [, name, content] = text.match(/^create\s+(?:a\s+)?(?:note|text file)(?:\s+(?:called|named))?\s+(.+?)\s+(?:that says|saying|with)\s+(.+)$/i);
-      if (stream.unattended) {
-        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
-      } else {
-        try {
-          const created = await this.documents.createTextFile('documents', name, content, '.txt');
-          result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
-        } catch (error) {
-          result = this.#result(error.message, 'documents', { success: false });
-        }
-      }
-    } else if (this.documents && /^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i.test(text)) {
-      const [, name, topic] = text.match(/^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i);
-      const draft = await this.ai.reply(`Write a concise, useful Markdown report about: ${topic}. Use a title, short summary, key points, and next actions.`, { unattended: stream.unattended === true });
-      if (!draft.ok) result = this.#result(draft.text, draft.source, { success: false });
-      else if (stream.unattended) {
-        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
-      } else {
-        try {
-          const created = await this.documents.createTextFile('documents', name, draft.text, '.md');
-          result = this.#result(`${created.message} I saved the report in your approved Documents folder.`, 'documents', { createdPath: created.path, success: true });
-        } catch (error) {
-          result = this.#result(error.message, 'documents', { success: false });
-        }
-      }
-    } else if (this.documents && /^(copy|move)\s+(.+?)\s+to\s+(.+)$/i.test(text)) {
-      const [, operation, query, location] = text.match(/^(copy|move)\s+(.+?)\s+to\s+(.+)$/i);
-      const source = (await this.tools.searchFiles(query))[0];
-      const destination = this.documents.resolveLocation(location);
-      if (!source) result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
-      else if (!destination) result = this.#result(`Approve or assign the ${location} folder in Settings first.`, 'documents', { success: false });
-      else result = await this.#runFileAction(operation.toLowerCase(), source.path, { destination }, stream);
-    } else if (this.documents && /^rename\s+(.+?)\s+to\s+(.+)$/i.test(text)) {
-      const [, query, newName] = text.match(/^rename\s+(.+?)\s+to\s+(.+)$/i);
-      const source = (await this.tools.searchFiles(query))[0];
-      result = source
-        ? await this.#runFileAction('rename', source.path, { newName }, stream)
-        : this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
-    } else if (this.documents && /^(?:delete|trash)\s+(.+)$/i.test(text)) {
-      const query = text.match(/^(?:delete|trash)\s+(.+)$/i)[1];
-      const matches = await this.tools.searchFiles(query);
-      const source = matches[0];
-      const second = matches[1];
-      // Deleting is not something JARVIS can undo (only Windows' Recycle Bin
-      // can), so it demands a clear best hit: a real name match, and — when
-      // there's a runner-up — a solid lead over it. Same +3 gap the "find and
-      // open" branches use for "confident", plus a floor of 5 (at least a
-      // name.startsWith hit in ToolService.searchFiles' scoring) so a single
-      // weak, coincidental match doesn't get trashed either.
-      const confident = source && typeof source.score === 'number' && source.score >= 5
-        && (!second || typeof second.score !== 'number' || source.score >= second.score + 3);
-      if (!source) {
-        result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
-      } else if (!confident) {
-        result = this.#result(`I'm not sure which file you mean by “${query}.” Choose the one you want, or ask me again with a more exact name.`, 'documents', { files: matches.slice(0, 5), query, needsChoice: matches.length > 1, success: false });
-      } else if (stream.unattended) {
-        result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
-      } else {
-        // "Delete" means the Recycle Bin and nothing more — and only when the
-        // bin will really catch it. JARVIS has no permanent-erase capability.
-        const check = this.documents.canRecycle(source.path);
-        if (!check.ok) {
-          result = this.#result(check.reason, 'documents', { success: false });
+        const [, name, location] = text.match(/^create\s+(?:a\s+)?folder(?:\s+(?:called|named))?\s+(.+?)\s+in\s+(.+)$/i);
+        if (stream.unattended) {
+          result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
         } else {
           try {
-            const outcome = await this.documents.trashItem(source.path);
-            result = this.#result(outcome.message, 'documents', { success: Boolean(outcome && outcome.ok) });
+            const created = await this.documents.createFolder(location, name);
+            result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
           } catch (error) {
             result = this.#result(error.message, 'documents', { success: false });
           }
         }
       }
-    } else if (this.documents && /^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i.test(text)) {
-      const location = text.match(/^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i)[1];
-      try {
-        const plan = await this.documents.planOrganization(location);
-        if (!plan.moves.length) result = this.#result(`The ${location} folder is already organized or contains no loose files.`, 'documents');
-        else {
-          result = await this.#runFileAction('organize', plan.directory, { plan }, stream);
+    } else if (this.documents && /^create\s+(?:a\s+)?(?:note|text file)(?:\s+(?:called|named))?\s+(.+?)\s+(?:that says|saying|with)\s+(.+)$/i.test(text)) {
+      if (!this.profile.files) {
+        result = this.#jrGate('Creating files');
+      } else {
+        const [, name, content] = text.match(/^create\s+(?:a\s+)?(?:note|text file)(?:\s+(?:called|named))?\s+(.+?)\s+(?:that says|saying|with)\s+(.+)$/i);
+        if (stream.unattended) {
+          result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+        } else {
+          try {
+            const created = await this.documents.createTextFile('documents', name, content, '.txt');
+            result = this.#result(created.message, 'documents', { createdPath: created.path, success: true });
+          } catch (error) {
+            result = this.#result(error.message, 'documents', { success: false });
+          }
         }
-      } catch (error) {
-        result = this.#result(error.message, 'documents', { success: false });
+      }
+    } else if (this.documents && /^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i.test(text)) {
+      if (!this.profile.files) {
+        result = this.#jrGate('Creating files');
+      } else {
+        const [, name, topic] = text.match(/^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i);
+        const draft = await this.ai.reply(`Write a concise, useful Markdown report about: ${topic}. Use a title, short summary, key points, and next actions.`, { unattended: stream.unattended === true });
+        if (!draft.ok) result = this.#result(draft.text, draft.source, { success: false });
+        else if (stream.unattended) {
+          result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+        } else {
+          try {
+            const created = await this.documents.createTextFile('documents', name, draft.text, '.md');
+            result = this.#result(`${created.message} I saved the report in your approved Documents folder.`, 'documents', { createdPath: created.path, success: true });
+          } catch (error) {
+            result = this.#result(error.message, 'documents', { success: false });
+          }
+        }
+      }
+    } else if (this.documents && /^(copy|move)\s+(.+?)\s+to\s+(.+)$/i.test(text)) {
+      if (!this.profile.files) {
+        result = this.#jrGate('Moving files');
+      } else {
+        const [, operation, query, location] = text.match(/^(copy|move)\s+(.+?)\s+to\s+(.+)$/i);
+        const source = (await this.tools.searchFiles(query))[0];
+        const destination = this.documents.resolveLocation(location);
+        if (!source) result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
+        else if (!destination) result = this.#result(`Approve or assign the ${location} folder in Settings first.`, 'documents', { success: false });
+        else result = await this.#runFileAction(operation.toLowerCase(), source.path, { destination }, stream);
+      }
+    } else if (this.documents && /^rename\s+(.+?)\s+to\s+(.+)$/i.test(text)) {
+      if (!this.profile.files) {
+        result = this.#jrGate('Renaming files');
+      } else {
+        const [, query, newName] = text.match(/^rename\s+(.+?)\s+to\s+(.+)$/i);
+        const source = (await this.tools.searchFiles(query))[0];
+        result = source
+          ? await this.#runFileAction('rename', source.path, { newName }, stream)
+          : this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
+      }
+    } else if (this.documents && /^(?:delete|trash)\s+(.+)$/i.test(text)) {
+      if (!this.profile.files) {
+        result = this.#jrGate('Deleting files');
+      } else {
+        const query = text.match(/^(?:delete|trash)\s+(.+)$/i)[1];
+        const matches = await this.tools.searchFiles(query);
+        const source = matches[0];
+        const second = matches[1];
+        // Deleting is not something JARVIS can undo (only Windows' Recycle Bin
+        // can), so it demands a clear best hit: a real name match, and — when
+        // there's a runner-up — a solid lead over it. Same +3 gap the "find and
+        // open" branches use for "confident", plus a floor of 5 (at least a
+        // name.startsWith hit in ToolService.searchFiles' scoring) so a single
+        // weak, coincidental match doesn't get trashed either.
+        const confident = source && typeof source.score === 'number' && source.score >= 5
+          && (!second || typeof second.score !== 'number' || source.score >= second.score + 3);
+        if (!source) {
+          result = this.#result(`I couldn't find “${query}.”`, 'documents', { success: false });
+        } else if (!confident) {
+          result = this.#result(`I'm not sure which file you mean by “${query}.” Choose the one you want, or ask me again with a more exact name.`, 'documents', { files: matches.slice(0, 5), query, needsChoice: matches.length > 1, success: false });
+        } else if (stream.unattended) {
+          result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
+        } else {
+          // "Delete" means the Recycle Bin and nothing more — and only when the
+          // bin will really catch it. JARVIS has no permanent-erase capability.
+          const check = this.documents.canRecycle(source.path);
+          if (!check.ok) {
+            result = this.#result(check.reason, 'documents', { success: false });
+          } else {
+            try {
+              const outcome = await this.documents.trashItem(source.path);
+              result = this.#result(outcome.message, 'documents', { success: Boolean(outcome && outcome.ok) });
+            } catch (error) {
+              result = this.#result(error.message, 'documents', { success: false });
+            }
+          }
+        }
+      }
+    } else if (this.documents && /^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i.test(text)) {
+      if (!this.profile.files) {
+        result = this.#jrGate('Organizing folders');
+      } else {
+        const location = text.match(/^organize\s+(?:my\s+)?(.+?)(?:\s+folder)?$/i)[1];
+        try {
+          const plan = await this.documents.planOrganization(location);
+          if (!plan.moves.length) result = this.#result(`The ${location} folder is already organized or contains no loose files.`, 'documents');
+          else {
+            result = await this.#runFileAction('organize', plan.directory, { plan }, stream);
+          }
+        } catch (error) {
+          result = this.#result(error.message, 'documents', { success: false });
+        }
       }
     } else if (this.#matchRoutine(text, settings)) {
       const { name, routine } = this.#matchRoutine(text, settings);
@@ -527,23 +618,27 @@ class CommandRouter {
         result = this.#result(action.message, 'windows', { success: action.ok });
       }
     } else if (/^(?:jarvis[, ]*)?(?:can you\s+)?(?:find|locate|look for|search(?: my (?:computer|files))? for|find\s+and\s+open)\s+/i.test(text)) {
-      const query = extractFileQuery(text);
-      const files = await this.tools.searchFiles(query);
-      if (!files.length) {
-        result = this.#result(`I couldn’t find “${query}” in your approved folders.`, 'files', { files: [], query });
+      if (!this.profile.files) {
+        result = this.#jrGate('Finding files');
       } else {
-        const top = files[0];
-        const second = files[1];
-        const confident = files.length === 1 || top.score >= (second?.score || 0) + 3 || /\b(latest|newest|most recent)\b/i.test(query);
-        if (confident) {
-          if (stream.unattended) {
-            result = this.#result(`Opening files needs you at the desk, sir — I've left it for you.`, 'files', { files, query, success: false });
-          } else {
-            const opened = await this.tools.openPath(top.path);
-            result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query, openedFile: top, success: opened.ok });
-          }
+        const query = extractFileQuery(text);
+        const files = await this.tools.searchFiles(query);
+        if (!files.length) {
+          result = this.#result(`I couldn’t find “${query}” in your approved folders.`, 'files', { files: [], query });
         } else {
-          result = this.#result(`I found ${files.length} possible matches. Choose the one you want.`, 'files', { files, query, needsChoice: true });
+          const top = files[0];
+          const second = files[1];
+          const confident = files.length === 1 || top.score >= (second?.score || 0) + 3 || /\b(latest|newest|most recent)\b/i.test(query);
+          if (confident) {
+            if (stream.unattended) {
+              result = this.#result(`Opening files needs you at the desk, sir — I've left it for you.`, 'files', { files, query, success: false });
+            } else {
+              const opened = await this.tools.openPath(top.path);
+              result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query, openedFile: top, success: opened.ok });
+            }
+          } else {
+            result = this.#result(`I found ${files.length} possible matches. Choose the one you want.`, 'files', { files, query, needsChoice: true });
+          }
         }
       }
     } else if (/^(?:open|show)\s+(?:jarvis\s+)?settings$/i.test(text)) {
@@ -554,12 +649,30 @@ class CommandRouter {
       } else {
         const target = cleanTarget(text.match(/^(?:open|launch|start)\s+(.+)/i)[1]);
         const projectName = Object.keys(settings.projects || {}).find((name) => lower.includes(name));
+        // Browser and terminal are their own checklist rows, stricter than
+        // plain "apps" — a parent may allow opening apps in general while
+        // keeping the browser or a real terminal off. Checked by keyword
+        // only, so no service is touched before the gate can run.
+        const isBrowserTarget = /\b(?:browser|chrome|edge|firefox|safari|opera)\b/i.test(target);
+        const isTerminalTarget = /\b(?:terminal|command\s*prompt|cmd|powershell|shell|console)\b/i.test(target);
         if (projectName && /\b(project|workspace|folder)\b/i.test(text)) {
-          const action = await this.tools.openPath(settings.projects[projectName]);
-          result = this.#result(action.ok ? `Opening the ${projectName} workspace.` : `${action.message} Assign that folder in Settings.`, 'files', { success: action.ok });
+          if (!this.profile.files) {
+            result = this.#jrGate('Opening project folders');
+          } else {
+            const action = await this.tools.openPath(settings.projects[projectName]);
+            result = this.#result(action.ok ? `Opening the ${projectName} workspace.` : `${action.message} Assign that folder in Settings.`, 'files', { success: action.ok });
+          }
+        } else if (isBrowserTarget && !this.profile.browser) {
+          result = this.#jrGate('The browser');
+        } else if (isTerminalTarget && !this.profile.terminal) {
+          result = this.#jrGate('The terminal');
+        } else if (!this.profile.apps) {
+          result = this.#jrGate('Opening apps');
         } else if (this.tools.resolveApplication(target)) {
           const action = await this.tools.openApplication(target);
           result = this.#result(action.message, 'windows', { success: action.ok });
+        } else if (!this.profile.files) {
+          result = this.#jrGate('Finding files');
         } else {
           const files = await this.tools.searchFiles(target);
           if (!files.length) {
@@ -606,13 +719,23 @@ class CommandRouter {
       if (this.defense) this.defense.exit();
       result = this.#result('Standing down. Back to the desk.', 'defense', { defense: 'exit' });
     } else if (isBattleRequest(text)) {
-      // Words only — safe attended or unattended. The rules ride in the prompt.
-      const { topic } = isBattleRequest(text);
-      const bars = await this.ai.reply(buildBattlePrompt(topic), { onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
-      result = this.#result(bars.text, 'battle', { success: bars.ok !== false });
+      if (!this.profile.battle) {
+        result = this.#jrGate('Battle mode');
+      } else {
+        // Words only — safe attended or unattended. The rules ride in the prompt.
+        const { topic } = isBattleRequest(text);
+        const bars = await this.ai.reply(buildBattlePrompt(topic), { onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
+        result = this.#result(bars.text, 'battle', { success: bars.ok !== false });
+      }
     } else {
       const memories = this.memory.search(text, 4);
-      const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true });
+      // JR's content lock rides along on every ordinary reply too — but the
+      // system prompt itself is assembled inside ai-service.js, not here (see
+      // AIService.prompt()). The router's honest job is to hand the rules
+      // text and the profile through context so ai-service can splice them
+      // in; see task-5-report.md and Task 7.
+      const jrPromptRules = this.profile.contentLock ? buildJrPromptRules({ age: this.jrAge(), kidName: settings.kidName }) : '';
+      const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true, profile: this.profile, jrPromptRules });
       const extra = { detail: aiResult.detail, success: aiResult.ok };
       // When the brain used a tool that changed local state, hand the fresh
       // list back so the modules redraw instead of showing stale data.
@@ -671,6 +794,13 @@ class CommandRouter {
 
   #result(response, source, extra = {}) {
     return { id: crypto.randomUUID(), response, source, timestamp: new Date().toISOString(), ...extra };
+  }
+
+  // The refusal every gated JR branch returns when a parent hasn't switched
+  // the feature on. Never reached in the standard profile — every flag it
+  // checks defaults true there.
+  #jrGate(label) {
+    return this.#result(`${label} isn't switched on for you. A grown-up can turn it on in the parent panel.`, 'jr-gate', { success: false });
   }
 
   // Owner-issued file work runs immediately: the approved-folder boundary and
