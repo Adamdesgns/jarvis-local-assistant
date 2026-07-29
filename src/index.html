@@ -663,6 +663,49 @@
           <div id="jr-parent-controls" class="jr-checklist"></div>
           <button type="button" id="jr-parent-save-controls">Save changes</button>
           <p class="jr-note" id="jr-parent-relaunch" hidden>Saved. Changes apply the next time JARVIS JR starts.</p>
+          <details id="jr-cameras" open>
+            <summary>Cameras</summary>
+            <p class="jr-note" id="jr-cameras-off-note" hidden></p>
+            <div id="jr-cameras-list" class="jr-cameras-list"></div>
+            <div id="jr-cameras-add" hidden>
+              <div class="jr-camera-tabs">
+                <button type="button" class="active" data-jr-cam-brand="rtsp">LOCAL (RTSP)</button>
+                <button type="button" data-jr-cam-brand="blink">BLINK</button>
+                <button type="button" data-jr-cam-brand="ring">RING</button>
+                <button type="button" data-jr-cam-brand="nest">NEST</button>
+              </div>
+              <div id="jr-cam-pane-rtsp" class="jr-camera-pane">
+                <label>Camera name <input id="jr-cam-rtsp-name" placeholder="Front Door" autocomplete="off"></label>
+                <label>Address <input id="jr-cam-rtsp-url" placeholder="rtsp://username:password@camera-address/stream" autocomplete="off"></label>
+                <button type="button" id="jr-cam-rtsp-add">Add camera</button>
+              </div>
+              <div id="jr-cam-pane-blink" class="jr-camera-pane" hidden>
+                <label>Blink email <input id="jr-cam-blink-email" type="email" autocomplete="off"></label>
+                <label>Blink password <input id="jr-cam-blink-password" type="password" autocomplete="off"></label>
+                <button type="button" id="jr-cam-blink-signin">Sign in</button>
+                <div id="jr-cam-blink-pin-row" hidden>
+                  <label>PIN from the Blink email <input id="jr-cam-blink-pin" inputmode="numeric" autocomplete="off"></label>
+                  <button type="button" id="jr-cam-blink-verify">Verify PIN</button>
+                </div>
+              </div>
+              <div id="jr-cam-pane-ring" class="jr-camera-pane" hidden>
+                <label>Ring email <input id="jr-cam-ring-email" type="email" autocomplete="off"></label>
+                <label>Ring password <input id="jr-cam-ring-password" type="password" autocomplete="off"></label>
+                <button type="button" id="jr-cam-ring-signin">Sign in</button>
+                <div id="jr-cam-ring-code-row" hidden>
+                  <label>Code from Ring <input id="jr-cam-ring-code" inputmode="numeric" autocomplete="off"></label>
+                  <button type="button" id="jr-cam-ring-verify">Verify code</button>
+                </div>
+              </div>
+              <div id="jr-cam-pane-nest" class="jr-camera-pane" hidden>
+                <label>Device Access project ID <input id="jr-cam-nest-project" autocomplete="off"></label>
+                <label>OAuth client ID <input id="jr-cam-nest-client-id" autocomplete="off"></label>
+                <label>OAuth client secret <input id="jr-cam-nest-client-secret" type="password" autocomplete="off"></label>
+                <button type="button" id="jr-cam-nest-signin">Start Google sign-in</button>
+              </div>
+              <p id="jr-cam-status" class="jr-note" role="status" hidden></p>
+            </div>
+          </details>
           <details>
             <summary>Change PIN</summary>
             <label>New PIN <input id="jr-new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>

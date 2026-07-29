@@ -966,3 +966,46 @@ body.jr-locked #cc-root {
    only styles the command-center variant, which has no equivalent icon
    button of its own to inherit from). */
 .jr-parent-launch { font-size: 15px; }
+
+/* Parent panel: CAMERAS (Task 8b) — accounts are managed only here, see the
+   design spec's "The grown-up panel". Reuses .jr-sheet details/label/button
+   styling as-is; the rules below only cover what that baseline doesn't —
+   the brand tabs, the account rows, and the per-account remove button.
+   Scoped under #jr-cameras (an id, so specificity beats the generic
+   `.jr-sheet details button` rule above without needing !important). */
+#jr-cameras .jr-cameras-list { margin-top: var(--s3); }
+.jr-camera-row {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--s2);
+  padding: var(--s2) 0; border-bottom: 1px solid var(--line);
+}
+.jr-camera-row:last-child { border-bottom: none; }
+.jr-camera-row b { color: var(--text-primary); font: 500 var(--text-sm) var(--font); }
+.jr-camera-row span {
+  margin-left: var(--s2); color: var(--text-muted); font-size: var(--text-xs);
+  text-transform: uppercase; letter-spacing: var(--track-wide);
+}
+.jr-camera-none { margin-top: var(--s3); color: var(--text-muted); font-size: var(--text-sm); }
+
+#jr-cameras .jr-camera-remove {
+  margin-top: 0; width: auto; height: 28px; padding: 0 var(--s3);
+  border: 1px solid var(--danger); border-radius: var(--r-sm);
+  background: var(--danger-tint); color: var(--danger);
+  font: 500 var(--text-xs) var(--font); cursor: pointer;
+}
+#jr-cameras .jr-camera-remove:hover { background: var(--danger); color: var(--surface-solid); }
+
+#jr-cameras .jr-camera-tabs { display: flex; gap: var(--s2); margin-top: var(--s4); flex-wrap: wrap; }
+#jr-cameras .jr-camera-tabs button {
+  flex: 1 1 auto; margin-top: 0; width: auto; height: 32px; padding: 0 var(--s2);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: transparent; color: var(--text-secondary);
+  font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide);
+  cursor: pointer; transition: all var(--dur-fast) var(--ease);
+}
+#jr-cameras .jr-camera-tabs button:hover { background: var(--accent-tint-10); }
+#jr-cameras .jr-camera-tabs button.active {
+  border-color: var(--line-accent); color: var(--accent-bright); background: var(--accent-tint-10);
+}
+.jr-camera-pane[hidden] { display: none; }
+#jr-cam-blink-pin-row,
+#jr-cam-ring-code-row { margin-top: var(--s3); }

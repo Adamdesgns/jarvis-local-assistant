@@ -123,6 +123,8 @@
 
   var verifiedPin = null;   // held only while the panel is open, in memory
   var lockoutTimer = null;
+  var pendingBlinkAccount = '';  // Blink account awaiting its emailed PIN
+  var pendingRing = null;        // {email, password} held between Ring's 2FA round-trip
 
   function resetParentPanel() {
     verifiedPin = null;
@@ -135,6 +137,206 @@
     $('jr-new-pin').value = '';
     showError($('jr-parent-error'), '');
     showError($('jr-pin-note'), '');
+    resetCameraForms();
+  }
+
+  // ---- Parent panel: cameras (accounts are managed ONLY here — see the
+  // design spec's "The grown-up panel") ---------------------------------
+
+  function resetCameraForms() {
+    $('jr-cameras-list').innerHTML = '';
+    $('jr-cam-rtsp-name').value = '';
+    $('jr-cam-rtsp-url').value = '';
+    $('jr-cam-blink-email').value = '';
+    $('jr-cam-blink-password').value = '';
+    $('jr-cam-blink-pin').value = '';
+    $('jr-cam-blink-pin-row').hidden = true;
+    pendingBlinkAccount = '';
+    $('jr-cam-ring-email').value = '';
+    $('jr-cam-ring-password').value = '';
+    $('jr-cam-ring-code').value = '';
+    $('jr-cam-ring-code-row').hidden = true;
+    pendingRing = null;
+    $('jr-cam-nest-project').value = '';
+    $('jr-cam-nest-client-id').value = '';
+    $('jr-cam-nest-client-secret').value = '';
+    showError($('jr-cam-status'), '');
+  }
+
+  // Whether the account form shows at all depends on the "Cameras" checklist
+  // item, not on anything in this file: jr:parent:cameras refuses every
+  // mutating action with `cameras` off (main.js — CameraService is never
+  // constructed unless PROFILE.cameras is true), so there is nothing useful
+  // for the form to do until a parent turns that on, saves, and relaunches.
+  // The list itself still works either way (see loadCameraAccounts).
+  function updateCamerasVisibility(controls) {
+    var camerasOn = Boolean(controls && controls.cameras);
+    $('jr-cameras-add').hidden = !camerasOn;
+    showError($('jr-cameras-off-note'), camerasOn ? '' :
+      'Turn on Cameras above, save, and relaunch JARVIS JR to add or remove accounts here.');
+  }
+
+  function renderCameraAccounts(accounts) {
+    var list = $('jr-cameras-list');
+    list.innerHTML = '';
+    if (!accounts || !accounts.length) {
+      var none = document.createElement('p');
+      none.className = 'jr-camera-none';
+      none.textContent = 'No camera accounts yet.';
+      list.appendChild(none);
+      return;
+    }
+    accounts.forEach(function (account) {
+      var row = document.createElement('div');
+      row.className = 'jr-camera-row';
+      row.innerHTML = '<div><b></b><span></span></div><button type="button" class="jr-camera-remove">Remove</button>';
+      row.querySelector('b').textContent = account.name || account.brand;
+      row.querySelector('span').textContent = account.brand;
+      var removeButton = row.querySelector('.jr-camera-remove');
+      var confirmTimer = null;
+      removeButton.addEventListener('click', function () {
+        if (!removeButton.classList.contains('confirming')) {
+          removeButton.classList.add('confirming');
+          removeButton.textContent = 'Tap again';
+          confirmTimer = setTimeout(function () {
+            removeButton.classList.remove('confirming');
+            removeButton.textContent = 'Remove';
+            confirmTimer = null;
+          }, 4000);
+          return;
+        }
+        if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = null; }
+        removeCameraAccount(account.id);
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function loadCameraAccounts() {
+    if (!verifiedPin) return;
+    window.jarvis.jrParentCameras(verifiedPin, 'list').then(function (result) {
+      renderCameraAccounts(result && result.ok ? result.accounts : []);
+    }).catch(function () {
+      renderCameraAccounts([]);
+    });
+  }
+
+  function removeCameraAccount(accountId) {
+    if (!verifiedPin) return;
+    window.jarvis.jrParentCameras(verifiedPin, 'remove-account', accountId).then(function (result) {
+      if (!result || !result.ok) {
+        showError($('jr-cam-status'), (result && result.message) || 'Could not remove that account.');
+        return;
+      }
+      loadCameraAccounts();
+    }).catch(function () {
+      showError($('jr-cam-status'), 'Could not reach JARVIS JR. Try again.');
+    });
+  }
+
+  function bindCameraEvents() {
+    document.querySelectorAll('#jr-cameras [data-jr-cam-brand]').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        document.querySelectorAll('#jr-cameras [data-jr-cam-brand]').forEach(function (other) {
+          other.classList.toggle('active', other === tab);
+        });
+        ['rtsp', 'blink', 'ring', 'nest'].forEach(function (brand) {
+          $('jr-cam-pane-' + brand).hidden = brand !== tab.dataset.jrCamBrand;
+        });
+        showError($('jr-cam-status'), '');
+      });
+    });
+
+    $('jr-cam-rtsp-add').addEventListener('click', function () {
+      if (!verifiedPin) return;
+      var name = $('jr-cam-rtsp-name').value.trim() || 'My cameras';
+      var url = $('jr-cam-rtsp-url').value.trim();
+      showError($('jr-cam-status'), '');
+      window.jarvis.jrParentCameras(verifiedPin, 'add-rtsp', { name: name, cameras: [{ name: name, url: url }] })
+        .then(function (result) {
+          if (!result || !result.ok) { showError($('jr-cam-status'), (result && result.message) || 'Could not add that camera.'); return; }
+          $('jr-cam-rtsp-name').value = '';
+          $('jr-cam-rtsp-url').value = '';
+          loadCameraAccounts();
+        }).catch(function () { showError($('jr-cam-status'), 'Could not reach JARVIS JR. Try again.'); });
+    });
+
+    $('jr-cam-blink-signin').addEventListener('click', function () {
+      if (!verifiedPin) return;
+      showError($('jr-cam-status'), '');
+      var payload = { email: $('jr-cam-blink-email').value, password: $('jr-cam-blink-password').value };
+      window.jarvis.jrParentCameras(verifiedPin, 'add-blink', payload).then(function (result) {
+        $('jr-cam-blink-password').value = '';
+        if (!result || !result.ok) { showError($('jr-cam-status'), (result && result.message) || 'Blink sign-in failed.'); return; }
+        if (result.needsPin) {
+          pendingBlinkAccount = result.accountId;
+          $('jr-cam-blink-pin-row').hidden = false;
+          showError($('jr-cam-status'), result.message || 'Blink emailed a PIN. Enter it below to finish.');
+          return;
+        }
+        $('jr-cam-blink-email').value = '';
+        loadCameraAccounts();
+      }).catch(function () { showError($('jr-cam-status'), 'Could not reach JARVIS JR. Try again.'); });
+    });
+
+    $('jr-cam-blink-verify').addEventListener('click', function () {
+      if (!verifiedPin || !pendingBlinkAccount) return;
+      window.jarvis.jrParentCameras(verifiedPin, 'blink-pin', { accountId: pendingBlinkAccount, pin: $('jr-cam-blink-pin').value })
+        .then(function (result) {
+          showError($('jr-cam-status'), (result && result.message) || '');
+          if (result && result.ok) {
+            pendingBlinkAccount = '';
+            $('jr-cam-blink-pin').value = '';
+            $('jr-cam-blink-pin-row').hidden = true;
+            loadCameraAccounts();
+          }
+        }).catch(function () { showError($('jr-cam-status'), 'Could not reach JARVIS JR. Try again.'); });
+    });
+
+    function ringSignIn(code) {
+      if (!verifiedPin) return;
+      showError($('jr-cam-status'), '');
+      var base = pendingRing || { email: $('jr-cam-ring-email').value, password: $('jr-cam-ring-password').value };
+      var payload = { email: base.email, password: base.password, code: code };
+      window.jarvis.jrParentCameras(verifiedPin, 'add-ring', payload).then(function (result) {
+        if (!result || !result.ok) {
+          showError($('jr-cam-status'), (result && result.message) || 'Ring sign-in failed.');
+          pendingRing = null;
+          $('jr-cam-ring-password').value = '';
+          $('jr-cam-ring-code-row').hidden = true;
+          return;
+        }
+        if (result.needs2fa) {
+          pendingRing = base;
+          $('jr-cam-ring-code-row').hidden = false;
+          showError($('jr-cam-status'), result.message || 'Enter the code Ring sent you.');
+          return;
+        }
+        pendingRing = null;
+        $('jr-cam-ring-password').value = '';
+        $('jr-cam-ring-code').value = '';
+        $('jr-cam-ring-code-row').hidden = true;
+        loadCameraAccounts();
+      }).catch(function () { showError($('jr-cam-status'), 'Could not reach JARVIS JR. Try again.'); });
+    }
+    $('jr-cam-ring-signin').addEventListener('click', function () { ringSignIn(''); });
+    $('jr-cam-ring-verify').addEventListener('click', function () { ringSignIn($('jr-cam-ring-code').value); });
+
+    $('jr-cam-nest-signin').addEventListener('click', function () {
+      if (!verifiedPin) return;
+      showError($('jr-cam-status'), 'Opening Google sign-in in your browser… approve JARVIS there, then come back.');
+      window.jarvis.jrParentCameras(verifiedPin, 'add-nest', {
+        projectId: $('jr-cam-nest-project').value,
+        clientId: $('jr-cam-nest-client-id').value,
+        clientSecret: $('jr-cam-nest-client-secret').value
+      }).then(function (result) {
+        showError($('jr-cam-status'), (result && result.message) || '');
+        if (result && result.ok) {
+          $('jr-cam-nest-client-secret').value = '';
+          loadCameraAccounts();
+        }
+      }).catch(function () { showError($('jr-cam-status'), 'Could not reach JARVIS JR. Try again.'); });
+    });
   }
 
   function openParentPanel() {
@@ -194,6 +396,8 @@
           return;
         }
         renderChecklist($('jr-parent-controls'), controlsResult.controls);
+        updateCamerasVisibility(controlsResult.controls);
+        loadCameraAccounts();
         $('jr-parent-body').hidden = false;
       });
     }).catch(function () {
@@ -211,6 +415,7 @@
         return;
       }
       renderChecklist($('jr-parent-controls'), result.controls);
+      updateCamerasVisibility(result.controls);
       if (result.relaunchNeeded) $('jr-parent-relaunch').hidden = false;
     }).catch(function () {
       showError($('jr-parent-error'), 'Could not save changes. Try again.');
@@ -267,6 +472,7 @@
     $('jr-parent-save-controls').addEventListener('click', saveParentControls);
     $('jr-pin-save').addEventListener('click', saveNewPin);
     $('jr-parent-close').addEventListener('click', closeParentPanel);
+    bindCameraEvents();
   }
 
   function init(status) {

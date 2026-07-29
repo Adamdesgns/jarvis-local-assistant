@@ -1147,13 +1147,33 @@ function setupIpc() {
   // same CameraService methods (and the same cameraRefusal() Pro gate) the
   // standard build's own camera handlers call directly above — no separate
   // credential-handling path to keep in sync.
+  //
+  // Task 8b adds the 'list' action (parent panel's CAMERAS tab, src/jr-parent-
+  // ui.js). It is handled BEFORE the `if (!cameras)` guard on purpose: `cameras`
+  // (the CameraService instance) is null whenever the "Cameras" checklist item
+  // is off — see `if (PROFILE.cameras)` above, where the service itself is
+  // never constructed, same JUNIOR principle as everything else in core/
+  // variant.js. But a parent must still be able to see (and remove) whatever
+  // is already configured even in that state, so 'list' reads straight off
+  // config.getSettings().cameraAccounts instead of going through the service.
+  // Every other action still requires `cameras` to exist (Cameras checklist
+  // item on, and a relaunch since it happened) because adding/removing an
+  // account calls a CameraService method. Only id/brand/name are returned —
+  // never a secret; those live in config's separate secrets storage
+  // (CameraService's #readSecrets/setSecret) and are never on the account
+  // object itself.
   ipcMain.handle('jr:parent:cameras', async (_e, payload) => {
     if (!JR) return { ok: false };
     const gate = parentControls.verifyPin(payload?.pin);
     if (!gate.ok) return gate;
-    if (!cameras) return { ok: false, message: 'Cameras are not turned on for JARVIS JR.' };
     const body = payload?.payload;
-    switch (String(payload?.action || '')) {
+    const action = String(payload?.action || '');
+    if (action === 'list') {
+      const accounts = config.getSettings().cameraAccounts || [];
+      return { ok: true, accounts: accounts.map((account) => ({ id: account.id, brand: account.brand, name: account.name })) };
+    }
+    if (!cameras) return { ok: false, message: 'Cameras are not turned on for JARVIS JR.' };
+    switch (action) {
       case 'add-blink': return cameraRefusal() || cameras.addBlinkAccount(body || {});
       case 'blink-pin': return cameras.submitBlinkPin(String(body?.accountId || ''), String(body?.pin || ''));
       case 'add-ring': return cameraRefusal() || cameras.addRingAccount(body || {});
