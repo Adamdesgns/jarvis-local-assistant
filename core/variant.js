@@ -168,7 +168,13 @@ const FEATURE_IPC = Object.freeze({
   terminal: ['terminal:classify', 'terminal:run', 'terminal:cwd'],
   screenRead: ['screen:describe'],
   files: ['files:roots', 'files:home', 'files:list', 'path:open', 'dialog:folder'],
-  tasks: ['tasks:list', 'tasks:add', 'tasks:update', 'tasks:remove']
+  tasks: ['tasks:list', 'tasks:add', 'tasks:update', 'tasks:remove'],
+  // The board's moves and the scoreboard. Gated on 'games' like every other
+  // FEATURE_IPC set — main.js constructs GameScores unconditionally (it is
+  // harmless in the standard build, same as MemoryStore/TaskStore), so this
+  // is the only place "games off" actually withholds anything in JR: the
+  // router's own branch (core/router.js) never calls detectGame either.
+  games: ['game:move', 'game:score']
   // documents/apps/browser/power gate no dedicated IPC channel today — they
   // run through command:submit, gated inside CommandRouter (Task 5) instead.
   // timers has no IPC surface yet in main.js. Nothing to list here until one

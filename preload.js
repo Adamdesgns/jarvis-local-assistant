@@ -57,6 +57,11 @@ contextBridge.exposeInMainWorld('jarvis', {
     update: (id, text) => ipcRenderer.invoke('memory:update', { id, text }),
     remove: (id) => ipcRenderer.invoke('memory:remove', id)
   },
+  // JARVIS JR's games: a move request and the scoreboard. Allowlisted under
+  // the 'games' flag (core/variant.js) — thrown from DevTools when a parent
+  // has switched games off, same as every other gated channel.
+  gameMove: (payload) => ipcRenderer.invoke('game:move', payload),
+  gameScore: (payload) => ipcRenderer.invoke('game:score', payload),
   cameras: {
     bootstrap: () => ipcRenderer.invoke('cameras:bootstrap'),
     addRtsp: (payload) => ipcRenderer.invoke('cameras:add-rtsp', payload),

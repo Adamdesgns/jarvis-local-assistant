@@ -101,4 +101,24 @@ function rpsThrow(difficulty, history = [], rng = Math.random) {
   return uniform();
 }
 
-module.exports = { DIFFICULTIES, TTT_LINES, tttWinner, tttBestMove, tttMove, RPS, rpsJudge, rpsThrow };
+// Narrow, anchored patterns — deliberately strict so an ordinary sentence
+// that merely mentions the game ("my brother won't play tic tac toe with
+// me") never opens a board. The router only ever parses; it never decides
+// how the games are played.
+const TTT_PATTERNS = Object.freeze([
+  /^(?:let'?s )?play (?:a game of )?tic[- ]?tac[- ]?toe$/i,
+  /^tic[- ]?tac[- ]?toe$/i
+]);
+const RPS_PATTERNS = Object.freeze([
+  /^(?:let'?s )?play rock[,\s]*paper[,\s]*scissors$/i,
+  /^rock paper scissors$/i
+]);
+
+function detectGame(text) {
+  const trimmed = String(text || '').trim();
+  if (TTT_PATTERNS.some((pattern) => pattern.test(trimmed))) return { game: 'ttt' };
+  if (RPS_PATTERNS.some((pattern) => pattern.test(trimmed))) return { game: 'rps' };
+  return null;
+}
+
+module.exports = { DIFFICULTIES, TTT_LINES, tttWinner, tttBestMove, tttMove, RPS, rpsJudge, rpsThrow, detectGame };

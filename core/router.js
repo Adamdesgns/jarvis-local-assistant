@@ -6,6 +6,8 @@ const { matchQuip } = require('./quips');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
 const { STANDARD_PROFILE } = require('./variant');
 const { guardTopic, buildJrPromptRules } = require('./kid-mode');
+const { detectGame } = require('./games');
+const { gameLine } = require('./game-lines');
 
 // An approved drive plan must be exactly what was shown on the card — frozen
 // all the way down before it is stored, so nothing between approval and
@@ -247,6 +249,30 @@ class CommandRouter {
       const quipResult = this.#result(quip.reply, 'local-core', quip.effect ? { effect: quip.effect } : {});
       this.#log(text, quipResult);
       return quipResult;
+    }
+
+    // "play tic tac toe" / "play rock paper scissors" — checked right after
+    // quips (quips still get first crack at a scripted line) and ahead of
+    // every other branch below, including battle, so a narrow game phrase
+    // can never be swallowed by a looser pattern further down. detectGame's
+    // patterns are anchored and deliberately strict (see games.js), so this
+    // never mis-fires on an ordinary sentence that merely mentions a game.
+    // When games is off, detectGame is never even called — same "off means
+    // untouched" gate style as cameraLook/driveAsk above, except here there
+    // is no jr-gate refusal to hand back: an unmatched or gated game phrase
+    // is harmless small talk and simply falls through to the ordinary reply
+    // branch at the bottom of this method.
+    if (this.profile.games) {
+      const detectedGame = detectGame(text);
+      if (detectedGame) {
+        const gameResult = this.#result(
+          gameLine('gameStart', { age: this.jrAge() }),
+          'jr-game',
+          { game: detectedGame.game, success: true }
+        );
+        this.#log(text, gameResult);
+        return gameResult;
+      }
     }
 
     const lower = text.toLowerCase();

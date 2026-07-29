@@ -19,6 +19,8 @@ const { Transcript } = require('./core/transcript');
 const { CrashLog, installProcessHandlers } = require('./core/crash-log');
 const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
+const { GameScores } = require('./core/game-scores');
+const { tttMove, rpsThrow } = require('./core/games');
 const { ToolService } = require('./core/tool-service');
 const { DocumentService } = require('./core/document-service');
 const { createCommandRunner } = require('./core/command-runner');
@@ -103,6 +105,7 @@ let log;
 let transcript;
 let memory;
 let tasks;
+let gameScores;
 let tools;
 let documents;
 // THE TERMINAL stage 2's runner. Safe to build at module scope: the approved-root
@@ -865,6 +868,20 @@ function setupIpc() {
   ipcMain.handle('tasks:add', (_event, input) => tasks.add(input));
   ipcMain.handle('tasks:update', (_event, { id, patch }) => tasks.update(id, patch));
   ipcMain.handle('tasks:remove', (_event, id) => tasks.remove(id));
+  // Real Math.random on both engines here — the rng parameter exists so the
+  // core/games.js test suite can pin deterministic behaviour; live play gets
+  // genuine randomness. JARVIS is always 'O' in tic tac toe (the games UI
+  // has the kid moving first as 'X' — see the games plan's Task 6).
+  ipcMain.handle('game:move', (_event, payload) => {
+    const { game, board, difficulty, history } = payload || {};
+    if (game === 'ttt') return { move: tttMove(board, 'O', difficulty) };
+    if (game === 'rps') return { shape: rpsThrow(difficulty, history) };
+    throw new Error(`Unknown game: ${game}`);
+  });
+  ipcMain.handle('game:score', (_event, payload) => {
+    const { game, outcome } = payload || {};
+    return game && outcome ? gameScores.record(game, outcome) : gameScores.get();
+  });
   ipcMain.handle('memory:list', () => memory.list(100));
   ipcMain.handle('memory:add', (_event, { text, project }) => memory.add(text, project));
   ipcMain.handle('memory:update', (_event, { id, text }) => memory.update(id, text));
@@ -1436,6 +1453,15 @@ app.whenReady().then(async () => {
   currentSkin = config.getSettings().skin || 'classic';
   memory = new MemoryStore(app.getPath('userData'));
   tasks = new TaskStore(app.getPath('userData'));
+  // Unconditional, like memory/tasks above — not gated on PROFILE.games. A
+  // kid's own scoreboard is harmless to have sitting on disk even when a
+  // parent has games switched off (or in the standard build, where it just
+  // rides along unused); the ONE place "games off" actually withholds
+  // anything is the IPC allowlist (core/variant.js's FEATURE_IPC.games) and
+  // the router's own gate (core/router.js), both of which never touch this
+  // instance when the flag is off. Simpler than a PROFILE.games-conditional
+  // construction, and keeps the standard build byte-identical in behaviour.
+  gameScores = new GameScores(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });
   documents = PROFILE.documents ? new DocumentService({ config, shell, emit: sendEverywhere }) : null;
   // getCameras/getAi are lazy getters: `cameras` isn't constructed until

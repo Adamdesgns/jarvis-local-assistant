@@ -68,6 +68,18 @@ test('ipc allowlist: tasks is on by default (matches DEFAULT_CONTROLS.tasks)', (
   assert.ok(off.has('tasks:add'));
 });
 
+// Task 4 (games): games is on by default (DEFAULT_CONTROLS.games), so the
+// move/score channels are reachable out of the box, and vanish the moment a
+// parent switches games off — same shape as the tasks test above.
+test('ipc allowlist: game channels follow the games flag (on by default)', () => {
+  const on = jrIpcAllowlist(profileFor('jr', DEFAULT_CONTROLS));
+  assert.ok(on.has('game:move'));
+  assert.ok(on.has('game:score'));
+  const off = jrIpcAllowlist(profileFor('jr', { ...DEFAULT_CONTROLS, games: false }));
+  assert.ok(!off.has('game:move'));
+  assert.ok(!off.has('game:score'));
+});
+
 test('ipc allowlist: never-list channels are absent no matter what is switched on', () => {
   const allOn = jrIpcAllowlist(profileFor('jr', Object.fromEntries(Object.keys(DEFAULT_CONTROLS).map((k) => [k, true]))));
   const never = [

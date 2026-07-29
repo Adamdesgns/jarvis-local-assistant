@@ -122,6 +122,50 @@ test('standard profile: behaviour unchanged — no guard, no gates', async () =>
   assert.notEqual(result.source, 'jr-guard');
 });
 
+// Task 4 (games): "play tic tac toe" / "play rock paper scissors" and their
+// narrow variants must resolve at the jr-game branch, not fall through to the
+// model. The negative case — a sentence that merely CONTAINS the words —
+// must NOT match, so an ordinary conversation about a sibling never opens a
+// game board. #result spreads `extra` flat onto the result object (see
+// router.js's #result), so the shape here is `result.game`/`result.success`
+// directly, not a nested `meta` object — pinned explicitly below.
+test('games ON: narrow "play tic tac toe" / "play rock paper scissors" phrasings open the board', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, games: true });
+  const ttt = [
+    'play tic tac toe', "let's play tic tac toe", 'play a game of tic tac toe',
+    'tic tac toe', 'tic-tac-toe', 'tictactoe'
+  ];
+  const rps = [
+    'play rock paper scissors', "let's play rock, paper, scissors", 'rock paper scissors'
+  ];
+  for (const phrase of ttt) {
+    const result = await router.handle(phrase);
+    assert.equal(result.source, 'jr-game', phrase);
+    assert.equal(result.game, 'ttt', phrase);
+    assert.equal(result.success, true, phrase);
+  }
+  for (const phrase of rps) {
+    const result = await router.handle(phrase);
+    assert.equal(result.source, 'jr-game', phrase);
+    assert.equal(result.game, 'rps', phrase);
+    assert.equal(result.success, true, phrase);
+  }
+});
+
+test('games ON: a sentence merely mentioning the game does not open the board', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, games: true });
+  const result = await router.handle("my brother won't play tic tac toe with me");
+  assert.notEqual(result.source, 'jr-game');
+});
+
+test('games OFF: "play tic tac toe" never reaches the jr-game branch', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, games: false });
+  const result = await router.handle('play tic tac toe');
+  assert.notEqual(result.source, 'jr-game');
+  const rps = await router.handle('play rock paper scissors');
+  assert.notEqual(rps.source, 'jr-game');
+});
+
 // Task 5 review holes: routines, focus mode, dashboard, close, and defense
 // mode all reached a real service with every JR control switched off. Reuses
 // the jrRouter() helper's throwing-proxy services (mine()) — if a gate is
