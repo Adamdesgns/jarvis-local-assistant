@@ -21,9 +21,24 @@ function accumulateStreamChunk(state, chunk) {
 }
 
 class AIService {
-  constructor(config, registry = null) {
+  // `options.profile`/`options.jrPromptRules` are how JR's construction in
+  // main.js makes the content lock FAIL CLOSED: every existing per-call
+  // `context` shape stays exactly as it was (nothing here is required), but
+  // when a caller forgets to thread `context.profile`/`context.jrPromptRules`
+  // through an individual reply()/answerFromDocuments() call — main.js's
+  // screen:describe used to be exactly that gap — #registryFor() and
+  // prompt() fall back to what was captured here at construction instead of
+  // silently handing back the full, ungated belt. Standard builds never pass
+  // this third argument, so this.profile/this.jrPromptRules stay null and
+  // every call site behaves byte-identically to before.
+  constructor(config, registry = null, options = {}) {
     this.config = config;
     this.registry = registry;
+    this.profile = options.profile || null;
+    // A thunk, not a precomputed string: a kid's age/name can change after
+    // boot (parent panel edits), so this must be read fresh on every turn
+    // rather than frozen at construction time.
+    this.jrPromptRules = typeof options.jrPromptRules === 'function' ? options.jrPromptRules : null;
     // Rolling conversation history per project so follow-up questions work.
     this.sessions = new Map();
   }
@@ -53,14 +68,17 @@ class AIService {
   // not a subset, because unattendedSafe is not untrusted-safe: remember_note
   // is append-only and still the perfect prompt-poisoning vector. Unattended
   // runs (scheduled tasks, nobody watching) get the unattendedSafe allowlist.
-  // jr's checklist gate composes with both: context.profile arrives on every
-  // ai.reply() call (the router threads it through — see core/router.js's
-  // reply call), so it is read from context here rather than stashed on the
-  // instance at construction time; filterRegistryForProfile no-ops for a
-  // standard/absent profile, so this changes nothing outside jr.
+  // jr's checklist gate composes with both: context.profile normally arrives
+  // on every ai.reply() call (the router threads it through — see
+  // core/router.js's #aiContext helper), but a caller that forgets it must
+  // still get the filtered belt in JR — that is the FAIL CLOSED fix: the
+  // effective profile falls back to the one captured at construction
+  // (this.profile) rather than to nothing. filterRegistryForProfile no-ops
+  // for a standard/absent profile, so this changes nothing outside jr.
   #registryFor(context) {
     if (context.untrustedContent === true) return [];
-    const registry = filterRegistryForProfile(this.registry || [], context.profile);
+    const profile = context.profile || this.profile;
+    const registry = filterRegistryForProfile(this.registry || [], profile);
     if (context.unattended === true) return registry.filter((tool) => tool.unattendedSafe === true);
     return registry;
   }
@@ -115,8 +133,19 @@ class AIService {
       // context.jrPromptRules; ai-service just appends what it was handed —
       // it does not recompute the rules or require profile.contentLock/jrAge
       // itself, so there is exactly one source of truth for the wording.
-      context.jrPromptRules || ''
+      // FAIL CLOSED: when a caller omits context.jrPromptRules entirely
+      // (rather than threading an explicit '' for a non-JR turn), and this
+      // instance was constructed with a JR profile, the rules are built here
+      // from the thunk captured at construction instead of silently coming
+      // back blank.
+      this.#effectiveJrPromptRules(context)
     ].filter(Boolean).join('\n');
+  }
+
+  #effectiveJrPromptRules(context) {
+    if (context.jrPromptRules !== undefined) return context.jrPromptRules;
+    if (this.profile?.contentLock && this.jrPromptRules) return this.jrPromptRules();
+    return '';
   }
 
   // Which cloud provider should answer: the user's preference when its key is
@@ -338,8 +367,15 @@ class AIService {
       '- Cite every claim with its source number in square brackets, like [1] or [2].',
       '- Keep the answer short and spoken-plain. Lead with the answer.',
       '',
-      `PASSAGES:\n${sourcesBlock}`
-    ].join('\n');
+      `PASSAGES:\n${sourcesBlock}`,
+      // JR's content lock, appended once when the caller threads it through
+      // context (see core/router.js's #aiContext). answerFromDocuments stays
+      // zero-tools regardless — this only affects the words the model is
+      // told to use, not what it can do — and the rules text itself already
+      // opens with its own "CONTENT LOCK —" marker (buildJrPromptRules), so
+      // no extra header is needed here.
+      context.jrPromptRules || ''
+    ].filter(Boolean).join('\n');
     const groundedContext = { ...context, systemOverride, onChunk: context.onChunk, onReset: context.onReset };
     const mode = settings.aiMode || 'local';
     let result;

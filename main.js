@@ -9,6 +9,7 @@ const {
 const { ConfigStore } = require('./core/config-store');
 const { resolveVariant, isJr, profileFor, jrUserDataPath, jrIpcAllowlist, filterJrSettingsPatch } = require('./core/variant');
 const { ParentControls } = require('./core/parent-controls');
+const { buildJrPromptRules } = require('./core/kid-mode');
 const { PRO_FEATURES, isPro, gateSettingsPatch, applyLicenseToSettings, featureAllowed } = require('./core/license-gate');
 const { resolveEdition, effectiveLicenseState, defaultAssistantName } = require('./core/edition');
 const { needsNaming, namingPatch, nameHeardIn, normalizeAssistantName } = require('./core/onboarding');
@@ -132,6 +133,13 @@ let heartbeat;
 let licenseService;
 let parentControls;
 let PROFILE;
+// JR's content-lock rules thunk — the same one AIService is constructed with
+// (see the `new AIService(...)` call and its `{ profile, jrPromptRules }`
+// options) and the same shape core/router.js's #aiContext() computes
+// per-call. Module-level, like `ai`/`PROFILE`, so a handler registered in
+// setupIpc() (a separate function) can still reach it via closure once boot
+// assigns it. Null in standard builds and whenever JR has no parentControls.
+let jrPromptRulesThunk = null;
 let camerasInitialized = false;
 let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
@@ -968,7 +976,17 @@ function setupIpc() {
       const primary = sources[0];
       if (!primary || primary.thumbnail.isEmpty()) return { ok: false, message: 'Windows did not return a screen image to look at.' };
       const base64 = primary.thumbnail.toPNG().toString('base64');
-      const answer = await ai.describeImage(base64, question || 'Describe what is on this screen and anything that looks important.', {});
+      // FIX (Task 7): this call used to hand describeImage an empty context
+      // — the per-call-context-only design fails open for exactly a caller
+      // like this one that forgets to thread the profile/content-lock rules.
+      // AIService's own construction-time profile/jrPromptRules (above) now
+      // covers this even if the context stayed empty, but threading it
+      // explicitly here too keeps this call site honest on its own, the same
+      // way core/router.js's #aiContext() does for every this.ai. call there.
+      const answer = await ai.describeImage(base64, question || 'Describe what is on this screen and anything that looks important.', {
+        profile: PROFILE,
+        jrPromptRules: jrPromptRulesThunk ? jrPromptRulesThunk() : ''
+      });
       return { ok: answer.ok !== false, message: answer.text, source: answer.source };
     } catch (error) {
       return { ok: false, message: `I could not read the screen: ${error.message}` };
@@ -1359,6 +1377,13 @@ app.whenReady().then(async () => {
   // mid-session checklist edit needs the relaunch jr:parent:controls reports.
   parentControls = JR ? new ParentControls(config) : null;
   PROFILE = profileFor(VARIANT, parentControls ? parentControls.getControls() : null);
+  // A thunk, not a precomputed string, so a parent-panel edit to age/kidName
+  // mid-session is picked up on the very next turn rather than frozen at
+  // boot. Passed into AIService below so the content lock rides even a call
+  // that forgets to thread context.jrPromptRules through itself (FAIL CLOSED
+  // — see AIService's constructor/prompt()); main.js's own screen:describe
+  // handler also builds the string explicitly from this same thunk.
+  jrPromptRulesThunk = parentControls ? () => buildJrPromptRules({ age: parentControls.age(), kidName: parentControls.getKidName() }) : null;
   // IPC allowlist: every channel not named here throws (handle) or is
   // silently dropped (on) for the JR build. Installed before setupIpc() (and
   // before any of the gated service construction below registers nothing —
@@ -1397,7 +1422,7 @@ app.whenReady().then(async () => {
   // below, and `ai` cannot be passed to its own registry before `new
   // AIService(...)` returns. Both closures resolve once the module-level
   // `let` bindings are assigned, without reordering construction.
-  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai }));
+  ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai }), { profile: PROFILE, jrPromptRules: jrPromptRulesThunk });
   ollama = new OllamaService({ config, emit: sendEverywhere });
   // Go2RtcManager/CameraService gate together on PROFILE.cameras. cameras CAN
   // be true in JR (a parent-enabled checklist item) independently of

@@ -229,3 +229,57 @@ test('standard profile: routine folders are unchanged — no isAllowed check, no
 function mineThatThrowsIfTouched() {
   return new Proxy({}, { get() { throw new Error('BOOBY TRAP: documents.isAllowed touched in standard profile'); } });
 }
+
+// Task 7 (fail-closed threading): the per-call-context-only design fails open
+// when a caller forgets — the fix is core/router.js's #aiContext() helper,
+// used at EVERY this.ai.reply()/answerFromDocuments() call site so none of
+// them can forget to hand over `profile`/`jrPromptRules`. This test pins that
+// for the three reply-reaching branches that are NOT the already-covered
+// ordinary-talk branch: battle, create-report, and document-summarize. Each
+// gets a fresh router with only the one control it needs switched on; where
+// the branch also touches a booby-trapped service (documents/tools) that
+// isn't the point of this test, it gets a minimal stub instead, per the task
+// brief ("give it a minimal stub for this test only").
+test('every reply-reaching branch threads profile + jrPromptRules through ai.reply (battle, create report, document summarize)', async () => {
+  const captured = [];
+  const aiReply = async (prompt, context) => { captured.push({ prompt, context }); return { ok: true, text: 'stub reply', source: 'local' }; };
+
+  // Battle mode.
+  {
+    const router = jrRouter({ ...DEFAULT_CONTROLS, battle: true }, aiReply);
+    captured.length = 0;
+    const result = await router.handle('battle me about pizza vs tacos');
+    assert.equal(captured.length, 1, 'battle must reach ai.reply exactly once');
+    assert.equal(captured[0].context.profile.contentLock, true);
+    assert.match(captured[0].context.jrPromptRules, /CONTENT LOCK/);
+    assert.match(captured[0].context.jrPromptRules, /HOMEWORK RULE/i);
+    assert.equal(result.source, 'battle');
+  }
+
+  // Create report — needs files ON; documents.createTextFile is stubbed
+  // minimally since the point here is what reaches ai.reply, not file I/O.
+  {
+    const router = jrRouter({ ...DEFAULT_CONTROLS, files: true }, aiReply);
+    router.documents = { createTextFile: async () => ({ ok: true, path: 'C:\\Docs\\notes.md', message: 'Created notes.md.' }) };
+    captured.length = 0;
+    await router.handle('create a report called notes about widgets');
+    assert.equal(captured.length, 1, 'create report must reach ai.reply exactly once');
+    assert.equal(captured[0].context.profile.contentLock, true);
+    assert.match(captured[0].context.jrPromptRules, /CONTENT LOCK/);
+  }
+
+  // Document summarize — needs documents ON; tools.searchFiles and
+  // documents.supports/readDocument are stubbed minimally for the same
+  // reason as above.
+  {
+    const router = jrRouter({ ...DEFAULT_CONTROLS, documents: true }, aiReply);
+    router.tools = { searchFiles: async () => [{ name: 'report.pdf', path: 'C:\\Docs\\report.pdf', type: 'file' }] };
+    router.documents = { supports: () => true, readDocument: async () => ({ name: 'report.pdf', text: 'doc text', truncated: false }) };
+    captured.length = 0;
+    await router.handle('summarize report.pdf');
+    assert.equal(captured.length, 1, 'document summarize must reach ai.reply exactly once');
+    assert.equal(captured[0].context.profile.contentLock, true);
+    assert.equal(captured[0].context.untrustedContent, true, 'summarize must keep its untrustedContent clamp');
+    assert.match(captured[0].context.jrPromptRules, /CONTENT LOCK/);
+  }
+});

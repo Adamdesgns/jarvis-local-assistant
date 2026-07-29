@@ -423,7 +423,7 @@ class CommandRouter {
         if (!passages.length) {
           result = this.#result(`I couldn’t find anything about “${question}” in your approved documents.`, 'documents', { files: [] });
         } else {
-          const aiResult = await this.ai.answerFromDocuments(question, passages, { project, onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
+          const aiResult = await this.ai.answerFromDocuments(question, passages, this.#aiContext({ project, onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true }));
           // Turn the cited passages into clickable file rows the user can open.
           const seen = new Set();
           const files = (aiResult.sources || []).filter((s) => { if (seen.has(s.path)) return false; seen.add(s.path); return true; })
@@ -461,7 +461,7 @@ class CommandRouter {
             // untrustedContent: the document's text rides in this prompt, so the
             // brain gets zero tools and the exchange stays out of history — a
             // planted file must never reach remember_note (TRAP audit, 41a).
-            const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`, { unattended: stream.unattended === true, untrustedContent: true });
+            const summary = await this.ai.reply(`Summarize this document clearly. Start with what it is, then list the important points and any actions or deadlines.\n\nDOCUMENT: ${document.name}\n\n${document.text}`, this.#aiContext({ unattended: stream.unattended === true, untrustedContent: true }));
             result = this.#result(summary.text, summary.source, { document: matches[0], success: summary.ok, detail: document.truncated ? 'The document was long, so JARVIS summarized the first section.' : '' });
           } catch (error) {
             result = this.#result(`I found the document but couldn't read it. ${error.message}`, 'documents', { success: false });
@@ -505,7 +505,7 @@ class CommandRouter {
         result = this.#jrGate('Creating files');
       } else {
         const [, name, topic] = text.match(/^create\s+(?:a\s+)?report(?:\s+(?:called|named))?\s+(.+?)\s+(?:about|on)\s+(.+)$/i);
-        const draft = await this.ai.reply(`Write a concise, useful Markdown report about: ${topic}. Use a title, short summary, key points, and next actions.`, { unattended: stream.unattended === true });
+        const draft = await this.ai.reply(`Write a concise, useful Markdown report about: ${topic}. Use a title, short summary, key points, and next actions.`, this.#aiContext({ unattended: stream.unattended === true }));
         if (!draft.ok) result = this.#result(draft.text, draft.source, { success: false });
         else if (stream.unattended) {
           result = this.#result(`This file action needs you at the desk, sir — I've left it for you.`, 'safety', { success: false });
@@ -778,7 +778,7 @@ class CommandRouter {
       } else {
         // Words only — safe attended or unattended. The rules ride in the prompt.
         const { topic } = isBattleRequest(text);
-        const bars = await this.ai.reply(buildBattlePrompt(topic), { onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
+        const bars = await this.ai.reply(buildBattlePrompt(topic), this.#aiContext({ onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true }));
         result = this.#result(bars.text, 'battle', { success: bars.ok !== false });
       }
     } else {
@@ -787,9 +787,9 @@ class CommandRouter {
       // system prompt itself is assembled inside ai-service.js, not here (see
       // AIService.prompt()). The router's honest job is to hand the rules
       // text and the profile through context so ai-service can splice them
-      // in; see task-5-report.md and Task 7.
-      const jrPromptRules = this.profile.contentLock ? buildJrPromptRules({ age: this.jrAge(), kidName: settings.kidName }) : '';
-      const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true, profile: this.profile, jrPromptRules });
+      // in; see task-5-report.md and Task 7. #aiContext (below) is the one
+      // place that computes both, shared by every this.ai. call site.
+      const aiResult = await this.ai.reply(text, this.#aiContext({ memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true }));
       const extra = { detail: aiResult.detail, success: aiResult.ok };
       // When the brain used a tool that changed local state, hand the fresh
       // list back so the modules redraw instead of showing stale data.
@@ -848,6 +848,20 @@ class CommandRouter {
 
   #result(response, source, extra = {}) {
     return { id: crypto.randomUUID(), response, source, timestamp: new Date().toISOString(), ...extra };
+  }
+
+  // The ONE place that assembles the context every this.ai.reply()/
+  // answerFromDocuments() call site hands over: the capability profile (so
+  // ai-service's registry filter sees it, on top of its own fail-closed
+  // fallback to whatever main.js constructed it with) and the content-lock
+  // rules text (built fresh each call — kidName/age can change between
+  // turns). Centralizing this means a call site can never forget to thread
+  // either one; see ordinary talk, battle, create-report, document-summarize
+  // and ask-my-documents, all of which pass their own `extra` through here.
+  #aiContext(extra = {}) {
+    const settings = this.config.getSettings();
+    const jrPromptRules = this.profile.contentLock ? buildJrPromptRules({ age: this.jrAge(), kidName: settings.kidName }) : '';
+    return { ...extra, profile: this.profile, jrPromptRules };
   }
 
   // The refusal every gated JR branch returns when a parent hasn't switched
