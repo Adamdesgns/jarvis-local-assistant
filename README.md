@@ -47,6 +47,35 @@ floating orb when minimized.
 - All data in one folder (`%APPDATA%\jarvis-local-assistant`) you can back up,
   export, or delete. See [PRIVACY.md](PRIVACY.md) and [SUPPORT.md](SUPPORT.md)
 
+## JARVIS JR — a separate build for kids
+
+JARVIS JR is the parental-controls variant of JARVIS: its own build, its
+own installer, its own `%APPDATA%\jarvis-jr` folder — never shares data
+with the grown-up JARVIS, and can run side by side with it. Run it from
+source with `npm run start:jr`; package its installer with `npm run
+dist:jr`.
+
+**The parental-controls model, in five lines:**
+- A parent sets it up first — PIN, birthdate, and a checklist of what's
+  allowed — before a kid ever sees a desk; nothing about that gate can be
+  skipped or redone without the PIN.
+- Every reply is age-banded off that birthdate, and adjusts automatically
+  as the kid gets older — no re-setup required.
+- A content-lock guard checks every message before it ever reaches the AI
+  brain; dangerous or grown-up topics get a fixed, honest deflection
+  instead of an explanation, no matter what the model would have said.
+- The checklist is deny-by-default and gates what JARVIS JR even builds —
+  a control left off (cameras, the terminal, the browser, file search)
+  isn't hidden, it's simply not constructed that run.
+- Checklist and PIN changes need the parent PIN and take effect the next
+  time JARVIS JR starts; the panel says so, so nothing shifts mid-session.
+
+**Privacy stance:** the activity log records topic refusals so a parent
+can see what got blocked and why, but never a cry for help — if a kid
+says something that sounds like they're in danger, JARVIS JR answers with
+care and points them to a trusted adult (and 988, in the US) without ever
+writing that moment to the log, on purpose.
+
 ## Install
 
 1. Download **JARVIS-FREE-SETUP.exe** from [Releases](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest) and run it.

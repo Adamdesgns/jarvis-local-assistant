@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Added — JARVIS JR: a separate build with parental controls built in
+- A new variant, its own build and installer (`npm run start:jr` /
+  `npm run dist:jr`), its own `%APPDATA%\jarvis-jr` folder — never touches
+  the grown-up JARVIS's data, and the two can run side by side.
+- **A parent sets it up, not the kid:** PIN, birthdate, and a checklist of
+  what's allowed, blocking the whole desk until it's done. Nothing about
+  that gate can be skipped or redone later without the PIN.
+- **The checklist is deny-by-default and gates what gets built, not just
+  what's shown** — cameras, the terminal, the browser, and file search
+  stay genuinely absent (not hidden, not disabled) until a parent turns
+  each one on; everything changes at the next launch, never mid-session.
+- **A content-lock guard reads every message before the AI brain does,**
+  age-banded off the birthdate a parent entered — dangerous or grown-up
+  topics get a fixed, honest deflection instead of an answer, no matter
+  what the model underneath would have said.
+- **Care is never surveillance:** if a kid says something that sounds
+  like they're in danger, JARVIS JR answers with care and points them to
+  a trusted adult (and 988, in the US) — and that moment is never written
+  to the activity log a parent can review, on purpose. Ordinary topic
+  refusals still are, so a parent can see what got blocked and why.
+- A PIN-gated parent panel (five wrong tries locks it out with a
+  countdown) lets a parent revisit the checklist or change the PIN
+  anytime after setup.
+
 ### Added — THE BROWSER (stage 1): surf inside JARVIS
 - A new **Browser** module (Modules → Browser): tabs (up to five), address bar,
   back/forward/reload, dressed in your skin with the active-tab underline in
