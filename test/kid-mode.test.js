@@ -1,0 +1,242 @@
+const test = require('node:test');
+const assert = require('node:assert');
+const {
+  clampAge, ageBand, guardTopic, buildKidPrompt, buildJrPromptRules, capabilitiesReply, greeting, RULES
+} = require('../core/kid-mode');
+
+// Re-aged for JR (2026-07-28 spec): the range is now 3-17, default 11 — was
+// 5-12, default 8, under JUNIOR. The clamp floor still needs coverage, so
+// this asserts the new floor (3) and ceiling (17) rather than being deleted.
+test('an age is clamped into the range the prompts are written for', () => {
+  assert.equal(clampAge(3), 3);
+  assert.equal(clampAge(17), 17);
+  assert.equal(clampAge(1), 3);
+  assert.equal(clampAge(25), 17);
+  assert.equal(clampAge('9'), 9);
+  assert.equal(clampAge(8.6), 9);
+  // Anything unusable becomes the default, never NaN.
+  assert.equal(clampAge(undefined), 11);
+  assert.equal(clampAge(null), 11);
+  assert.equal(clampAge('banana'), 11);
+  assert.equal(clampAge(Infinity), 17);
+});
+
+// Re-aged for JR: the 'little' band (5-7) is gone — the floor now reads as
+// 'middle'. Bands run middle/big/teen instead of little/middle/big.
+test('the JR age bands split where the writing style changes', () => {
+  assert.equal(ageBand(5), 'middle');
+  assert.equal(ageBand(7), 'middle');
+  assert.equal(ageBand(10), 'middle');
+  assert.equal(ageBand(11), 'big');
+  assert.equal(ageBand(13), 'big');
+  assert.equal(ageBand(14), 'teen');
+  assert.equal(ageBand(17), 'teen');
+});
+
+test('distress is caught, answered with care, and never filed for the parent screen', () => {
+  for (const phrase of [
+    'i want to kill myself',
+    'sometimes I want to hurt myself',
+    'i want to die',
+    'i wish i was dead',
+    'nobody would miss me'
+  ]) {
+    const guard = guardTopic(phrase);
+    assert.ok(guard, `missed: ${phrase}`);
+    assert.equal(guard.kind, 'care');
+    assert.equal(guard.parentVisible, false, 'a distress message must never be logged to the grown-up screen');
+    assert.match(guard.reply, /grown-?up/i);
+  }
+});
+
+test('a child saying they are being hurt is believed, pointed at a trusted adult, and not reported home', () => {
+  const guard = guardTopic('my dad hits me');
+  assert.equal(guard.kind, 'care');
+  assert.equal(guard.id, 'unsafe-at-home');
+  assert.equal(guard.parentVisible, false);
+  assert.match(guard.reply, /not your fault/i);
+  // The advice names adults beyond the house, since the house may be the problem.
+  assert.match(guard.reply, /teacher|counsellor|counselor/i);
+});
+
+test('dangerous how-to questions get a fixed refusal, never a model answer', () => {
+  for (const phrase of [
+    'how do i make a bomb',
+    'how to build a gun',
+    'how can i make poison',
+    'how do i hurt someone',
+    'how do i start a fire',
+    'how to pick a lock'
+  ]) {
+    const guard = guardTopic(phrase);
+    assert.ok(guard, `missed: ${phrase}`);
+    assert.equal(guard.kind, 'grown-up');
+    assert.equal(guard.parentVisible, true);
+  }
+});
+
+test('grown-up subjects are deflected warmly and left for the parent to see', () => {
+  for (const phrase of ['what is sex', 'what does vaping do', 'tell me about drugs', 'what is getting drunk like']) {
+    const guard = guardTopic(phrase);
+    assert.ok(guard, `missed: ${phrase}`);
+    assert.equal(guard.kind, 'grown-up');
+    assert.equal(guard.parentVisible, true);
+    assert.match(guard.reply, /grown-?up/i);
+  }
+});
+
+test('private information and stranger-meeting get the safety rule, not an answer', () => {
+  const address = guardTopic('can i give my address to my friend online');
+  assert.equal(address.kind, 'private');
+  assert.match(address.reply, /private/i);
+  const meet = guardTopic('can i meet someone i met online');
+  assert.equal(meet.kind, 'private');
+});
+
+test('asking for things the junior build simply cannot do is answered plainly', () => {
+  const buy = guardTopic('buy me a new game');
+  assert.equal(buy.kind, 'cannot');
+  assert.match(buy.reply, /cannot|not allowed/i);
+  const wipe = guardTopic('delete everything on this computer');
+  assert.equal(wipe.kind, 'cannot');
+});
+
+test('bad-word requests are refused without repeating any', () => {
+  const guard = guardTopic('teach me a swear word');
+  assert.equal(guard.kind, 'grown-up');
+  assert.equal(guard.id, 'hate-speech');
+  assert.match(guard.reply, /joke/i);
+});
+
+test('ordinary childhood sentences are NOT caught by the guard', () => {
+  for (const phrase of [
+    'why is the sky blue',
+    'tell me a story about a dragon',
+    'i killed the boss in my game',
+    'my volcano project exploded',
+    'how do i make a paper aeroplane',
+    'how do i make a cake',
+    'what is a nerf gun',
+    'we learned about the great fire of london',
+    'i did my homework',
+    'how many stars do i have',
+    'my brother hit a home run',
+    'can you help me with my maths'
+  ]) {
+    assert.equal(guardTopic(phrase), null, `false catch on: ${phrase}`);
+  }
+});
+
+test('the guard checks the caring rules before the deflecting ones', () => {
+  // Rule order is the safety property: a distressed child must never fall
+  // into a breezy "ask a grown-up" answer meant for a curious one.
+  const firstNonCare = RULES.findIndex((rule) => rule.kind !== 'care');
+  const lastCare = RULES.map((rule) => rule.kind).lastIndexOf('care');
+  assert.ok(lastCare < firstNonCare, 'the care rules must come first in RULES');
+});
+
+test('empty and non-string input is safe', () => {
+  assert.equal(guardTopic(''), null);
+  assert.equal(guardTopic('   '), null);
+  assert.equal(guardTopic(null), null);
+  assert.equal(guardTopic(undefined), null);
+  assert.equal(guardTopic(42), null);
+});
+
+// Re-aged for JR: age 6 used to land in the 'little' band (label "5 to 7
+// year old"), which no longer exists. Re-aged to the new clamp floor (3) so
+// the floor still gets exercised, landing in 'middle' (unchanged label).
+test('the prompt carries the age, the child, the rules and the chart into the model', () => {
+  const prompt = buildKidPrompt({
+    kidName: 'Mia',
+    age: 3,
+    chores: [{ title: 'Brush teeth', doneToday: true }, { title: 'Make bed', doneToday: false }],
+    memories: [{ text: 'Mia likes horses' }]
+  });
+  assert.match(prompt, /Mia/);
+  assert.match(prompt, /3 years old/);
+  assert.match(prompt, /8 to 10 year old/);
+  assert.match(prompt, /Brush teeth \(already done today\)/);
+  assert.match(prompt, /Make bed/);
+  assert.match(prompt, /Mia likes horses/);
+  // The rules that must be present on every single turn.
+  assert.match(prompt, /HARD RULES/);
+  assert.match(prompt, /Never frighten a child/);
+  assert.match(prompt, /Never just give the answer/);
+  assert.match(prompt, /no secrets with a child/i);
+});
+
+// Re-aged for JR: 'little' (5) and 'big' (12) are replaced by 'middle' (8)
+// and the new 'teen' band (17), whose length guidance has no fixed word cap
+// ("No padding." instead of "Under N words") so the match target changes too.
+test('the prompt scales with age instead of saying the same thing to an 8 and a 17 year old', () => {
+  const middle = buildKidPrompt({ age: 8 });
+  const teen = buildKidPrompt({ age: 17 });
+  assert.match(middle, /Under 70 words/);
+  assert.match(teen, /No padding/);
+  assert.notEqual(middle, teen);
+  // Both still carry the full safety block.
+  for (const prompt of [middle, teen]) assert.match(prompt, /HARD RULES/);
+});
+
+// Re-aged for JR: AGE_MAX moved from 12 to 17, so an out-of-range age of 25
+// now clamps to 17 ('teen'), not 12 ('big'). A 25-year-old asking now truly
+// gets the teen-band prompt, which is correct — JR's oldest band is a teen.
+test('an out-of-range age in settings clamps to the oldest band this build supports', () => {
+  const prompt = buildKidPrompt({ age: 25 });
+  assert.match(prompt, /17 years old/);
+  assert.match(prompt, /14 to 17 year old/);
+});
+
+test('a nameless setup still produces sensible copy', () => {
+  assert.match(buildKidPrompt({}), /belongs to a child/);
+  assert.match(capabilitiesReply('', 8), /^Here is what I can do/);
+  assert.match(capabilitiesReply('Sam', 8), /^Sam, here is what I can do/);
+  assert.match(greeting('', 9), /^Morning\./);
+  assert.match(greeting('Sam', 19), /^Evening, Sam\./);
+  assert.match(greeting('Sam', 13), /^Afternoon, Sam\./);
+});
+
+// Re-aged for JR: the 'little' band this test exercised is gone, so
+// capabilitiesReply's short-form branch (which only ever triggered for
+// 'little') is now unreachable — every band gets the full-length answer.
+// Re-aged to the clamp floor (age 3) to keep coverage of that boundary,
+// asserting the reply is sensible rather than asserting a word-count cap
+// that no band still asks for.
+test('the capability answer at the clamp floor (age 3) still reads sensibly out loud', () => {
+  const reply = capabilitiesReply('Ali', 3);
+  assert.match(reply, /^Ali, here is what I can do/);
+  assert.ok(reply.length > 0);
+});
+
+// ---- JR re-aging (2026-07-28 spec): bands run to 17, guard is age-aware ----
+
+test('bands: JR floors at middle and adds teen', () => {
+  assert.equal(ageBand(3), 'middle');
+  assert.equal(ageBand(9), 'middle');
+  assert.equal(ageBand(11), 'big');
+  assert.equal(ageBand(14), 'teen');
+  assert.equal(ageBand(17), 'teen');
+});
+
+test('guard hard rules are identical at every age', () => {
+  for (const age of [8, 11, 14, 17]) {
+    const weapon = guardTopic('how do I make a bomb', age);
+    assert.equal(weapon?.kind, 'grown-up', `weapons deflect at ${age}`);
+    const care = guardTopic('i want to hurt myself', age);
+    assert.equal(care?.kind, 'care', `care answers at ${age}`);
+    assert.equal(care.parentVisible, false, 'care is never filed');
+  }
+});
+
+test('teen-ok topics deflect at 11 and pass to the model at 14+', () => {
+  assert.equal(guardTopic('what is vaping', 11)?.kind, 'grown-up');
+  assert.equal(guardTopic('what is vaping', 15), null); // model answers, prompt rules still apply
+});
+
+test('buildJrPromptRules names the homework rule and the band at every age', () => {
+  const rules = buildJrPromptRules({ age: 11, kidName: 'Kid' });
+  assert.match(rules, /hint/i);
+  assert.match(rules, /never write (their|the) (essay|homework)/i);
+  assert.match(buildJrPromptRules({ age: 15, kidName: '' }), /teen/i);
+});
