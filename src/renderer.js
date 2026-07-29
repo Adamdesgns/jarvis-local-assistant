@@ -1572,7 +1572,7 @@ async function executeCommand(command) {
   if (looksLikeScreenView(text)) { setResponse(`› ${text}`); return describeScreen(text); }
   state.streamBuffer = '';
   document.body.classList.add('busy');
-  if (looksLikeFileSearch(text)) startSearchExperience(text);
+  if (looksLikeFileSearch(text) && moduleAllowedForCurrentProfile('file-explorer')) startSearchExperience(text);
   else setCoreState('processing', 'ROUTING LOCAL COMMAND');
   setResponse(`› ${text}`);
   try {
@@ -1598,6 +1598,13 @@ async function executeCommand(command) {
         $('scan-path').textContent = result.query;
         setTimeout(() => finishSearchExperience(), 1800);
       }
+    } else if (state.searchActive) {
+      // The router answered without a .files key at all — e.g. a jr-gate
+      // reply when the profile denies file-explorer. There is no match
+      // animation running to protect here, so close the spotlight now
+      // rather than leaving it stuck open forever (renderModuleVisibility
+      // deliberately never touches .spotlight cards).
+      finishSearchExperience();
     }
     state.activity = await window.jarvis.recentActivity(20); renderActivity(state.activity);
     // Safety net: any command can change tasks through the brain's tools, so
