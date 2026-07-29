@@ -87,6 +87,56 @@ test('setPin requires the old pin', () => {
   assert.equal(pc.verifyPin('13579').ok, true);
 });
 
+// FIX 1 (Critical, task-6 review): setup re-entry. Once isSetUp() is true,
+// completeSetup must refuse a redo unless the payload proves it is the same
+// parent — a verified currentPin, checked through the SAME verifyPin/PinGate
+// used everywhere else, so brute-forcing a re-setup counts toward the normal
+// lockout rather than opening a second, uncounted PIN-guessing surface.
+test('completeSetup refuses re-entry with no currentPin once already set up', () => {
+  const pc = new ParentControls(fakeConfig());
+  const first = pc.completeSetup({ pin: '2468', birthdate: '2015-03-09', controls: { documents: true } });
+  assert.equal(first.ok, true);
+  const redo = pc.completeSetup({ pin: '1357', birthdate: '2016-06-01', controls: { browser: true } });
+  assert.equal(redo.ok, false);
+  assert.match(redo.reason, /already set up/i);
+  // nothing changed
+  assert.equal(pc.getBirthdate(), '2015-03-09');
+  assert.equal(pc.verifyPin('2468').ok, true);
+});
+
+test('completeSetup refuses re-entry with a wrong currentPin, and it counts toward lockout', () => {
+  const pc = new ParentControls(fakeConfig());
+  pc.completeSetup({ pin: '2468', birthdate: '2015-03-09', controls: {} });
+  for (let i = 0; i < 4; i++) {
+    const redo = pc.completeSetup({ pin: '1357', birthdate: '2016-06-01', controls: {}, currentPin: '0000' });
+    assert.equal(redo.ok, false);
+    assert.match(redo.reason, /already set up/i);
+  }
+  // the 5th wrong currentPin trips the same lockout verifyPin uses
+  const fifth = pc.completeSetup({ pin: '1357', birthdate: '2016-06-01', controls: {}, currentPin: '0000' });
+  assert.equal(fifth.ok, false);
+  // even the RIGHT pin is now refused, through the ordinary parent-panel gate
+  const locked = pc.verifyPin('2468');
+  assert.equal(locked.ok, false);
+  assert.equal(locked.locked, true);
+  // nothing was ever changed by any of the failed attempts
+  assert.equal(pc.getBirthdate(), '2015-03-09');
+});
+
+test('completeSetup with the right currentPin performs a full redo', () => {
+  const pc = new ParentControls(fakeConfig());
+  pc.completeSetup({ pin: '2468', birthdate: '2015-03-09', controls: { documents: true }, kidName: 'Old' });
+  const redo = pc.completeSetup({
+    pin: '1357', birthdate: '2016-06-01', controls: { browser: true }, kidName: 'New', currentPin: '2468'
+  });
+  assert.equal(redo.ok, true);
+  assert.equal(pc.getBirthdate(), '2016-06-01');
+  assert.equal(pc.getKidName(), 'New');
+  assert.equal(pc.verifyPin('1357').ok, true);
+  assert.equal(pc.getControls().browser, true);
+  assert.equal(pc.getControls().documents, false); // a full redo replaces, it does not merge
+});
+
 test('completeSetup stores an optional kidName, trimmed and capped at 24 chars', () => {
   const pc = new ParentControls(fakeConfig());
   pc.completeSetup({ pin: '2468', birthdate: '2015-03-09', controls: {}, kidName: '  Sam  ' });

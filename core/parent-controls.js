@@ -69,7 +69,22 @@ class ParentControls {
     return Boolean(data.pinHash && data.birthdate);
   }
 
-  completeSetup({ pin, birthdate, controls, kidName } = {}) {
+  completeSetup({ pin, birthdate, controls, kidName, currentPin } = {}) {
+    // Re-entry guard: once a parent has already completed setup, a second
+    // completeSetup call is a full redo — new PIN, new birthdate, the works —
+    // so it demands proof this is the same parent, not just a page reload a
+    // kid found. That proof is a currentPin that verifies against the stored
+    // hash, routed through the SAME verifyPin()/PinGate the parent panel
+    // uses: a currentPin present but wrong still counts as a failed attempt
+    // toward the ordinary lockout, so this can't be used as a second,
+    // uncounted PIN-guessing surface next to jr:parent:verify.
+    if (this.isSetUp()) {
+      const hasCurrentPin = currentPin !== undefined && currentPin !== null && String(currentPin).trim() !== '';
+      const verified = hasCurrentPin && this.verifyPin(currentPin).ok;
+      if (!verified) {
+        return { ok: false, reason: 'JARVIS JR is already set up. Use the parent panel.' };
+      }
+    }
     const pinCheck = lock.validatePin(pin);
     if (!pinCheck.ok) return { ok: false, reason: pinCheck.message };
     const parsed = parseBirthdate(birthdate);

@@ -142,3 +142,76 @@ test('routine with only folders needs files, not apps', async () => {
   const result = await router.handle('start work');
   assert.equal(result.source, 'jr-gate');
 });
+
+// FIX 3 (Critical, task-6 review): routine folders bypass approved roots.
+// A routine's folders are settings.json entries a kid can edit directly (or
+// a parent can mistype), resolved through `(settings.projects || {})[folder]
+// || folder` — so an entry that is not a known project name is opened AS A
+// LITERAL PATH with no check at all, even though the ordinary "open the
+// Anvil project" and "find and open ..." branches only ever reach paths
+// vetted by the same approved-roots boundary path:open uses. This is the
+// booby trap: `documents` here is `mine('documents')` (see jrRouter above),
+// so if the router ever reaches `tools.openPath` on the unapproved path
+// without first consulting `documents.isAllowed`, the BOOBY TRAP on `tools`
+// fires and fails the test with a clear rejection instead of a silent pass.
+test('JR + files ON: a routine folder outside approved roots is refused, tools.openPath never touched', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, files: true });
+  router.documents = { isAllowed: (target) => target === 'C:\\Approved' };
+  router.config = {
+    getSettings: () => ({
+      kidName: 'Kid', personality: 'Witty, composed.', searchRoots: [], applications: {},
+      projects: {},
+      routines: { 'start work': { apps: [], folders: ['C:\\NotApproved'] } }
+    })
+  };
+  const result = await router.handle('start work'); // router.tools is still mine('tools') — a touch throws
+  assert.equal(result.success, false);
+  assert.match(result.response, /notapproved|not approved|approved/i);
+});
+
+test('JR + files ON: a routine whose folders are all approved still runs (no false refusal)', async () => {
+  const opened = [];
+  const router = jrRouter({ ...DEFAULT_CONTROLS, files: true });
+  router.documents = { isAllowed: (target) => target === 'C:\\Approved' };
+  router.tools = {
+    openApplication: async (name) => { opened.push(name); return { ok: true, message: 'ok' }; },
+    openPath: async (target) => { opened.push(target); return { ok: true, message: 'ok' }; },
+    resolveApplication: () => null
+  };
+  router.config = {
+    getSettings: () => ({
+      kidName: 'Kid', personality: 'Witty, composed.', searchRoots: [], applications: {},
+      projects: {},
+      routines: { 'start work': { apps: [], folders: ['C:\\Approved'] } }
+    })
+  };
+  const result = await router.handle('start work');
+  assert.deepEqual(opened, ['C:\\Approved']);
+  assert.equal(result.success, true);
+});
+
+test('standard profile: routine folders are unchanged — no isAllowed check, no gate', async () => {
+  const opened = [];
+  const router = jrRouter(DEFAULT_CONTROLS);
+  router.profile = { ...STANDARD_PROFILE };
+  router.documents = mineThatThrowsIfTouched();
+  router.tools = {
+    openApplication: async (name) => { opened.push(name); return { ok: true, message: 'ok' }; },
+    openPath: async (target) => { opened.push(target); return { ok: true, message: 'ok' }; },
+    resolveApplication: () => null
+  };
+  router.config = {
+    getSettings: () => ({
+      kidName: 'Kid', personality: 'Witty, composed.', searchRoots: [], applications: {},
+      projects: {},
+      routines: { 'start work': { apps: [], folders: ['C:\\AnyPathAtAll'] } }
+    })
+  };
+  const result = await router.handle('start work');
+  assert.deepEqual(opened, ['C:\\AnyPathAtAll']);
+  assert.equal(result.success, true);
+});
+
+function mineThatThrowsIfTouched() {
+  return new Proxy({}, { get() { throw new Error('BOOBY TRAP: documents.isAllowed touched in standard profile'); } });
+}

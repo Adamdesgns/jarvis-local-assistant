@@ -146,11 +146,16 @@ const BASE_IPC = Object.freeze([
 // behind it, so the handler would throw/reach a null; the allowlist keeps
 // the renderer from even reaching that handler.
 const FEATURE_IPC = Object.freeze({
+  // View-only: listing what is already configured, snapshotting, and
+  // watching a live stream. Every channel that ADDS/REMOVES an account or
+  // ARMS/DISARMS a system is deliberately absent — see the "never admitted"
+  // list below. Those are parental territory, same family as the jrParent
+  // secret itself, and are reachable only through the PIN-gated
+  // jr:parent:cameras channel (JR_IPC, below).
   cameras: [
-    'cameras:bootstrap', 'cameras:add-blink', 'cameras:blink-pin', 'cameras:systems',
-    'cameras:add-ring', 'cameras:live-answer', 'cameras:add-nest', 'cameras:describe',
-    'cameras:set-armed', 'cameras:add-rtsp', 'cameras:remove-account', 'cameras:list',
-    'cameras:snapshot', 'cameras:live-start', 'cameras:live-stop', 'cameras:discover'
+    'cameras:bootstrap', 'cameras:systems', 'cameras:list', 'cameras:snapshot',
+    'cameras:describe', 'cameras:live-start', 'cameras:live-stop', 'cameras:live-answer',
+    'cameras:discover'
   ],
   terminal: ['terminal:classify', 'terminal:run', 'terminal:cwd'],
   screenRead: ['screen:describe'],
@@ -168,7 +173,13 @@ const FEATURE_IPC = Object.freeze({
 // jr:parent:* mutation still demands the PIN in the same call; the renderer
 // never holds an unlocked session token.
 const JR_IPC = Object.freeze([
-  'jr:status', 'jr:setup:complete', 'jr:parent:verify', 'jr:parent:controls', 'jr:parent:pin'
+  'jr:status', 'jr:setup:complete', 'jr:parent:verify', 'jr:parent:controls', 'jr:parent:pin',
+  // Camera CONFIG's one doorway: {pin, action, payload}. main.js verifies the
+  // PIN first (same PinGate lockout as every other jr:parent:* mutation),
+  // then dispatches `action` to the same CameraService methods the standard
+  // build's cameras:add-blink/add-ring/add-nest/add-rtsp/remove-account/
+  // set-armed/blink-pin channels call directly — no separate credential path.
+  'jr:parent:cameras'
 ]);
 
 // NEVER admitted, at any checklist setting — deliberately left OUT of every
@@ -188,6 +199,11 @@ const JR_IPC = Object.freeze([
 //   license:status/activate/validate/deactivate         — purchase/license management
 //   defense:status/enter/exit/wave-off/zones            — defense is always off in jr
 //   screen:drive-stop                                   — screenDrive is always off in jr
+//   cameras:add-blink/blink-pin/add-ring/add-nest/       — camera CONFIG: account credentials
+//     add-rtsp/remove-account/set-armed                    and arm/disarm. Never admitted under
+//                                                          their own names, cameras on or off —
+//                                                          reachable only through the PIN-gated
+//                                                          jr:parent:cameras multiplexer (JR_IPC).
 
 function jrIpcAllowlist(profile) {
   const allowed = new Set([...BASE_IPC, ...JR_IPC]);
@@ -199,8 +215,35 @@ function jrIpcAllowlist(profile) {
   return allowed;
 }
 
+// settings:save's own ConfigStore.updateSettings allowlist (core/config-store.js)
+// was written for a single-variant app: it happily writes searchRoots,
+// routines, cameraAccounts, screenControlEnabled, autonomyRules, and more —
+// every one of them capability-adjacent state that belongs to the PIN-locked
+// parent checklist, not to a renderer-reachable channel a kid's UI can call
+// freely (see task-6-report.md, "Settings keys a JR kid can still write").
+// JR_SETTINGS_ALLOW is the narrower list main.js filters every JR
+// settings:save patch through — cosmetic/voice state only. Everything else is
+// silently dropped: the parent panel's PIN-gated channels are the only route
+// to anything that widens what JR can do.
+const JR_SETTINGS_ALLOW = Object.freeze([
+  'skin', 'orbSkin', 'orbColor', 'windowGlass', 'motionMode', 'moduleLayout',
+  'hiddenModules', 'orbBounds', 'voiceName', 'voiceEnabled', 'localVoiceEnabled',
+  'localVoiceModel', 'wakeWordEnabled', 'wakeSensitivity', 'ttsEngine',
+  'kokoroVoice', 'kokoroDevice', 'minimizeToOrb'
+]);
+
+// Pure and side-effect-free so it is trivial to test on its own: keeps only
+// the allowed keys actually present in the patch, drops everything else.
+function filterJrSettingsPatch(patch) {
+  const out = {};
+  for (const key of JR_SETTINGS_ALLOW) {
+    if (Object.prototype.hasOwnProperty.call(patch || {}, key)) out[key] = patch[key];
+  }
+  return out;
+}
+
 module.exports = {
   VARIANTS, CONTROL_KEYS, DEFAULT_CONTROLS, STANDARD_PROFILE,
   resolveVariant, isJr, normalizeControls, profileFor,
-  jrUserDataPath, jrIpcAllowlist
+  jrUserDataPath, jrIpcAllowlist, JR_SETTINGS_ALLOW, filterJrSettingsPatch
 };

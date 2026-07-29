@@ -7,7 +7,7 @@ const {
   Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
-const { resolveVariant, isJr, profileFor, jrUserDataPath, jrIpcAllowlist } = require('./core/variant');
+const { resolveVariant, isJr, profileFor, jrUserDataPath, jrIpcAllowlist, filterJrSettingsPatch } = require('./core/variant');
 const { ParentControls } = require('./core/parent-controls');
 const { PRO_FEATURES, isPro, gateSettingsPatch, applyLicenseToSettings, featureAllowed } = require('./core/license-gate');
 const { resolveEdition, effectiveLicenseState, defaultAssistantName } = require('./core/edition');
@@ -882,10 +882,17 @@ function setupIpc() {
 
   ipcMain.handle('settings:save', async (_event, patch) => {
     const previous = config.getSettings();
+    // JR first: capability-adjacent settings (searchRoots, routines,
+    // cameraAccounts, screenControlEnabled, aiMode, ...) are parental
+    // territory — the parent panel's PIN-gated channels are the only route
+    // to them in JR. filterJrSettingsPatch keeps only cosmetic/voice state;
+    // everything else in a JR renderer patch is silently dropped before the
+    // license gate or ConfigStore ever see it. No-op in standard (JR false).
+    const incomingPatch = JR ? filterJrSettingsPatch(patch || {}) : (patch || {});
     // The license choke point: an unlicensed attempt to switch a Pro feature
     // on is stripped here, before anything persists, and reported so the UI
     // can explain instead of silently snapping the toggle back.
-    const { patch: gatedPatch, refused } = gateSettingsPatch(previous, patch || {}, currentLicenseState());
+    const { patch: gatedPatch, refused } = gateSettingsPatch(previous, incomingPatch, currentLicenseState());
     // The rename path shares first-run naming's rules: control characters
     // stripped (the name lands verbatim in every system prompt), capped, and
     // an emptied field falls back to a real name instead of a broken prompt.
@@ -1112,6 +1119,32 @@ function setupIpc() {
   ipcMain.handle('cameras:discover', () => {
     const { discoverCameras } = require('./core/camera/onvif-discovery');
     return discoverCameras({});
+  });
+
+  // JARVIS JR's one doorway for camera CONFIG (see core/variant.js — the
+  // cameras:add-*/remove-account/set-armed/blink-pin channels are deliberately
+  // absent from the JR allowlist under their own names). Same shape as the
+  // other jr:parent:* mutations: the PIN is verified in THIS call, through the
+  // same PinGate lockout, and only on success does it dispatch to the exact
+  // same CameraService methods (and the same cameraRefusal() Pro gate) the
+  // standard build's own camera handlers call directly above — no separate
+  // credential-handling path to keep in sync.
+  ipcMain.handle('jr:parent:cameras', async (_e, payload) => {
+    if (!JR) return { ok: false };
+    const gate = parentControls.verifyPin(payload?.pin);
+    if (!gate.ok) return gate;
+    if (!cameras) return { ok: false, message: 'Cameras are not turned on for JARVIS JR.' };
+    const body = payload?.payload;
+    switch (String(payload?.action || '')) {
+      case 'add-blink': return cameraRefusal() || cameras.addBlinkAccount(body || {});
+      case 'blink-pin': return cameras.submitBlinkPin(String(body?.accountId || ''), String(body?.pin || ''));
+      case 'add-ring': return cameraRefusal() || cameras.addRingAccount(body || {});
+      case 'add-nest': return cameraRefusal() || cameras.addNestAccount(body || {}, { openExternal: (url) => shell.openExternal(url) });
+      case 'add-rtsp': return cameraRefusal() || cameras.addRtspAccount(body || {});
+      case 'remove-account': return cameras.removeAccount(String(body || ''));
+      case 'set-armed': return cameras.setArmed(String(body?.key || ''), Boolean(body?.armed));
+      default: return { ok: false, message: 'Unknown camera action.' };
+    }
   });
 
   // Defense mode. Enter is Pro-gated inside the service; exit and wave-off

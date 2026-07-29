@@ -603,10 +603,31 @@ class CommandRouter {
         // neither part blocked runs untouched.
         const hasApps = (routine.apps || []).length > 0;
         const hasFolders = (routine.folders || []).length > 0;
+        // JR's content lock applies to a routine's folders exactly like it
+        // applies to path:open: every target must resolve inside an approved
+        // root before anything is touched. Checked as a pre-flight pass over
+        // the WHOLE routine, before any tools.openPath call, so one bad entry
+        // in settings.json can't be used to smuggle a peek at an arbitrary
+        // folder alongside the routine's legitimate ones. Only computed once
+        // the apps/files gates above have already passed — hasFolders &&
+        // !profile.files refuses first, so a files-off build never touches
+        // this.documents at all (matches the "files off never reaches a
+        // service" invariant every other JR gate holds to).
+        const badTarget = (hasFolders && this.profile.files && this.profile.contentLock)
+          ? (routine.folders || [])
+              .map((folder) => (settings.projects || {})[folder] || folder)
+              .find((target) => !this.documents.isAllowed(target))
+          : null;
         if (hasApps && !this.profile.apps) {
           result = this.#jrGate('Routines that open programs');
         } else if (hasFolders && !this.profile.files) {
           result = this.#jrGate('Routines that open folders');
+        } else if (badTarget) {
+          result = this.#result(
+            `The ${name} routine points to “${badTarget}”, which is outside your approved folders. Ask a parent to fix it in Settings.`,
+            'jr-gate',
+            { success: false }
+          );
         } else {
           const opened = [];
           const failed = [];

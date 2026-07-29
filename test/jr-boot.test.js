@@ -1,7 +1,10 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { jrUserDataPath, jrIpcAllowlist, profileFor, DEFAULT_CONTROLS } = require('../core/variant');
+const {
+  jrUserDataPath, jrIpcAllowlist, profileFor, DEFAULT_CONTROLS,
+  JR_SETTINGS_ALLOW, filterJrSettingsPatch
+} = require('../core/variant');
 
 test('jrUserDataPath: own folder, never the grown-up one', () => {
   const p = jrUserDataPath('C:\\Users\\kid\\AppData\\Roaming');
@@ -92,4 +95,76 @@ test('ipc allowlist: standard variant is unaffected (jr helper only meaningful f
   // FEATURE_IPC set, so they still do not appear via this helper.
   assert.ok(!standard.has('mobile:status'));
   assert.ok(standard.has('cameras:snapshot'));
+});
+
+// FIX 2 (Critical, task-6 review): camera CONFIG must be PIN-gated in JR.
+// Adding/removing a camera account (or arming/disarming a security system) is
+// parental territory, same family as the jrParent secret itself — a kid who
+// can reach cameras:add-blink could plant a stranger's Blink login on the
+// family account with nobody the wiser. Those channels move behind the new
+// jr:parent:cameras multiplexer (PIN-verified per call, same as
+// jr:parent:controls); only viewing what is already configured stays under
+// the plain 'cameras' checklist flag.
+test('ipc allowlist: cameras ON exposes only view channels, never account/arm config, plus jr:parent:cameras', () => {
+  const on = jrIpcAllowlist(profileFor('jr', { ...DEFAULT_CONTROLS, cameras: true }));
+  // view surface: listing, snapshotting, live-viewing what is already set up
+  for (const viewChannel of [
+    'cameras:bootstrap', 'cameras:systems', 'cameras:list', 'cameras:snapshot',
+    'cameras:describe', 'cameras:live-start', 'cameras:live-stop', 'cameras:live-answer',
+    'cameras:discover'
+  ]) {
+    assert.ok(on.has(viewChannel), `${viewChannel} should stay kid-reachable when cameras is on`);
+  }
+  // config surface: adding/removing accounts, arming/disarming — never admitted directly
+  for (const configChannel of [
+    'cameras:add-blink', 'cameras:blink-pin', 'cameras:add-ring', 'cameras:add-nest',
+    'cameras:add-rtsp', 'cameras:remove-account', 'cameras:set-armed'
+  ]) {
+    assert.ok(!on.has(configChannel), `${configChannel} must never be directly reachable, even with cameras on`);
+  }
+  // the PIN-gated doorway is present at every checklist setting, cameras on or off
+  assert.ok(on.has('jr:parent:cameras'));
+  const off = jrIpcAllowlist(profileFor('jr', DEFAULT_CONTROLS));
+  assert.ok(off.has('jr:parent:cameras'));
+  assert.ok(!off.has('cameras:add-blink'));
+});
+
+// FIX 4 (Important, task-6 review): JR settings allowlist. settings:save's
+// existing ConfigStore allowlist was written for a single-variant app — it
+// happily writes searchRoots/routines/cameraAccounts/screenControlEnabled/etc
+// from a JR renderer patch, none of which any JR UI should ever assemble, but
+// nothing stopped a hand-crafted IPC call from doing it anyway. JR_SETTINGS_ALLOW
+// is the narrower list main.js's settings:save now filters every JR patch
+// through: cosmetic/voice state only, nothing capability-adjacent.
+test('JR_SETTINGS_ALLOW: benign UI/voice state only — no capability-adjacent keys', () => {
+  for (const benign of [
+    'skin', 'orbSkin', 'orbColor', 'windowGlass', 'motionMode', 'moduleLayout',
+    'hiddenModules', 'orbBounds', 'voiceName', 'voiceEnabled', 'localVoiceEnabled',
+    'localVoiceModel', 'wakeWordEnabled', 'wakeSensitivity', 'ttsEngine',
+    'kokoroVoice', 'kokoroDevice', 'minimizeToOrb'
+  ]) {
+    assert.ok(JR_SETTINGS_ALLOW.includes(benign), `${benign} should be allowed`);
+  }
+  for (const capabilityAdjacent of [
+    'searchRoots', 'projects', 'routines', 'focusApps', 'cameraAccounts',
+    'cameraAiDescriptions', 'cameraCloudVision', 'screenControlEnabled',
+    'screenControlAllowlist', 'aiMode', 'cloudProvider'
+  ]) {
+    assert.ok(!JR_SETTINGS_ALLOW.includes(capabilityAdjacent), `${capabilityAdjacent} must never be JR-writable`);
+  }
+});
+
+test('filterJrSettingsPatch: keeps allowed keys, silently drops everything else', () => {
+  const patch = {
+    orbSkin: 'nebula', wakeSensitivity: 'high',
+    searchRoots: ['C:\\anywhere'], cameraAccounts: [{ brand: 'blink' }],
+    aiMode: 'cloud', assistantName: 'Not Jarvis'
+  };
+  const filtered = filterJrSettingsPatch(patch);
+  assert.deepEqual(filtered, { orbSkin: 'nebula', wakeSensitivity: 'high' });
+});
+
+test('filterJrSettingsPatch: empty/undefined patch yields an empty object, not a throw', () => {
+  assert.deepEqual(filterJrSettingsPatch({}), {});
+  assert.deepEqual(filterJrSettingsPatch(undefined), {});
 });
