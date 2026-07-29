@@ -2,7 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { CommandRouter } = require('../core/router');
+const { AIService } = require('../core/ai-service');
 const { profileFor, DEFAULT_CONTROLS, STANDARD_PROFILE } = require('../core/variant');
+const { buildJrPromptRules } = require('../core/kid-mode');
 
 // Services that DETONATE if touched. A gated branch that reaches its service
 // is a failed test, not a refused command.
@@ -90,7 +92,19 @@ test('an enabled feature passes through: files ON reaches tools', async () => {
 // instead — is threading `jrPromptRules` (the buildJrPromptRules() text,
 // precomputed here since kid-mode.js already exists) through the `context`
 // object so Task 7 has something to append.
-test.todo('Task 7 (ai-service.js): ordinary talk\'s assembled system prompt contains CONTENT LOCK + HOMEWORK RULE when profile.contentLock — belongs in ai-service\'s own test, since ai-service.js (not router.js) owns prompt assembly; router only threads context.jrPromptRules through.');
+// Was test.todo('Task 7 (ai-service.js): ...'); converted to a live test now
+// that Task 7 exists. ai-service.js (not router.js) owns prompt assembly, so
+// this constructs an AIService directly and calls its own prompt() with the
+// exact jrPromptRules text the router computes and threads through context —
+// proving ai-service appends what it is handed rather than recomputing it.
+test('Task 7 (ai-service.js): ordinary talk\'s assembled system prompt contains CONTENT LOCK + HOMEWORK RULE when profile.contentLock', () => {
+  const ai = new AIService({ getSettings: () => ({}), getSecret: () => '' });
+  const settings = { assistantName: 'JARVIS', profileName: 'Kid', personality: 'Witty, composed.' };
+  const jrPromptRules = buildJrPromptRules({ age: 11, kidName: 'Kid' });
+  const assembled = ai.prompt(settings, { jrPromptRules });
+  assert.match(assembled, /CONTENT LOCK/);
+  assert.match(assembled, /HOMEWORK RULE/i);
+});
 
 test('ordinary talk threads jrPromptRules through context for ai-service to consume', async () => {
   let seenContext = null;

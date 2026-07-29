@@ -8,6 +8,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'add_task',
       description: 'Add a task or reminder to the local task list.',
+      feature: 'tasks',
       unattendedSafe: true,
       parameters: {
         type: 'object',
@@ -25,6 +26,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     {
       name: 'list_open_tasks',
       description: 'List the currently open tasks.',
+      feature: 'tasks',
       unattendedSafe: true,
       parameters: { type: 'object', properties: {} },
       execute: async () => ({
@@ -34,6 +36,8 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     },
     {
       name: 'remember_note',
+      // core: local memory reaches nothing outside the app — always allowed.
+      feature: null,
       description: 'Save a short note to local memory.',
       unattendedSafe: true,
       parameters: {
@@ -45,6 +49,8 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     },
     {
       name: 'search_memory',
+      // core: local memory reaches nothing outside the app — always allowed.
+      feature: null,
       description: 'Search saved local notes and memories.',
       unattendedSafe: true,
       parameters: {
@@ -56,6 +62,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     },
     {
       name: 'search_files',
+      feature: 'files',
       description: 'Search the approved folders for files by name or content keywords. Returns names and paths only.',
       unattendedSafe: true,
       parameters: {
@@ -70,6 +77,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     },
     {
       name: 'read_file',
+      feature: 'documents',
       description: 'Read the text contents of a file inside the approved folders (use a path from search_files). Reads PDF, Word, Excel, CSV, text, and code.',
       unattendedSafe: true,
       parameters: {
@@ -89,6 +97,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     },
     {
       name: 'open_application',
+      feature: 'apps',
       description: 'Open one of the approved Windows applications (explorer, chrome, vs code, terminal, calculator, notepad, claude).',
       parameters: {
         type: 'object',
@@ -99,6 +108,8 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     },
     {
       name: 'get_current_datetime',
+      // core: the clock reaches nothing outside the app — always allowed.
+      feature: null,
       description: 'Get the current local date and time.',
       unattendedSafe: true,
       parameters: { type: 'object', properties: {} },
@@ -106,6 +117,7 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
     },
     {
       name: 'look_at_camera',
+      feature: 'cameras',
       description: 'Take a fresh snapshot from a named security camera and describe what is visible in it.',
       unattendedSafe: true,
       parameters: {
@@ -143,6 +155,18 @@ function buildToolRegistry({ tools, tasks, memory, config, documents, getCameras
   return registry;
 }
 
+// jr's fourth gate at the model layer: a tool the checklist has not switched
+// on is not in the belt. `feature: null` is an EXPLICIT declaration that a
+// tool reaches nothing outside the app; a row that never declared anything
+// is denied in jr — a powerful tool added next year stays off for kids until
+// somebody marks it, on purpose.
+function filterRegistryForProfile(registry, profile) {
+  if (!profile || profile.contentLock !== true) return registry;
+  return registry.filter((tool) =>
+    Object.prototype.hasOwnProperty.call(tool, 'feature') &&
+    (tool.feature === null || profile[tool.feature] === true));
+}
+
 function toolSpecs(registry) {
   return registry.map((tool) => ({
     type: 'function',
@@ -173,4 +197,4 @@ async function executeToolCall(registry, call) {
   }
 }
 
-module.exports = { buildToolRegistry, toolSpecs, executeToolCall, withTimeout };
+module.exports = { buildToolRegistry, filterRegistryForProfile, toolSpecs, executeToolCall, withTimeout };

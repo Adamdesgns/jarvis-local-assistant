@@ -1,4 +1,4 @@
-const { toolSpecs, executeToolCall } = require('./tool-registry');
+const { toolSpecs, executeToolCall, filterRegistryForProfile } = require('./tool-registry');
 const { runAgent } = require('./agent-loop');
 const { normalizeOllama, normalizeAnthropic, anthropicTools, OpenAIResponsesSession } = require('./brain-adapters');
 
@@ -53,9 +53,14 @@ class AIService {
   // not a subset, because unattendedSafe is not untrusted-safe: remember_note
   // is append-only and still the perfect prompt-poisoning vector. Unattended
   // runs (scheduled tasks, nobody watching) get the unattendedSafe allowlist.
+  // jr's checklist gate composes with both: context.profile arrives on every
+  // ai.reply() call (the router threads it through — see core/router.js's
+  // reply call), so it is read from context here rather than stashed on the
+  // instance at construction time; filterRegistryForProfile no-ops for a
+  // standard/absent profile, so this changes nothing outside jr.
   #registryFor(context) {
     if (context.untrustedContent === true) return [];
-    const registry = this.registry || [];
+    const registry = filterRegistryForProfile(this.registry || [], context.profile);
     if (context.unattended === true) return registry.filter((tool) => tool.unattendedSafe === true);
     return registry;
   }
@@ -101,7 +106,16 @@ class AIService {
       '- Match effort to the question: simple question, one-sentence answer.',
       '- Casual greetings and "how are you" are small talk: answer naturally in one short sentence, and do not ask what needs doing unless he asks for help.',
       `Saved notes that may be relevant:\n${memories}`,
-      `Open tasks:\n${tasks}`
+      `Open tasks:\n${tasks}`,
+      // jr's content-lock rules ride every model turn from right here — this
+      // is the ONE place the system prompt is assembled (every reply path,
+      // direct or agentic, funnels through prompt() via #initialMessages or
+      // a direct call). The router (core/router.js) already computes the
+      // rules text with buildJrPromptRules() and threads it through as
+      // context.jrPromptRules; ai-service just appends what it was handed —
+      // it does not recompute the rules or require profile.contentLock/jrAge
+      // itself, so there is exactly one source of truth for the wording.
+      context.jrPromptRules || ''
     ].filter(Boolean).join('\n');
   }
 
