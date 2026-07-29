@@ -1,0 +1,48 @@
+{
+  "appId": "com.adam.jarvis.jr",
+  "productName": "JARVIS JR",
+  "asar": true,
+  "asarUnpack": [
+    "scripts/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "resources/go2rtc",
+      "to": "go2rtc",
+      "filter": [
+        "go2rtc.exe"
+      ]
+    },
+    {
+      "from": "build/edition",
+      "to": "edition"
+    }
+  ],
+  "files": [
+    "main.js",
+    "preload.js",
+    "preload-stop.js",
+    "core/**/*",
+    "src/**/*",
+    "scripts/**/*",
+    "assets/**/*",
+    "INSTALL-OLLAMA.url",
+    "DISCLAIMER.txt",
+    "LICENSE",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "jarvisVariant": "jr"
+  },
+  "win": {
+    "target": "nsis",
+    "icon": "assets/icon.png",
+    "artifactName": "JARVIS-JR-Setup-${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  }
+}
