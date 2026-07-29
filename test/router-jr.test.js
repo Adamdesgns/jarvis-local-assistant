@@ -346,12 +346,12 @@ test('JR + files ON: a routine whose folders are all approved still runs (no fal
 // same invariant every other JR gate holds to). files ON + documents OFF is
 // a perfectly normal checklist combination, so a folder routine must not
 // crash reaching a null service; it must resolve some result.
-test('JR + files ON, documents OFF (documents service null): a folder routine does not throw', async () => {
-  const router = jrRouter({ ...DEFAULT_CONTROLS, files: true, documents: false });
+test('JR + files ON, documents OFF (documents service null): a folder routine refuses via jr-gate, never touches tools', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, files: true, documents: false, contentLock: true });
   router.documents = null; // main.js never builds this service when documents is off
   router.tools = {
-    openApplication: async (name) => ({ ok: true, message: 'ok' }),
-    openPath: async (target) => ({ ok: true, message: 'ok' }),
+    openApplication: () => { throw new Error('BOOBY TRAP: tools.openApplication touched'); },
+    openPath: () => { throw new Error('BOOBY TRAP: tools.openPath touched'); },
     resolveApplication: () => null
   };
   router.config = {
@@ -361,7 +361,9 @@ test('JR + files ON, documents OFF (documents service null): a folder routine do
       routines: { 'start work': { apps: [], folders: ['anvil'] } }
     })
   };
-  await assert.doesNotReject(() => router.handle('start work'));
+  const result = await router.handle('start work');
+  assert.equal(result.source, 'jr-gate', 'must refuse at the jr-gate when documents cannot be verified');
+  assert.equal(result.success, false);
 });
 
 test('standard profile: routine folders are unchanged — no isAllowed check, no gate', async () => {

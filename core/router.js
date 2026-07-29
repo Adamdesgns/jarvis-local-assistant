@@ -673,6 +673,8 @@ class CommandRouter {
           result = this.#jrGate('Routines that open programs');
         } else if (hasFolders && !this.profile.files) {
           result = this.#jrGate('Routines that open folders');
+        } else if (this.profile.contentLock && hasFolders && this.profile.files && !this.documents) {
+          result = this.#jrGate('Routines that open folders');
         } else if (badTarget) {
           result = this.#result(
             `The ${name} routine points to “${badTarget}”, which is outside your approved folders. Ask a parent to fix it in Settings.`,
