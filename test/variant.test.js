@@ -58,4 +58,18 @@ test('a birthday changes no feature: profileFor takes no age argument', () => {
   assert.equal(profileFor.length, 2);
 });
 
+// VARIANT-ORDER (final-review blocker): contentLock:true must sit AFTER the
+// controls spread in profileFor's jr branch, in the never-block with its
+// siblings — not before it, where it only survives because normalizeControls
+// drops unknown keys. A hostile/malformed controls object with its own
+// contentLock/cameraConfig/defense keys must never be able to smuggle those
+// through: content lock has no off switch, and the never-block stays false.
+test('content lock has no off switch, and hostile controls cannot smuggle a never-key', () => {
+  const p = profileFor('jr', { contentLock: false, cameraConfig: true, defense: true });
+  assert.equal(p.contentLock, true);
+  for (const never of ['cameraConfig', 'screenDrive', 'claudeBridge', 'nightShift', 'schedules', 'autonomy', 'phone', 'defense']) {
+    assert.equal(p[never], false, `${never} must be false in jr`);
+  }
+});
+
 void VARIANTS; void isJr;

@@ -143,12 +143,15 @@ class ParentControls {
   }
 
   setPin(oldPin, newPin) {
-    const data = this.#read();
-    if (!data.pinHash || !lock.verifyPin(String(oldPin || ''), data.pinHash)) {
-      return { ok: false, reason: 'The current PIN is wrong.' };
-    }
+    // Route the old-PIN check through the SAME gated verifyPin() that
+    // completeSetup's re-entry guard and the parent panel use — never call
+    // lock.verifyPin directly here, or setPin becomes an unthrottled PIN
+    // oracle sitting right next to the throttled one.
+    const verified = this.verifyPin(oldPin);
+    if (!verified.ok) return verified;
     const pinCheck = lock.validatePin(newPin);
     if (!pinCheck.ok) return { ok: false, reason: pinCheck.message };
+    const data = this.#read();
     data.pinHash = lock.hashPin(String(newPin));
     this.#write(data);
     return { ok: true };

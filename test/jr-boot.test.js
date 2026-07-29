@@ -1,9 +1,12 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   jrUserDataPath, jrIpcAllowlist, profileFor, DEFAULT_CONTROLS,
-  JR_SETTINGS_ALLOW, filterJrSettingsPatch, STANDARD_PROFILE, moduleAllowedInProfile
+  JR_SETTINGS_ALLOW, filterJrSettingsPatch, STANDARD_PROFILE, moduleAllowedInProfile,
+  CONTROL_KEYS
 } = require('../core/variant');
 
 test('jrUserDataPath: own folder, never the grown-up one', () => {
@@ -232,4 +235,30 @@ test('module cards follow the profile: the full src/index.html module map', () =
   // Outside the lock, an unmapped name is not denied — standard has nothing
   // to withhold.
   assert.equal(moduleAllowedInProfile('some-future-module', STANDARD_PROFILE), true);
+});
+
+// ROLLUP-11 (final-review blocker): src/jr-parent-ui.js's LABELS map is a
+// HAND-MAINTAINED mirror of core/variant.js's CONTROL_KEYS — jr-parent-ui.js's
+// own comment explains why: preload.js runs sandboxed (main.js webPreferences:
+// { sandbox: true }), so it cannot require project modules the way an
+// un-sandboxed preload could, and nothing exposes the raw key list over IPC
+// today. A future key added to CONTROL_KEYS with no matching LABELS entry
+// would render as a checklist row with no visible label text — silent
+// breakage nobody would notice from a glance at the parent panel.
+//
+// jr-parent-ui.js is a plain <script> (window.JrParentUI is its only global),
+// not a CommonJS module, so it cannot be require()'d in node:test without a
+// DOM. Rather than stand up a fake window/document just to read one object
+// literal, this reads the source text and regexes out LABELS' own keys —
+// no DOM, no sandboxed-preload seam to fake, and it fails exactly when the
+// mirror falls out of sync, which is the one failure mode worth catching.
+test("ROLLUP-11: src/jr-parent-ui.js's LABELS mirrors every core/variant.js CONTROL_KEYS entry", () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'jr-parent-ui.js'), 'utf8');
+  const match = source.match(/var LABELS = \{([\s\S]*?)\n\s*\};/);
+  assert.ok(match, 'LABELS object literal must be findable in jr-parent-ui.js');
+  const keys = Array.from(match[1].matchAll(/^\s*(\w+):/gm)).map((m) => m[1]);
+  assert.ok(keys.length > 0, 'the regex must actually find label keys, not silently match nothing');
+  for (const key of CONTROL_KEYS) {
+    assert.ok(keys.includes(key), `LABELS is missing an entry for CONTROL_KEYS' "${key}"`);
+  }
 });

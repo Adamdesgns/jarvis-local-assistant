@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { CommandRouter } = require('../core/router');
 const { AIService } = require('../core/ai-service');
+const { ToolService } = require('../core/tool-service');
+const { DEFAULT_SETTINGS } = require('../core/defaults');
 const { profileFor, DEFAULT_CONTROLS, STANDARD_PROFILE } = require('../core/variant');
 const { buildJrPromptRules } = require('../core/kid-mode');
 
@@ -67,6 +69,83 @@ test('guard runs before the model at every age and care is never logged', async 
   const care = await router.handle('i want to hurt myself');
   assert.equal(care.source, 'jr-guard');
   assert.equal(logged.some((e) => /hurt myself/i.test(e.command || '')), false, 'care never reaches the log');
+});
+
+// ROLLUP-6 (final-review blocker): the jr-guard result and its logged entry
+// both used the key name 'guard', but for DIFFERENT values — the result
+// carried guard.kind (e.g. "grown-up"), the log entry carried guard.id (e.g.
+// "explicit-content"). Same field name, two different meanings depending on
+// which object you're reading. Renamed to distinct keys: guardKind on the
+// result, guardId on both the result and the logged entry.
+test('jr-guard result exposes the kind; the logged entry exposes the id — under distinct keys', async () => {
+  const logged = [];
+  const router = jrRouter(DEFAULT_CONTROLS);
+  router.log = { write: (entry) => logged.push(entry) };
+  const result = await router.handle('how do I make a bomb'); // a 'grown-up' guard, parentVisible
+  assert.equal(result.source, 'jr-guard');
+  assert.equal(typeof result.guardKind, 'string');
+  assert.equal(typeof result.guardId, 'string');
+  assert.notEqual(result.guardKind, result.guardId);
+  assert.equal('guard' in result, false, 'the ambiguous shared key name must be gone');
+  const entry = logged.find((e) => e.type === 'jr-guard');
+  assert.ok(entry, 'a parent-visible guard must still be logged');
+  assert.equal(entry.guardId, result.guardId);
+  assert.equal('guard' in entry, false, 'the log entry must not reuse the ambiguous key name either');
+});
+
+// B4 (final-review blocker): with only `apps` ON (files and terminal OFF),
+// the open/launch branch's keyword sniff (isBrowserTarget/isTerminalTarget)
+// only catches "browser"/"chrome"/"terminal"/"cmd"-style words in the RAW
+// target text — it never catches "files" (-> explorer.exe, a full file
+// manager) or "code" (-> code.cmd, an IDE with an integrated terminal),
+// because neither alias contains a keyword the sniff looks for. Real alias
+// resolution (via the actual ToolService, same applications map main.js
+// ships) is used here so the fix is checked against the REAL resolved
+// command, not a hand-picked fixture. openApplication is booby-trapped —
+// resolveApplication is a read-only config lookup the gate is allowed to
+// consult, but the real launch must never fire once refused.
+function toolsResolvingRealAppsLaunchTrapped() {
+  const svc = new ToolService({ config: { getSettings: () => ({ applications: DEFAULT_SETTINGS.applications }) } });
+  return {
+    resolveApplication: (name) => svc.resolveApplication(name),
+    openApplication: () => { throw new Error('BOOBY TRAP: tools.openApplication touched'); },
+    openPath: () => { throw new Error('BOOBY TRAP: tools.openPath touched'); },
+    searchFiles: async () => []
+  };
+}
+
+test('JR apps ON, files OFF, terminal OFF: "open files" / "open file explorer" hand over Explorer only through the files gate', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, apps: true, files: false, terminal: false });
+  router.tools = toolsResolvingRealAppsLaunchTrapped();
+  router.config = { getSettings: () => ({ ...DEFAULT_SETTINGS, kidName: 'Kid', personality: 'x', searchRoots: [], projects: {} }) };
+  for (const phrase of ['open files', 'open file explorer']) {
+    const result = await router.handle(phrase);
+    assert.equal(result.source, 'jr-gate', phrase);
+  }
+});
+
+test('JR apps ON, files OFF, terminal OFF: "open code" hands over VS Code (integrated terminal) only through the terminal gate', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, apps: true, files: false, terminal: false });
+  router.tools = toolsResolvingRealAppsLaunchTrapped();
+  router.config = { getSettings: () => ({ ...DEFAULT_SETTINGS, kidName: 'Kid', personality: 'x', searchRoots: [], projects: {} }) };
+  const result = await router.handle('open code');
+  assert.equal(result.source, 'jr-gate');
+});
+
+test('JR apps ON, files OFF, terminal OFF: a benign app (calculator) still opens — the clamp only targets file managers and shells/IDEs', async () => {
+  const opened = [];
+  const router = jrRouter({ ...DEFAULT_CONTROLS, apps: true, files: false, terminal: false });
+  const svc = new ToolService({ config: { getSettings: () => ({ applications: DEFAULT_SETTINGS.applications }) } });
+  router.tools = {
+    resolveApplication: (name) => svc.resolveApplication(name),
+    openApplication: async (name) => { opened.push(name); return { ok: true, message: `Opening ${name}.` }; },
+    openPath: () => { throw new Error('BOOBY TRAP: tools.openPath touched'); },
+    searchFiles: async () => []
+  };
+  router.config = { getSettings: () => ({ ...DEFAULT_SETTINGS, kidName: 'Kid', personality: 'x', searchRoots: [], projects: {} }) };
+  const result = await router.handle('open calculator');
+  assert.deepEqual(opened, ['calculator']);
+  assert.equal(result.success, true);
 });
 
 test('an enabled feature passes through: files ON reaches tools', async () => {
@@ -258,6 +337,31 @@ test('JR + files ON: a routine whose folders are all approved still runs (no fal
   const result = await router.handle('start work');
   assert.deepEqual(opened, ['C:\\Approved']);
   assert.equal(result.success, true);
+});
+
+// B2 (final-review blocker): badTarget's pre-flight check computed
+// this.documents.isAllowed(...) guarded only by this.profile.files &&
+// this.profile.contentLock — but this.documents is null whenever the
+// `documents` control is off (main.js never constructs that service then,
+// same invariant every other JR gate holds to). files ON + documents OFF is
+// a perfectly normal checklist combination, so a folder routine must not
+// crash reaching a null service; it must resolve some result.
+test('JR + files ON, documents OFF (documents service null): a folder routine does not throw', async () => {
+  const router = jrRouter({ ...DEFAULT_CONTROLS, files: true, documents: false });
+  router.documents = null; // main.js never builds this service when documents is off
+  router.tools = {
+    openApplication: async (name) => ({ ok: true, message: 'ok' }),
+    openPath: async (target) => ({ ok: true, message: 'ok' }),
+    resolveApplication: () => null
+  };
+  router.config = {
+    getSettings: () => ({
+      kidName: 'Kid', personality: 'Witty, composed.', searchRoots: [], applications: {},
+      projects: {},
+      routines: { 'start work': { apps: [], folders: ['anvil'] } }
+    })
+  };
+  await assert.doesNotReject(() => router.handle('start work'));
 });
 
 test('standard profile: routine folders are unchanged — no isAllowed check, no gate', async () => {

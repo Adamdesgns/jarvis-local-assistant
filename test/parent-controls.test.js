@@ -87,6 +87,23 @@ test('setPin requires the old pin', () => {
   assert.equal(pc.verifyPin('13579').ok, true);
 });
 
+// B1 (final-review blocker): setPin's old-pin check must be throttled by the
+// SAME PinGate as verifyPin/completeSetup. Before the fix it called
+// lock.verifyPin directly, so a kid could brute-force setPin's oldPin
+// unthrottled even while the ordinary parent-panel gate was locked out.
+test('setPin: five wrong old-pins lock the gate, and even the right pin is refused while locked', () => {
+  const pc = new ParentControls(fakeConfig());
+  pc.completeSetup({ pin: '2468', birthdate: '2015-03-09', controls: {} });
+  for (let i = 0; i < 5; i++) assert.equal(pc.setPin('0000', '13579').ok, false);
+  const sixth = pc.setPin('2468', '13579'); // right old pin, but gate is locked
+  assert.equal(sixth.ok, false);
+  assert.equal(sixth.locked, true);
+  assert.ok(sixth.retryInSeconds > 0);
+  // nothing changed — the PIN is still the original
+  assert.equal(pc.verifyPin('2468').ok, false); // still locked, so even THIS reports locked
+  assert.equal(pc.verifyPin('2468').locked, true);
+});
+
 // FIX 1 (Critical, task-6 review): setup re-entry. Once isSetUp() is true,
 // completeSetup must refuse a redo unless the payload proves it is the same
 // parent — a verified currentPin, checked through the SAME verifyPin/PinGate

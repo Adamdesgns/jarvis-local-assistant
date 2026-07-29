@@ -15,7 +15,7 @@ const { resolveEdition, effectiveLicenseState, defaultAssistantName } = require(
 const { needsNaming, namingPatch, nameHeardIn, normalizeAssistantName } = require('./core/onboarding');
 const { LicenseService } = require('./core/license-service');
 const { ActivityLog } = require('./core/activity-log');
-const { Transcript } = require('./core/transcript');
+const { Transcript, shouldTranscribe } = require('./core/transcript');
 const { CrashLog, installProcessHandlers } = require('./core/crash-log');
 const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
@@ -227,7 +227,10 @@ function createMainWindow() {
       // THE BROWSER module's <webview>. Every attach is rewritten by
       // core/browser-guard.js below — no preload, forced stranger partition,
       // no node — so enabling the tag does not widen what a page can reach.
-      webviewTag: true
+      webviewTag: true,
+      // DEVTOOLS: JR only — closes the other half of the vector Menu.setApplicationMenu(null)
+      // opens above (app.whenReady's `if (JR)` block). Standard keeps DevTools.
+      ...(JR ? { devTools: false } : {})
     }
   });
   // The browser wall, seam 1: whatever webview params the renderer asked
@@ -672,19 +675,36 @@ function setupIpc() {
     return { transcript, heard: nameHeardIn(transcript, String(payload?.name || '')) };
   });
   // Every exchange passes through here, which makes it the one honest place to
-  // journal the conversation. The user's line is written BEFORE the router
-  // runs, so a request that crashes or hangs still leaves a record of what was
-  // asked; the reply is written after, and only if there was one.
+  // journal the conversation. Standard build: unchanged — the user's line is
+  // written BEFORE the router runs, so a request that crashes or hangs still
+  // leaves a record of what was asked; the reply is written after, and only
+  // if there was one.
+  //
+  // JR: a 'care' guard exchange (the child may be hurting or unsafe — see
+  // core/kid-mode.js) is deliberately never written to the parent-visible
+  // activity log (core/router.js only logs guard.parentVisible rows), and a
+  // transcript file under %APPDATA%\jarvis-jr is just as reachable by a
+  // curious sibling as that log — so it must not land here either. That can
+  // only be known once the router has answered, so in JR BOTH sides are
+  // held until result.guardKind is known, then written together (or
+  // withheld together) via shouldTranscribe() (core/transcript.js).
   ipcMain.handle('command:submit', async (_event, payload) => {
     const text = typeof payload === 'string' ? payload : payload?.text;
     const project = typeof payload === 'object' && payload ? payload.project : 'general';
-    transcript.append('you', text);
+    if (!JR) transcript.append('you', text);
     const result = await router.handle(text, project, {
       onChunk: (piece) => sendEverywhere('ai:stream', { piece }),
       onReset: () => sendEverywhere('ai:stream-reset', {}),
       onStep: (step) => sendEverywhere('agent:step', { index: step.index, tool: step.tool, summary: summarizeAgentStep(step) })
     });
-    transcript.append('jarvis', result?.response);
+    if (JR) {
+      if (shouldTranscribe(result)) {
+        transcript.append('you', text);
+        transcript.append('jarvis', result?.response);
+      }
+    } else {
+      transcript.append('jarvis', result?.response);
+    }
     return result;
   });
   // The record, as text, ready to paste. Reading it is deliberately a pull:
@@ -1446,6 +1466,14 @@ app.whenReady().then(async () => {
       ? listener
       : async () => { throw new Error(`${channel} is not part of JARVIS JR.`); });
     ipcMain.on = (channel, listener) => realOn(channel, ALLOWED.has(channel) ? listener : () => {});
+    // DEVTOOLS (defense-in-depth behind B1's real fix): the default Electron
+    // menu's Ctrl+Shift+I opens DevTools, which hands a kid an unthrottled
+    // Node/renderer console — a much bigger hole than any single IPC channel.
+    // Removing the menu entirely closes that path; devTools:false on the
+    // main window (createMainWindow, below) closes the keyboard shortcut and
+    // any other way to summon it. Standard build keeps its menu and devtools
+    // — this never runs when JR is false.
+    Menu.setApplicationMenu(null);
   }
   log = new ActivityLog(app.getPath('userData'));
   // The rolling 24-48h record of what was said, both sides, in plain text.

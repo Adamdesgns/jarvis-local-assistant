@@ -29,6 +29,26 @@ function cleanTarget(value) {
     .replace(/[\s,?.!]+$/, '');
 }
 
+// B4: which RESOLVED application entries actually hand over the file manager
+// or a shell/IDE with an integrated terminal — checked against the
+// resolved {canonical, command} tools.resolveApplication() returns, not the
+// raw target text. The open/launch branch's browser/terminal keyword sniff
+// only catches words like "browser"/"chrome"/"terminal"/"cmd" IN THE TARGET
+// TEXT — an alias such as "files" (-> explorer.exe) or "code" (-> code.cmd)
+// never contains one of those words, so it used to fall straight through to
+// the plain `apps` gate and hand over Explorer or an IDE's integrated shell
+// even with files/terminal switched off.
+const FILE_MANAGER_APP = /\bexplorer(?:\.exe)?\b/i;
+const SHELL_OR_IDE_APP = /\b(?:code(?:\.cmd)?|vs\s*code|wt(?:\.exe)?|windows\s*terminal|cmd(?:\.exe)?|command\s*prompt|powershell(?:\.exe)?|terminal)\b/i;
+
+function appOpensFileManager(app) {
+  return Boolean(app) && FILE_MANAGER_APP.test(`${app.canonical || ''} ${app.command || ''}`);
+}
+
+function appOpensShellOrIde(app) {
+  return Boolean(app) && SHELL_OR_IDE_APP.test(`${app.canonical || ''} ${app.command || ''}`);
+}
+
 function parseDueDate(text) {
   const now = new Date();
   const due = new Date(now);
@@ -212,11 +232,15 @@ class CommandRouter {
     if (this.profile.contentLock) {
       const guard = guardTopic(text, this.jrAge());
       if (guard) {
-        const guarded = this.#result(guard.reply, 'jr-guard', { guard: guard.kind, guardId: guard.id, success: true });
+        // guardKind (guard.kind, e.g. "grown-up"/"care") and guardId
+        // (guard.id, e.g. "dangerous-making") are DISTINCT keys, never both
+        // named 'guard' — that ambiguity let the result's meaning ("kind")
+        // and the log's meaning ("id") silently diverge under the same name.
+        const guarded = this.#result(guard.reply, 'jr-guard', { guardKind: guard.kind, guardId: guard.id, success: true });
         // A kid in distress is answered, not filed — see kid-mode.js. Care
         // rows are never written to the parent's log.
         if (guard.parentVisible) {
-          this.log.write({ type: 'jr-guard', command: text, response: guard.reply, source: 'jr-guard', guard: guard.id });
+          this.log.write({ type: 'jr-guard', command: text, response: guard.reply, source: 'jr-guard', guardId: guard.id });
         }
         return guarded;
       }
@@ -640,7 +664,7 @@ class CommandRouter {
         // !profile.files refuses first, so a files-off build never touches
         // this.documents at all (matches the "files off never reaches a
         // service" invariant every other JR gate holds to).
-        const badTarget = (hasFolders && this.profile.files && this.profile.contentLock)
+        const badTarget = (hasFolders && this.profile.files && this.profile.contentLock && this.documents)
           ? (routine.folders || [])
               .map((folder) => (settings.projects || {})[folder] || folder)
               .find((target) => !this.documents.isAllowed(target))
@@ -736,26 +760,40 @@ class CommandRouter {
           result = this.#jrGate('The browser');
         } else if (isTerminalTarget && !this.profile.terminal) {
           result = this.#jrGate('The terminal');
-        } else if (!this.profile.apps) {
-          result = this.#jrGate('Opening apps');
-        } else if (this.tools.resolveApplication(target)) {
-          const action = await this.tools.openApplication(target);
-          result = this.#result(action.message, 'windows', { success: action.ok });
-        } else if (!this.profile.files) {
-          result = this.#jrGate('Finding files');
         } else {
-          const files = await this.tools.searchFiles(target);
-          if (!files.length) {
-            result = this.#result(`I couldn’t find a file matching “${target}.”`, 'files', { files: [], query: target });
+          // Gate by what the target ACTUALLY resolves to, not just what its
+          // name sounds like — "open files"/"open file explorer" hand over
+          // explorer.exe (a full file manager) and "open code" hands over
+          // code.cmd (an IDE with its own integrated terminal), and neither
+          // alias is caught by the isBrowserTarget/isTerminalTarget keyword
+          // sniff above. Checked before the plain `apps` gate so these two
+          // stricter rows can't be bypassed just because apps is on.
+          const resolvedApp = this.tools.resolveApplication(target);
+          if (this.profile.contentLock && appOpensFileManager(resolvedApp) && !this.profile.files) {
+            result = this.#jrGate('The file explorer');
+          } else if (this.profile.contentLock && appOpensShellOrIde(resolvedApp) && !this.profile.terminal) {
+            result = this.#jrGate('Apps with a built-in terminal');
+          } else if (!this.profile.apps) {
+            result = this.#jrGate('Opening apps');
+          } else if (resolvedApp) {
+            const action = await this.tools.openApplication(target);
+            result = this.#result(action.message, 'windows', { success: action.ok });
+          } else if (!this.profile.files) {
+            result = this.#jrGate('Finding files');
           } else {
-            const top = files[0];
-            const second = files[1];
-            const confident = files.length === 1 || top.score >= (second?.score || 0) + 3 || /\b(latest|newest|most recent)\b/i.test(target);
-            if (confident) {
-              const opened = await this.tools.openPath(top.path);
-              result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query: target, openedFile: top, success: opened.ok });
+            const files = await this.tools.searchFiles(target);
+            if (!files.length) {
+              result = this.#result(`I couldn’t find a file matching “${target}.”`, 'files', { files: [], query: target });
             } else {
-              result = this.#result(`I found ${files.length} possible matches. Choose the one you want.`, 'files', { files, query: target, needsChoice: true });
+              const top = files[0];
+              const second = files[1];
+              const confident = files.length === 1 || top.score >= (second?.score || 0) + 3 || /\b(latest|newest|most recent)\b/i.test(target);
+              if (confident) {
+                const opened = await this.tools.openPath(top.path);
+                result = this.#result(`Found it. Opening ${top.name}.`, 'files', { files, query: target, openedFile: top, success: opened.ok });
+              } else {
+                result = this.#result(`I found ${files.length} possible matches. Choose the one you want.`, 'files', { files, query: target, needsChoice: true });
+              }
             }
           }
         }

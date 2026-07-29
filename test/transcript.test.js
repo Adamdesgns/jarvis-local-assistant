@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { Transcript, dayKey } = require('../core/transcript');
+const { Transcript, dayKey, shouldTranscribe } = require('../core/transcript');
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-transcript-'));
@@ -154,6 +154,29 @@ test('the day key follows local time, not UTC', () => {
   // put an evening conversation in tomorrow's file.
   const evening = at(2026, 7, 28, 19, 30, 0);
   assert.equal(dayKey(evening), '2026-07-28');
+});
+
+// F1 (final-review blocker): main.js's command:submit journals BOTH sides of
+// every exchange to this file — but a JR 'care' guard exchange (kept out of
+// activity.jsonl on purpose, see core/router.js's guard.parentVisible) must
+// not land here either. A transcript file under %APPDATA% is exactly as
+// reachable by a curious sibling as the parent-visible log this was already
+// kept out of. main.js is Electron's entry point (app.whenReady side
+// effects on require), so it is not require()-able from a plain node:test
+// file — the "should this exchange be transcribed" decision is extracted
+// into this tiny pure predicate instead, right beside the file it protects,
+// so main.js can call it and this test can verify it directly with no
+// Electron seam at all.
+test('shouldTranscribe: a JR care-guard result is withheld; every ordinary result is kept', () => {
+  assert.equal(shouldTranscribe({ source: 'jr-guard', guardKind: 'care' }), false);
+  // A different guard kind (e.g. 'grown-up') is parent-visible territory —
+  // it stays in the transcript same as any ordinary reply.
+  assert.equal(shouldTranscribe({ source: 'jr-guard', guardKind: 'grown-up' }), true);
+  assert.equal(shouldTranscribe({ source: 'local-core', response: 'hi' }), true);
+  assert.equal(shouldTranscribe({ source: 'jr-gate' }), true);
+  // Defensive against a missing/malformed result — never crash the handler.
+  assert.equal(shouldTranscribe(null), true);
+  assert.equal(shouldTranscribe(undefined), true);
 });
 
 test('the window walks calendar days, so a 23-hour DST day still keeps two', () => {

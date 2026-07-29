@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-  clampAge, ageBand, guardTopic, buildKidPrompt, buildJrPromptRules, capabilitiesReply, greeting, RULES
+  clampAge, ageBand, guardTopic, buildKidPrompt, buildJrPromptRules, capabilitiesReply, greeting, RULES, BAND_GUIDE
 } = require('../core/kid-mode');
 
 // Re-aged for JR (2026-07-28 spec): the range is now 3-17, default 11 — was
@@ -31,6 +31,20 @@ test('the JR age bands split where the writing style changes', () => {
   assert.equal(ageBand(13), 'big');
   assert.equal(ageBand(14), 'teen');
   assert.equal(ageBand(17), 'teen');
+});
+
+// ROLLUP-2 (final-review blocker): BAND_GUIDE's labels are written into the
+// model prompt, so they must describe the SAME range ageBand() actually uses
+// — the old copy said "8 to 10" for middle (which floors at 3, per the clamp
+// test above) and "11 to 12" for big (which actually runs 11-13, per the
+// band-split test above). A prompt that lies about the child's age range is
+// itself a content-safety bug: it can license the model to write for a wider
+// or narrower kid than the one actually on the other end.
+test("BAND_GUIDE's labels do not misstate the ranges ageBand() actually uses", () => {
+  assert.doesNotMatch(BAND_GUIDE.middle.label, /8 to 10/);
+  assert.match(BAND_GUIDE.middle.label, /10/); // still names its ceiling
+  assert.doesNotMatch(BAND_GUIDE.big.label, /11 to 12\b/);
+  assert.match(BAND_GUIDE.big.label, /11 to 13/);
 });
 
 test('distress is caught, answered with care, and never filed for the parent screen', () => {
@@ -155,7 +169,7 @@ test('the prompt carries the age, the child, the rules and the chart into the mo
   });
   assert.match(prompt, /Mia/);
   assert.match(prompt, /3 years old/);
-  assert.match(prompt, /8 to 10 year old/);
+  assert.match(prompt, /a kid 10 or younger/);
   assert.match(prompt, /Brush teeth \(already done today\)/);
   assert.match(prompt, /Make bed/);
   assert.match(prompt, /Mia likes horses/);

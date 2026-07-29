@@ -112,4 +112,17 @@ class Transcript {
   }
 }
 
-module.exports = { Transcript, dayKey, KEEP_DAYS };
+// F1: whether a command:submit exchange should be journaled here at all. A
+// JR 'care' guard result (a child possibly in distress — see
+// core/router.js's guard.parentVisible / core/kid-mode.js's RULES) is
+// deliberately never written to the parent-visible activity log, on the
+// product decision that a kid who is unsafe at home must not learn that
+// telling the computer reports him. A transcript file under %APPDATA% is
+// just as reachable by a curious sibling as that log, so it withholds the
+// same exchange for the same reason — pure, so main.js's ipc handler and
+// this test can both call it directly with no Electron seam required.
+function shouldTranscribe(result) {
+  return !(result && result.source === 'jr-guard' && result.guardKind === 'care');
+}
+
+module.exports = { Transcript, dayKey, KEEP_DAYS, shouldTranscribe };

@@ -43,13 +43,13 @@ function ageBand(value) {
 
 const BAND_GUIDE = {
   middle: {
-    label: 'an 8 to 10 year old',
+    label: 'a kid 10 or younger',
     length: 'Two or three sentences. Under 70 words unless they asked for a story.',
     words: 'Everyday words. New words are welcome if you explain them right away with a comparison to something they know.',
     tone: 'Friendly and curious. Treat them as clever. Never babyish.'
   },
   big: {
-    label: 'an 11 to 12 year old',
+    label: 'an 11 to 13 year old',
     length: 'Up to four sentences. Under 110 words unless they asked for a story.',
     words: 'Normal words, real terms included. Explain the term once, then use it.',
     tone: 'Straight and respectful, the way you would talk to someone who is nearly a teenager. No baby talk, no talking down.'

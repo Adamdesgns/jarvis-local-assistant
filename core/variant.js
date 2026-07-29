@@ -87,8 +87,13 @@ function profileFor(variant, controls) {
   return {
     variant: 'jr',
     productName: 'JARVIS JR',
-    contentLock: true,   // no control key reaches this — see the tests
     ...on,
+    // The never-block: no control key reaches any of these, at any checklist
+    // setting. contentLock lives here too (not before the spread) so a
+    // hostile/malformed controls object can never smuggle a contentLock key
+    // through the spread — it is structurally impossible, not merely safe
+    // because normalizeControls happens to drop unknown keys today.
+    contentLock: true,
     cameraConfig: false,
     screenDrive: false,
     claudeBridge: false,
