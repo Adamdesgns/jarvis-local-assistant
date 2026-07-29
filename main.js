@@ -7,6 +7,8 @@ const {
   Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
+const { resolveVariant, isJr, profileFor, jrUserDataPath, jrIpcAllowlist } = require('./core/variant');
+const { ParentControls } = require('./core/parent-controls');
 const { PRO_FEATURES, isPro, gateSettingsPatch, applyLicenseToSettings, featureAllowed } = require('./core/license-gate');
 const { resolveEdition, effectiveLicenseState, defaultAssistantName } = require('./core/edition');
 const { needsNaming, namingPatch, nameHeardIn, normalizeAssistantName } = require('./core/onboarding');
@@ -65,6 +67,23 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 // one (RTF 0.50 on Intel vs 0.15 on the RTX). Also set before app ready.
 app.commandLine.appendSwitch('force_high_performance_gpu');
 
+// Which build this is — 'standard' (the JARVIS that has always shipped) or
+// 'jr' (the parental-controls build). Stamped at build time into
+// package.json's jarvisVariant (packaged builds only — an unpackaged app has
+// no stamp to trust) and forced with --jr / JARVIS_VARIANT=jr for
+// `npm run start:jr`. See core/variant.js for why this is a different axis
+// from core/edition.js.
+const VARIANT = resolveVariant({
+  stamped: app.isPackaged ? require('./package.json').jarvisVariant : '',
+  env: process.argv.includes('--jr') ? 'jr' : process.env.JARVIS_VARIANT
+});
+const JR = isJr(VARIANT);
+// JR's data NEVER touches the grown-up folder — dev mode included. This is
+// the fix for the JUNIOR dev-mode leak found 2026-07-28. Must run before
+// ANY service reads app.getPath('userData') — CrashLog, two lines down, is
+// the very first one.
+if (JR) app.setPath('userData', jrUserDataPath(app.getPath('appData')));
+
 // Last-resort safety net: an error nothing else caught is written to
 // crash.log beside the rest of the user data instead of silently killing the
 // app. Renderer windows report their escaped errors into the same log.
@@ -111,6 +130,8 @@ let scheduleService;
 let nightShift;
 let heartbeat;
 let licenseService;
+let parentControls;
+let PROFILE;
 let camerasInitialized = false;
 let currentSkin = 'classic';
 let gpuLabel = 'RTX 5060 · 8 GB';
@@ -539,6 +560,10 @@ function licensedSettings() {
 }
 
 async function syncMobileServer() {
+  // JR never constructs mobileServer/mobileAuth (PROFILE.phone is always
+  // false) but the mobileEnabled setting bit is still one settings:save can
+  // write (see task-6-report.md); no-op rather than throw on the null pair.
+  if (!mobileServer || !mobileAuth) return;
   const settings = licensedSettings();
   mobileServer.stop();
   if (settings.mobileEnabled) await mobileServer.start();
@@ -564,6 +589,39 @@ function pushCameraAlertToPhones({ key, kind, name, body, at }) {
 }
 
 function setupIpc() {
+  // JARVIS JR's parent-lock surface. Registered unconditionally — the IPC
+  // allowlist installed earlier is what actually keeps these reachable only
+  // in JR (jrIpcAllowlist admits them at every checklist setting) — but each
+  // handler also refuses on its own when !JR, so a standard build calling one
+  // of these directly (it never does; nothing in the standard renderer sends
+  // them) gets a clean { ok: false } instead of a crash on a null
+  // parentControls. Every jr:parent:* mutation demands the PIN in the same
+  // call — the renderer never holds an unlocked session token.
+  ipcMain.handle('jr:status', () => ({ jr: JR, setUp: JR ? parentControls.isSetUp() : true, profile: PROFILE }));
+  ipcMain.handle('jr:setup:complete', (_e, payload) => {
+    if (!JR) return { ok: false };
+    const result = parentControls.completeSetup(payload || {});
+    // PROFILE was computed once at boot from whatever the checklist held
+    // then (empty, pre-setup). Setup just wrote the real checklist, so the
+    // profile this whole process built its services from is now stale — the
+    // only clean fix is to rebuild the process, not patch PROFILE in place.
+    if (result.ok) { app.relaunch(); app.exit(0); }
+    return result;
+  });
+  ipcMain.handle('jr:parent:verify', (_e, payload) => JR ? parentControls.verifyPin(payload?.pin) : { ok: false });
+  ipcMain.handle('jr:parent:controls', (_e, payload) => {
+    if (!JR) return { ok: false };
+    const gate = parentControls.verifyPin(payload?.pin);
+    if (!gate.ok) return gate;
+    const controls = payload?.patch ? parentControls.setControls(payload.patch) : parentControls.getControls();
+    // No hot-disable: an off-to-on flip would need a service this process
+    // never constructed, and an on-to-off flip should not yank a feature out
+    // from under something mid-use. Every checklist change takes effect at
+    // next launch; relaunchNeeded tells the renderer to say so.
+    return { ok: true, controls, relaunchNeeded: Boolean(payload?.patch) };
+  });
+  ipcMain.handle('jr:parent:pin', (_e, payload) => JR ? parentControls.setPin(payload?.oldPin, payload?.newPin) : { ok: false });
+
   ipcMain.handle('bootstrap', async () => ({
     settings: config.publicSettings(),
     telemetry: await collectTelemetry(),
@@ -650,7 +708,11 @@ function setupIpc() {
     return classifyCommand(text);
   });
   ipcMain.handle('terminal:run', async (_event, payload) => {
-    const roots = documents.approvedRoots();
+    // documents is null whenever PROFILE.documents is off — a checklist
+    // combination the terminal control does not imply (a parent can turn
+    // terminal on without turning documents on). Same empty-roots refusal a
+    // fresh install with no approved folder yet already returns.
+    const roots = documents ? documents.approvedRoots() : [];
     if (!roots.length) {
       return {
         refused: true,
@@ -662,7 +724,7 @@ function setupIpc() {
     // cwd is renderer-supplied so `cd` can move around, but it is only ever
     // honoured inside an approved root — the runner re-checks it too.
     const requested = payload?.cwd;
-    const cwd = requested && documents.isAllowed(requested) ? requested : roots[0];
+    const cwd = requested && documents && documents.isAllowed(requested) ? requested : roots[0];
     const result = await terminalRunner.run({
       command: payload?.command,
       cwd,
@@ -681,7 +743,7 @@ function setupIpc() {
     return { ...result, cwd };
   });
   ipcMain.handle('terminal:cwd', () => {
-    const roots = documents.approvedRoots();
+    const roots = documents ? documents.approvedRoots() : [];
     return { cwd: roots[0] || '', roots };
   });
   ipcMain.handle('approval:resolve', (_event, payload) => router.resolveApproval(payload.id, Boolean(payload.approved)));
@@ -843,11 +905,11 @@ function setupIpc() {
       localVoice.stop();
       setTimeout(() => localVoice.start(), 1700);
     }
-    if (JSON.stringify(previous.watchedFolders || []) !== JSON.stringify(updated.watchedFolders || [])) {
+    if (folderWatch && JSON.stringify(previous.watchedFolders || []) !== JSON.stringify(updated.watchedFolders || [])) {
       folderWatch.start();
     }
     if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
-    if (previous.schedulesEnabled !== updated.schedulesEnabled) {
+    if (scheduleService && previous.schedulesEnabled !== updated.schedulesEnabled) {
       scheduleService.start().catch((error) => {
         log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
       });
@@ -855,7 +917,11 @@ function setupIpc() {
     if (previous.orbSkin !== updated.orbSkin || previous.orbColor !== updated.orbColor) {
       sendEverywhere('orb:prefs', { orbSkin: updated.orbSkin || 'original', orbColor: updated.orbColor || 'gold' });
     }
-    if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
+    // setupNightShift touches scheduleStore and nightShift directly with no
+    // null-check of its own — both are always off in JR, so only run it when
+    // both are actually constructed (true in standard; never in JR, even if
+    // a kid flips nightShiftEnabled through this same channel).
+    if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true && scheduleStore && nightShift) {
       return setupNightShift(updated);
     }
     return updated;
@@ -1253,6 +1319,27 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'media');
 
   config = new ConfigStore(app.getPath('userData'), safeStorage);
+  // The parent's half of JR: PIN, birthdate, checklist, kid name — lives in
+  // config's secrets store (never in settings.json, which the kid can reach).
+  // PROFILE is the capability list every gated construction below consults;
+  // computed once at boot from the checklist as it stood at launch, so a
+  // mid-session checklist edit needs the relaunch jr:parent:controls reports.
+  parentControls = JR ? new ParentControls(config) : null;
+  PROFILE = profileFor(VARIANT, parentControls ? parentControls.getControls() : null);
+  // IPC allowlist: every channel not named here throws (handle) or is
+  // silently dropped (on) for the JR build. Installed before setupIpc() (and
+  // before any of the gated service construction below registers nothing —
+  // construction never touches ipcMain) so every channel setupIpc() adds is
+  // covered. Standard builds are untouched: JR is false, nothing is wrapped.
+  if (JR) {
+    const ALLOWED = jrIpcAllowlist(PROFILE);
+    const realHandle = ipcMain.handle.bind(ipcMain);
+    const realOn = ipcMain.on.bind(ipcMain);
+    ipcMain.handle = (channel, listener) => realHandle(channel, ALLOWED.has(channel)
+      ? listener
+      : async () => { throw new Error(`${channel} is not part of JARVIS JR.`); });
+    ipcMain.on = (channel, listener) => realOn(channel, ALLOWED.has(channel) ? listener : () => {});
+  }
   log = new ActivityLog(app.getPath('userData'));
   // The rolling 24-48h record of what was said, both sides, in plain text.
   // Pruned on every append, and once here at boot so a machine that sat idle
@@ -1263,75 +1350,88 @@ app.whenReady().then(async () => {
   // Gated view: Pro flags read false until licensed. Explicit delegation, not
   // a subclass — ConfigStore keeps its private fields and its write paths.
   const gatedConfig = { getSettings: licensedSettings };
-  autonomy = new AutonomyService({ config: gatedConfig, emit: sendEverywhere, log });
+  // AutonomyService/FolderWatchService gate together on PROFILE.autonomy —
+  // JR never constructs either (see core/variant.js's trailing always-off
+  // block), so the camera-alert path below and the settings:save watcher
+  // restart both null-check autonomy/folderWatch rather than assume them.
+  autonomy = PROFILE.autonomy ? new AutonomyService({ config: gatedConfig, emit: sendEverywhere, log }) : null;
   currentSkin = config.getSettings().skin || 'classic';
   memory = new MemoryStore(app.getPath('userData'));
   tasks = new TaskStore(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });
-  documents = new DocumentService({ config, shell, emit: sendEverywhere });
+  documents = PROFILE.documents ? new DocumentService({ config, shell, emit: sendEverywhere }) : null;
   // getCameras/getAi are lazy getters: `cameras` isn't constructed until
   // below, and `ai` cannot be passed to its own registry before `new
   // AIService(...)` returns. Both closures resolve once the module-level
   // `let` bindings are assigned, without reordering construction.
   ai = new AIService(config, buildToolRegistry({ tools, tasks, memory, config, documents, getCameras: () => cameras, getAi: () => ai }));
   ollama = new OllamaService({ config, emit: sendEverywhere });
-  go2rtc = new Go2RtcManager({
-    binaryPath: app.isPackaged
-      ? path.join(process.resourcesPath, 'go2rtc', 'go2rtc.exe')
-      : path.join(__dirname, 'resources', 'go2rtc', 'go2rtc.exe'),
-    dataDir: path.join(app.getPath('userData'), 'cameras'),
-    emit: sendEverywhere
-  });
-  cameras = new CameraService({
-    config, log, go2rtc,
-    // Autonomy listens where the alert is born: same payload the UI gets.
-    emit: (channel, payload) => {
-      sendEverywhere(channel, payload);
-      if (channel === 'cameras:alert') {
-        autonomy.handleCameraAlert(payload);
-        pushCameraAlertToPhones(payload);
-        // Defense mode listens where the alert is born too. The service does
-        // its own opt-in/armed/night checks and always announces before entry.
-        if (defense) defense.handleCameraAlert(payload);
-      }
-    },
-    notify: (title, body) => {
-      if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
-    },
-    notifyGate: (alert) => autonomy.notifyGate(alert)
-  });
-  // Smart alerts: describe the frame with the local vision model when the
-  // user has AI descriptions turned on. Failures fall back to generic text.
-  cameras.describeFrame = async (jpegBase64, context) => {
-    if (config.getSettings().cameraAiDescriptions !== true) return null;
-    const described = await ai.describeCameraFrame(jpegBase64, context.name);
-    return described.ok ? described.text : null;
-  };
-  if (isPro(currentLicenseState())) {
-    cameras.init();
-    camerasInitialized = true;
-  } else if ((config.getSettings().cameraAccounts || []).length) {
-    log.write({ type: 'license', command: 'cameras-init-skipped', response: 'Saved cameras stay dormant until JARVIS Pro is activated.', source: 'license' });
+  // Go2RtcManager/CameraService gate together on PROFILE.cameras. cameras CAN
+  // be true in JR (a parent-enabled checklist item) independently of
+  // autonomy/defense, which are always off in JR — so the alert closure below
+  // null-checks both rather than assume the always-on-in-standard case.
+  if (PROFILE.cameras) {
+    go2rtc = new Go2RtcManager({
+      binaryPath: app.isPackaged
+        ? path.join(process.resourcesPath, 'go2rtc', 'go2rtc.exe')
+        : path.join(__dirname, 'resources', 'go2rtc', 'go2rtc.exe'),
+      dataDir: path.join(app.getPath('userData'), 'cameras'),
+      emit: sendEverywhere
+    });
+    cameras = new CameraService({
+      config, log, go2rtc,
+      // Autonomy listens where the alert is born: same payload the UI gets.
+      emit: (channel, payload) => {
+        sendEverywhere(channel, payload);
+        if (channel === 'cameras:alert') {
+          if (autonomy) autonomy.handleCameraAlert(payload);
+          pushCameraAlertToPhones(payload);
+          // Defense mode listens where the alert is born too. The service does
+          // its own opt-in/armed/night checks and always announces before entry.
+          if (defense) defense.handleCameraAlert(payload);
+        }
+      },
+      notify: (title, body) => {
+        if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
+      },
+      notifyGate: (alert) => (autonomy ? autonomy.notifyGate(alert) : true)
+    });
+    // Smart alerts: describe the frame with the local vision model when the
+    // user has AI descriptions turned on. Failures fall back to generic text.
+    cameras.describeFrame = async (jpegBase64, context) => {
+      if (config.getSettings().cameraAiDescriptions !== true) return null;
+      const described = await ai.describeCameraFrame(jpegBase64, context.name);
+      return described.ok ? described.text : null;
+    };
+    if (isPro(currentLicenseState())) {
+      cameras.init();
+      camerasInitialized = true;
+    } else if ((config.getSettings().cameraAccounts || []).length) {
+      log.write({ type: 'license', command: 'cameras-init-skipped', response: 'Saved cameras stay dormant until JARVIS Pro is activated.', source: 'license' });
+    }
+  } else {
+    go2rtc = null;
+    cameras = null;
   }
-  claudeBridge = new ClaudeBridge({
+  claudeBridge = PROFILE.claudeBridge ? new ClaudeBridge({
     config,
     transcript: createTranscript(app.getPath('userData')),
     log
-  });
+  }) : null;
   // Slice 1 of JARVIS's "hands": reads the screen, clicks nothing. Shows the
   // same "viewing your screen" indicator the cloud-vision feature uses, since a
   // read is a privacy event even though it changes nothing on the PC. The
   // helper lives in scripts/ (kept out of the asar so it runs from disk).
-  screenReader = new ScreenReader({
+  screenReader = PROFILE.screenRead ? new ScreenReader({
     scriptPath: path.join(__dirname, 'scripts', 'read-screen.ps1'),
     log,
     onViewing: (active) => sendEverywhere('screen:viewing', { active })
-  });
+  }) : null;
   // Slice 2 of the hands: the session referee, backed by one persistent
   // drive-screen.ps1 helper per approved session. The voice route arrives in
   // its own commit — until then no plan can reach run(). Every stop path is
   // live already.
-  hands = new ScreenHands({
+  hands = PROFILE.screenDrive ? new ScreenHands({
     driverFactory: () => new ScreenDriver({ scriptPath: path.join(__dirname, 'scripts', 'drive-screen.ps1'), log }),
     getSettings: licensedSettings,
     log,
@@ -1352,7 +1452,7 @@ app.whenReady().then(async () => {
       sendEverywhere('screen:drive', { type: 'approval', approval: card });
     }),
     stopWindow: { open: openDriveStopWindow, update: updateDriveStopWindow, close: closeDriveStopWindow }
-  });
+  }) : null;
   // The router only ever reads settings (no writes, no secrets), so it takes
   // the gated view too: voice-routing into screen reading/driving respects
   // the license without the router knowing licenses exist.
@@ -1376,37 +1476,49 @@ app.whenReady().then(async () => {
   // carries it), not the persisted one; every fetch it makes is
   // allowlist-checked. Raw config here once left defense dead on builds that
   // never activated a key, effective licence or not.
-  defense = new DefenseService({ config: gatedConfig, ai, cameras, emit: sendEverywhere, log });
-  defense.start();
-  router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands, defense });
-  scheduleStore = new ScheduleStore(app.getPath('userData'));
-  nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config: gatedConfig, ai, documents });
-  scheduleService = new ScheduleService({ store: scheduleStore, config: gatedConfig, router, nightShift, emit: sendEverywhere, log });
-  scheduleService.start().catch((error) => {
-    log.write({ type: 'schedule-error', command: 'boot-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
+  defense = PROFILE.defense ? new DefenseService({ config: gatedConfig, ai, cameras, emit: sendEverywhere, log }) : null;
+  if (defense) defense.start();
+  router = new CommandRouter({
+    config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras,
+    claude: claudeBridge, screen: screenReader, hands, defense,
+    profile: PROFILE, jrAge: () => (parentControls ? parentControls.age() : 11)
   });
+  // ScheduleStore/ScheduleService gate on PROFILE.schedules; NightShiftService
+  // gates separately on PROFILE.nightShift (both are always off in JR, but
+  // are independent flags in principle — see core/variant.js).
+  scheduleStore = PROFILE.schedules ? new ScheduleStore(app.getPath('userData')) : null;
+  nightShift = PROFILE.nightShift ? new NightShiftService({ userDataPath: app.getPath('userData'), config: gatedConfig, ai, documents }) : null;
+  scheduleService = PROFILE.schedules ? new ScheduleService({ store: scheduleStore, config: gatedConfig, router, nightShift, emit: sendEverywhere, log }) : null;
+  if (scheduleService) {
+    scheduleService.start().catch((error) => {
+      log.write({ type: 'schedule-error', command: 'boot-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
+    });
+  }
   heartbeat = new HeartbeatService({
     config,
-    checks: buildDefaultChecks({ tasks, crashLog, nightShift }),
+    // night-shift-failures reads nightShift directly with no null-check of
+    // its own (core/heartbeat.js, out of this task's file list) — dropped
+    // rather than fed a nightShift it would crash on the first tick.
+    checks: buildDefaultChecks({ tasks, crashLog, nightShift }).filter((check) => check.name !== 'night-shift-failures' || nightShift),
     emit: sendEverywhere,
     log
   });
   heartbeat.start();
   powerMonitor.on('resume', () => {
     try {
-      scheduleService.arm();
+      if (scheduleService) scheduleService.arm();
       maybeMorningReport();
     } catch (error) {
       log.write({ type: 'schedule-error', command: 'resume-arm', response: error && error.message ? error.message : String(error), source: 'schedule' });
     }
   });
-  folderWatch = new FolderWatchService({
+  folderWatch = PROFILE.autonomy ? new FolderWatchService({
     config,
     emit: sendEverywhere,
     notify: (title, body) => {
       if (Notification.isSupported()) new Notification({ title, body, icon: path.join(__dirname, 'assets', 'icon.png') }).show();
     }
-  });
+  }) : null;
   localVoice = new LocalVoiceService({
     voiceRoot: voiceDataRoot(),
     scriptPath: packagedScript('local_voice.py'),
@@ -1420,8 +1532,13 @@ app.whenReady().then(async () => {
     cacheDir: path.join(app.getPath('userData'), 'voice-cache'),
     onStatus: (status) => sendEverywhere('tts:status', status)
   });
-  mobileAuth = new MobileAuth({ devices: loadMobileDevices() });
-  mobileServer = new MobileServer({
+  // MobileServer/MobileAuth gate on PROFILE.phone — always off in JR. A kid
+  // reaching settings:save can still flip the mobileEnabled setting bit
+  // (see task-6-report.md); syncMobileServer() itself now no-ops when
+  // mobileServer/mobileAuth were never constructed, so that flip does
+  // nothing rather than crashing on a null service.
+  mobileAuth = PROFILE.phone ? new MobileAuth({ devices: loadMobileDevices() }) : null;
+  mobileServer = PROFILE.phone ? new MobileServer({
     config, router, auth: mobileAuth, documents,
     transcribe: (buffer, mimeType) => localVoice.transcribe(buffer, mimeType),
     // The phone does no synthesis: the PC renders and streams it the audio, so
@@ -1434,7 +1551,7 @@ app.whenReady().then(async () => {
     // this keeps the same defensive pattern used for buildToolRegistry's
     // getCameras — cameras may be reassigned or absent in some code paths.
     getCameras: () => cameras
-  });
+  }) : null;
   if (config.getSettings().mobileEnabled) syncMobileServer();
   try {
     const gpu = await app.getGPUInfo('basic');
@@ -1451,7 +1568,7 @@ app.whenReady().then(async () => {
   // first thing JARVIS says. Until it is ready every caller falls back to the
   // system voice, so he can talk from the first second either way.
   voiceService.start();
-  folderWatch.start();
+  if (folderWatch) folderWatch.start();
   setInterval(checkTaskReminders, 30000);
   setTimeout(() => maybeMorningReport(), 12000);
   // Quiet update check a few seconds after launch; only speaks up if newer.

@@ -21,6 +21,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "start:jr": "electron . --jr",
     "test": "node --test",
     "capture": "node scripts/capture-preview.js",
     "dist": "node scripts/stamp-edition.mjs retail && electron-builder --win nsis",
