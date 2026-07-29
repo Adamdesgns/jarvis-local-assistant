@@ -1,6 +1,14 @@
+// Dual export, same pattern as src/orbs/orb-engine.js: node (main.js, the
+// test suite) requires this file via module.exports; the renderer loads it
+// as a classic <script> (src/index.html, before renderer.js) and reads
+// window.JrVariant. The renderer only ever needs the pure, data-only pieces
+// (moduleAllowedInProfile, STANDARD_PROFILE, PROFILE shape) — jrUserDataPath
+// touches node:path and is never called from there, so `require` itself is
+// guarded rather than assumed: real in Node, undefined in a browser window.
+(function () {
 'use strict';
 
-const path = require('node:path');
+const path = typeof require === 'function' ? require('node:path') : null;
 
 // Which PRODUCT VARIANT this build is: 'standard' (the JARVIS that has always
 // shipped) or 'jr' (JARVIS JR — the parental-controls build for kids, spec:
@@ -242,8 +250,50 @@ function filterJrSettingsPatch(patch) {
   return out;
 }
 
-module.exports = {
+// Module cards (src/index.html's data-module names) -> the profile flag that
+// gates them. 'true' means the card is harmless at every checklist setting
+// (stats/notes displays with no reach-out capability behind them) — it rides
+// along without a dedicated checklist key. Real names, taken straight off
+// src/index.html's <article data-module="..."> list; 'command' (the docked
+// input bar, not a module card) is deliberately absent — it is never gated,
+// see src/renderer.js.
+const MODULE_PROFILE_KEY = Object.freeze({
+  tasks: 'tasks',
+  'file-explorer': 'files',
+  'night-shift': 'nightShift',
+  terminal: 'terminal',
+  cameras: 'cameras',
+  browser: 'browser',
+  'document-viewer': 'documents',
+  'quick-commands': 'timers',
+  projects: 'files',
+  performance: true,
+  memory: true,
+  activity: true
+});
+
+// Whether a module's card may exist at all, given the profile main.js built
+// (the same PROFILE the renderer already receives via jr:status). Outside
+// the content lock (standard, or any profile that doesn't declare one) this
+// withholds nothing — profileFor('standard', ...) already grants everything.
+// Under the lock, a module name this map has never heard of is deny-by-
+// default, not allow-by-accident: a future module that forgets to add itself
+// here should fail closed, the same JUNIOR principle profileFor() itself
+// runs on.
+function moduleAllowedInProfile(moduleName, profile) {
+  if (!profile || !profile.contentLock) return true;
+  const key = MODULE_PROFILE_KEY[moduleName];
+  if (key === true) return true;
+  if (key === undefined) return false;
+  return Boolean(profile[key]);
+}
+
+const api = {
   VARIANTS, CONTROL_KEYS, DEFAULT_CONTROLS, STANDARD_PROFILE,
   resolveVariant, isJr, normalizeControls, profileFor,
-  jrUserDataPath, jrIpcAllowlist, JR_SETTINGS_ALLOW, filterJrSettingsPatch
+  jrUserDataPath, jrIpcAllowlist, JR_SETTINGS_ALLOW, filterJrSettingsPatch,
+  MODULE_PROFILE_KEY, moduleAllowedInProfile
 };
+if (typeof module !== 'undefined' && module.exports) module.exports = api;
+if (typeof window !== 'undefined') window.JrVariant = api;
+})();

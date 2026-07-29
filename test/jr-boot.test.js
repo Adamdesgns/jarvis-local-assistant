@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {
   jrUserDataPath, jrIpcAllowlist, profileFor, DEFAULT_CONTROLS,
-  JR_SETTINGS_ALLOW, filterJrSettingsPatch
+  JR_SETTINGS_ALLOW, filterJrSettingsPatch, STANDARD_PROFILE, moduleAllowedInProfile
 } = require('../core/variant');
 
 test('jrUserDataPath: own folder, never the grown-up one', () => {
@@ -167,4 +167,55 @@ test('filterJrSettingsPatch: keeps allowed keys, silently drops everything else'
 test('filterJrSettingsPatch: empty/undefined patch yields an empty object, not a throw', () => {
   assert.deepEqual(filterJrSettingsPatch({}), {});
   assert.deepEqual(filterJrSettingsPatch(undefined), {});
+});
+
+// Task 9: module cards follow the profile. A module the checklist denies
+// must have no card in JR and must never be re-showable from the layout UI —
+// this is the pure, testable half of that guarantee. moduleAllowedInProfile
+// is the single source of truth the renderer consults for both halves.
+test('module cards follow the profile', () => {
+  const off = profileFor('jr', DEFAULT_CONTROLS);
+  assert.equal(moduleAllowedInProfile('tasks', off), true);
+  assert.equal(moduleAllowedInProfile('cameras', off), false);
+  assert.equal(moduleAllowedInProfile('file-explorer', off), false);
+  assert.equal(moduleAllowedInProfile('night-shift', off), false);   // never in jr
+  assert.equal(moduleAllowedInProfile('terminal', off), false);
+  const filesOn = profileFor('jr', { ...DEFAULT_CONTROLS, files: true, cameras: true });
+  assert.equal(moduleAllowedInProfile('file-explorer', filesOn), true);
+  assert.equal(moduleAllowedInProfile('cameras', filesOn), true);
+  assert.equal(moduleAllowedInProfile('anything', STANDARD_PROFILE), true);
+});
+
+test('module cards follow the profile: the full src/index.html module map', () => {
+  const off = profileFor('jr', DEFAULT_CONTROLS);
+  // On by default under the checklist's base experience.
+  assert.equal(moduleAllowedInProfile('tasks', off), true);
+  // Harmless stats/notes cards ride along at every checklist setting.
+  assert.equal(moduleAllowedInProfile('performance', off), true);
+  assert.equal(moduleAllowedInProfile('memory', off), true);
+  assert.equal(moduleAllowedInProfile('activity', off), true);
+  // timers is on in the base experience (DEFAULT_CONTROLS), so its card
+  // (quick-commands) is already allowed with no checklist changes.
+  assert.equal(moduleAllowedInProfile('quick-commands', off), true); // -> timers
+  // Reach-out features off by default.
+  assert.equal(moduleAllowedInProfile('projects', off), false);       // -> files
+  assert.equal(moduleAllowedInProfile('document-viewer', off), false); // -> documents
+  assert.equal(moduleAllowedInProfile('browser', off), false);
+  // Flipping the nearest checklist key changes the card's fate: timers off
+  // takes quick-commands with it, and turning on files/documents/browser
+  // turns on projects/document-viewer/browser respectively.
+  const flipped = profileFor('jr', {
+    ...DEFAULT_CONTROLS, timers: false, files: true, documents: true, browser: true
+  });
+  assert.equal(moduleAllowedInProfile('quick-commands', flipped), false);
+  assert.equal(moduleAllowedInProfile('projects', flipped), true);
+  assert.equal(moduleAllowedInProfile('document-viewer', flipped), true);
+  assert.equal(moduleAllowedInProfile('browser', flipped), true);
+  // Unknown module name under the content lock: deny by default, not
+  // allow-by-accident — nobody should be able to smuggle a card past the
+  // checklist just by giving it a name this map has never heard of.
+  assert.equal(moduleAllowedInProfile('some-future-module', off), false);
+  // Outside the lock, an unmapped name is not denied — standard has nothing
+  // to withhold.
+  assert.equal(moduleAllowedInProfile('some-future-module', STANDARD_PROFILE), true);
 });

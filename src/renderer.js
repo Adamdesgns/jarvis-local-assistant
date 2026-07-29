@@ -35,6 +35,10 @@ const state = {
   memories: [],
   activity: [],
   hiddenModules: [],
+  // The PROFILE from jr:status (always present, even in the standard build —
+  // see initialize()). Null only in the brief instant before boot fills it
+  // in; moduleAllowedForCurrentProfile treats that the same as "unlocked".
+  profile: null,
   layout: {},
   editing: false,
   activeProject: 'general',
@@ -732,14 +736,35 @@ async function renderNightShift() {
   }
 }
 
+// The profile dominates the hiddenModules mechanism: a module the checklist
+// denies has no card and no way back, regardless of what hiddenModules says.
+// 'command' (the docked input bar) is not a module card — src/index.html's
+// data-module list and core/variant.js's MODULE_PROFILE_KEY both leave it
+// out on purpose, so it is never gated here. window.JrVariant missing (its
+// <script> tag failed to load) fails OPEN rather than hiding every module —
+// the same posture as jr:status itself, which already can't lock anything
+// down without a live profile.
+function moduleAllowedForCurrentProfile(name) {
+  if (name === 'command') return true;
+  if (!window.JrVariant) return true;
+  return window.JrVariant.moduleAllowedInProfile(name, state.profile);
+}
+
 function renderModuleVisibility() {
   document.querySelectorAll('[data-module]').forEach((module) => {
-    const hidden = state.hiddenModules.includes(module.dataset.module);
+    const name = module.dataset.module;
+    const hidden = !moduleAllowedForCurrentProfile(name) || state.hiddenModules.includes(name);
     if (!module.classList.contains('spotlight')) module.classList.toggle('hidden-module', hidden);
-    applyModuleLayout(module.dataset.module);
+    applyModuleLayout(name);
   });
   document.querySelectorAll('[data-toggle-module]').forEach((button) => {
-    const enabled = !state.hiddenModules.includes(button.dataset.toggleModule);
+    const name = button.dataset.toggleModule;
+    // A module the profile denies doesn't get a picker entry at all — there
+    // is nothing to show the checklist didn't already turn off.
+    const allowed = moduleAllowedForCurrentProfile(name);
+    button.hidden = !allowed;
+    if (!allowed) return;
+    const enabled = !state.hiddenModules.includes(name);
     button.classList.toggle('enabled', enabled);
     button.querySelector('i').textContent = enabled ? '✓' : '';
   });
@@ -940,6 +965,10 @@ function scheduleLayoutSave() {
 function toggleModule(name, visible) {
   const currentlyHidden = state.hiddenModules.includes(name);
   const shouldShow = visible ?? currentlyHidden;
+  // Belt-and-suspenders: the picker already hides this module's button, but
+  // a module the profile denies must stay unreachable even if something
+  // else calls toggleModule('cameras', true) directly — profile dominates.
+  if (shouldShow && !moduleAllowedForCurrentProfile(name)) return;
   if (shouldShow) state.hiddenModules = state.hiddenModules.filter((item) => item !== name);
   else if (!currentlyHidden) state.hiddenModules.push(name);
   // The command bar is docked, not a floating panel — it never gets placed
@@ -2600,6 +2629,11 @@ async function initialize() {
     // throws, so this stays a no-op except in JR. See src/jr-parent-ui.js.
     const jrStatus = await window.jarvis.jrStatus?.().catch(() => null);
     if (jrStatus?.jr && window.JrParentUI) window.JrParentUI.init(jrStatus);
+    // main.js always answers with a real PROFILE (standard's is
+    // STANDARD_PROFILE, contentLock: false — see core/variant.js), so this
+    // is only null if the IPC call itself failed above; moduleAllowedFor
+    // CurrentProfile treats null the same as unlocked, matching standard.
+    state.profile = jrStatus?.profile || null;
     state.settings = bootstrap.settings;
     // Retail first run: he needs a name before anything else happens. Await
     // it so the greeting below uses whatever the buyer just chose.
