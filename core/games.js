@@ -67,4 +67,38 @@ function tttMove(board, mark, difficulty, rng = Math.random) {
   return moves[Math.floor(rng() * moves.length)];
 }
 
-module.exports = { DIFFICULTIES, TTT_LINES, tttWinner, tttBestMove, tttMove };
+const RPS = Object.freeze(['rock', 'paper', 'scissors']);
+const BEATS = Object.freeze({ rock: 'scissors', paper: 'rock', scissors: 'paper' });   // key beats value
+const LOSES_TO = Object.freeze({ rock: 'paper', paper: 'scissors', scissors: 'rock' }); // key loses to value
+
+function rpsJudge(kid, jarvis) {
+  if (kid === jarvis) return 'tie';
+  return BEATS[kid] === jarvis ? 'kid' : 'jarvis';
+}
+
+function mostFrequent(history, rng) {
+  const recent = history.slice(-5);
+  if (!recent.length) return null;
+  const counts = {};
+  for (const item of recent) counts[item] = (counts[item] || 0) + 1;
+  const top = Math.max(...Object.values(counts));
+  const leaders = RPS.filter((shape) => counts[shape] === top);
+  return leaders[Math.floor(rng() * leaders.length)];
+}
+
+// JARVIS's throw. `history` is the kid's PREVIOUS throws only — the current
+// throw is not a parameter, so this function CANNOT cheat against the kid,
+// and a test pins that. Kids repeat themselves constantly, which is why
+// "hard" wins more than a third against real children. "easy" cheats the
+// other way, deliberately and in writing: half the time it throws the hand
+// the kid's favourite move beats.
+function rpsThrow(difficulty, history = [], rng = Math.random) {
+  const uniform = () => RPS[Math.floor(rng() * 3)];
+  const favourite = mostFrequent(history, rng);
+  if (!favourite) return uniform();
+  if (difficulty === 'hard') return LOSES_TO[favourite];
+  if (difficulty === 'easy') return rng() < 0.5 ? BEATS[favourite] : uniform();
+  return uniform();
+}
+
+module.exports = { DIFFICULTIES, TTT_LINES, tttWinner, tttBestMove, tttMove, RPS, rpsJudge, rpsThrow };

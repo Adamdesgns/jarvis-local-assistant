@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { TTT_LINES, tttWinner, tttBestMove, tttMove, DIFFICULTIES } = require('../core/games');
+const { TTT_LINES, tttWinner, tttBestMove, tttMove, DIFFICULTIES, RPS, rpsJudge, rpsThrow } = require('../core/games');
 
 const E = null;
 
@@ -71,4 +71,40 @@ test('tttMove only ever returns a legal move, at every difficulty', () => {
       assert.equal(board[move], E, `${difficulty} played an occupied square`);
     }
   }
+});
+
+test('rps judging table, complete, both directions', () => {
+  const beats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+  for (const a of RPS) for (const b of RPS) {
+    const expected = a === b ? 'tie' : beats[a] === b ? 'kid' : 'jarvis';
+    assert.equal(rpsJudge(a, b), expected, `${a} vs ${b}`);
+  }
+});
+
+test('rpsThrow cannot see the current throw: the signature has no such parameter', () => {
+  assert.equal(rpsThrow.length <= 3, true);
+  // And behaviourally: same history + same rng seed => same throw, whatever the kid picks now.
+  const rngA = seededRng(9); const rngB = seededRng(9);
+  assert.equal(rpsThrow('hard', ['rock', 'rock'], rngA), rpsThrow('hard', ['rock', 'rock'], rngB));
+});
+
+test('hard reads the pattern: a kid who always throws rock gets papered', () => {
+  const rng = seededRng(11);
+  let paper = 0;
+  for (let i = 0; i < 200; i++) if (rpsThrow('hard', ['rock','rock','rock','rock','rock'], rng) === 'paper') paper += 1;
+  assert.ok(paper >= 190, `hard must counter the pattern (paper ${paper}/200)`);
+});
+
+test('easy leans the kid\'s way against their pattern', () => {
+  const rng = seededRng(13);
+  let scissors = 0; // scissors LOSES to rock — the throw a rock-kid beats
+  for (let i = 0; i < 600; i++) if (rpsThrow('easy', ['rock','rock','rock'], rng) === 'scissors') scissors += 1;
+  assert.ok(scissors >= 240, `easy must lean losing (scissors ${scissors}/600, uniform would be ~200)`);
+});
+
+test('normal with no history is roughly uniform', () => {
+  const rng = seededRng(17);
+  const counts = { rock: 0, paper: 0, scissors: 0 };
+  for (let i = 0; i < 900; i++) counts[rpsThrow('normal', [], rng)] += 1;
+  for (const shape of RPS) assert.ok(counts[shape] > 200, `${shape}: ${counts[shape]}/900`);
 });
