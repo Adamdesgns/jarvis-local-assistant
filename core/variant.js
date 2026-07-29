@@ -174,7 +174,7 @@ const FEATURE_IPC = Object.freeze({
   // harmless in the standard build, same as MemoryStore/TaskStore), so this
   // is the only place "games off" actually withholds anything in JR: the
   // router's own branch (core/router.js) never calls detectGame either.
-  games: ['game:move', 'game:score']
+  games: ['game:move', 'game:score', 'game:line']
   // documents/apps/browser/power gate no dedicated IPC channel today — they
   // run through command:submit, gated inside CommandRouter (Task 5) instead.
   // timers has no IPC surface yet in main.js. Nothing to list here until one

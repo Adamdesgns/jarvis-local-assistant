@@ -21,6 +21,7 @@ const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
 const { GameScores } = require('./core/game-scores');
 const { tttMove, rpsThrow } = require('./core/games');
+const { gameLine } = require('./core/game-lines');
 const { ToolService } = require('./core/tool-service');
 const { DocumentService } = require('./core/document-service');
 const { createCommandRunner } = require('./core/command-runner');
@@ -881,6 +882,17 @@ function setupIpc() {
   ipcMain.handle('game:score', (_event, payload) => {
     const { game, outcome } = payload || {};
     return game && outcome ? gameScores.record(game, outcome) : gameScores.get();
+  });
+  // The games UI's trash-talk lines (core/game-lines.js), age-banded off the
+  // same parentControls.age() the router uses for its own gameStart line
+  // (core/router.js). gameLine() throws on an unknown occasion — caught here
+  // so a UI typo degrades to a silent no-line rather than a dead overlay.
+  ipcMain.handle('game:line', (_event, payload) => {
+    try {
+      return { line: gameLine(String(payload?.occasion || ''), { age: parentControls ? parentControls.age() : 11 }) };
+    } catch {
+      return { line: '' };
+    }
   });
   ipcMain.handle('memory:list', () => memory.list(100));
   ipcMain.handle('memory:add', (_event, { text, project }) => memory.add(text, project));

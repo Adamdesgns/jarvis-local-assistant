@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   // has switched games off, same as every other gated channel.
   gameMove: (payload) => ipcRenderer.invoke('game:move', payload),
   gameScore: (payload) => ipcRenderer.invoke('game:score', payload),
+  gameLine: (occasion) => ipcRenderer.invoke('game:line', { occasion }),
   cameras: {
     bootstrap: () => ipcRenderer.invoke('cameras:bootstrap'),
     addRtsp: (payload) => ipcRenderer.invoke('cameras:add-rtsp', payload),

@@ -718,6 +718,39 @@
       </div>
     </div>
 
+    <!-- JARVIS JR: the games overlay (tic tac toe / rock paper scissors) — see
+         src/jr-games-ui.js, which only ever opens this when a router result
+         carries a truthy .game ('ttt'|'rps', source 'jr-game'). Stays hidden
+         and inert on the standard build, same as #jr-setup/#jr-parent above:
+         the router branch that sets .game never fires there. -->
+    <div id="jr-games" class="jr-overlay jr-games-overlay" hidden>
+      <div class="jr-sheet jr-games-sheet">
+        <h2 id="jr-games-title">GAME</h2>
+        <button type="button" id="jr-games-close" class="jr-games-close" aria-label="Close game">✕</button>
+
+        <div id="jr-game-difficulty" class="jr-game-diff-row">
+          <button type="button" class="jr-game-diff-btn" data-difficulty="easy">EASY</button>
+          <button type="button" class="jr-game-diff-btn" data-difficulty="normal">NORMAL</button>
+          <button type="button" class="jr-game-diff-btn" data-difficulty="hard">HARD</button>
+        </div>
+
+        <div id="jr-board" class="jr-board" hidden></div>
+
+        <div id="jr-rps" class="jr-rps-row" hidden>
+          <button type="button" class="jr-rps-btn" data-shape="rock"><canvas width="64" height="64"></canvas><span>Rock</span></button>
+          <button type="button" class="jr-rps-btn" data-shape="paper"><canvas width="64" height="64"></canvas><span>Paper</span></button>
+          <button type="button" class="jr-rps-btn" data-shape="scissors"><canvas width="64" height="64"></canvas><span>Scissors</span></button>
+        </div>
+
+        <div class="jr-game-canvas-wrap">
+          <canvas id="jr-game-canvas" width="160" height="160"></canvas>
+        </div>
+
+        <p id="jr-game-line" class="jr-game-line" role="status"></p>
+        <p id="jr-game-score" class="jr-game-score"></p>
+      </div>
+    </div>
+
     <script src="orbs/orb-engine.js"></script>
     <script src="orbs/plasma.js"></script>
     <script src="orbs/neural.js"></script>
@@ -726,6 +759,7 @@
     <script src="orbs/halation.js"></script>
     <script src="orbs/aurora.js"></script>
     <script src="orbs/starfield.js"></script>
+    <script src="orbs/shapes.js"></script>
     <script src="hologram.js"></script>
     <script src="layout-engine.js"></script>
     <script src="skins.js"></script>
@@ -736,6 +770,7 @@
     <script src="terminal-ui.js"></script>
     <script src="terminal-session.js"></script>
     <script src="jr-parent-ui.js"></script>
+    <script src="jr-games-ui.js"></script>
     <script src="../core/variant.js"></script>
     <script src="renderer.js"></script>
     <script src="command-center.js"></script>

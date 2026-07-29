@@ -597,6 +597,10 @@ function speak(message) {
     speakWithSystemVoice(message);
   });
 }
+// Exposed so src/jr-games-ui.js can speak its game lines through the exact
+// same path (settings gate, Kokoro-then-system-voice fallback, caption
+// reset) as every other command reply, instead of duplicating any of it.
+if (typeof window !== 'undefined') window.JrSpeak = speak;
 
 async function speakWithKokoro(message) {
   const result = await window.jarvis.speak(message);
@@ -1583,6 +1587,17 @@ async function executeCommand(command) {
     if (result.openSettings) openSettings();
     if (result.document) showDocumentOutput(result.document.name, result.response);
     if (result.approval) showApproval(result.approval);
+    // JARVIS JR's games: the router answers "play tic tac toe"/"play rock
+    // paper scissors" with a FLAT result.game ('ttt'|'rps', source 'jr-game')
+    // — see core/games.js's detectGame and core/router.js. That router branch
+    // is gated on profile.games alone (not contentLock), and STANDARD_PROFILE
+    // also has games:true — so result.game comes back set on the STANDARD
+    // build too (confirmed live during this task's manual pass). The overlay
+    // must never open there, so this hook additionally requires the JR
+    // variant (state.profile is populated at boot for both variants — see
+    // initialize() above). Also a no-op on the jr-gate refusal when games is
+    // off (that result never carries .game at all).
+    if (result.game && state.profile?.variant === 'jr' && window.JrGamesUI) window.JrGamesUI.open(result.game);
     if (result.files) {
       state.searchResults = result.files;
       renderFileRows(result.files, true);

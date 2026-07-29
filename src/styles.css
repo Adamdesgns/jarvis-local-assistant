@@ -1009,3 +1009,75 @@ body.jr-locked #cc-root {
 .jr-camera-pane[hidden] { display: none; }
 #jr-cam-blink-pin-row,
 #jr-cam-ring-code-row { margin-top: var(--s3); }
+
+/* Games overlay (Task 6): tic tac toe / rock paper scissors — src/jr-games-ui.js.
+   Reuses .jr-overlay/.jr-sheet as the base (same dark full-window sheet as
+   setup/parent), widened for the board and the reveal canvas. */
+.jr-games-sheet { width: 460px; position: relative; text-align: center; }
+/* #jr-games-close (an id, not just .jr-games-close): needs to out-specificity
+   the generic ".jr-sheet > button" rule above (width:100%/margin/accent
+   background) the same way #jr-parent-close already does — a class alone
+   loses that fight since ".jr-sheet > button" carries an extra type selector. */
+#jr-games-close {
+  position: absolute; top: var(--s4); right: var(--s4);
+  width: 28px; height: 28px; margin: 0; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: transparent; color: var(--text-secondary);
+  font: 500 var(--text-sm) var(--font); line-height: 1; cursor: pointer;
+}
+#jr-games-close:hover { color: var(--text-primary); border-color: var(--line-strong); background: transparent; }
+
+.jr-game-diff-row { display: flex; gap: var(--s2); margin-top: var(--s3); }
+.jr-game-diff-btn {
+  flex: 1 1 auto; margin-top: 0; height: 36px; padding: 0 var(--s2);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: transparent; color: var(--text-secondary);
+  font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide);
+  cursor: pointer; transition: all var(--dur-fast) var(--ease);
+}
+.jr-game-diff-btn:hover { background: var(--accent-tint-10); }
+.jr-game-diff-btn.active {
+  border-color: var(--line-accent); color: var(--accent-bright); background: var(--accent-tint-10);
+}
+
+.jr-board {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2);
+  margin: var(--s5) auto 0; width: 216px;
+}
+.jr-board[hidden] { display: none; }
+.jr-cell {
+  width: 68px; height: 68px; margin: 0; padding: 0;
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--surface-input); color: var(--text-primary);
+  font: 600 28px var(--font-display); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.jr-cell:hover:not(:disabled) { background: var(--accent-tint-10); }
+.jr-cell:disabled { cursor: default; }
+.jr-cell[data-mark="X"] { color: var(--accent-bright); }
+.jr-cell[data-mark="O"] { color: var(--text-secondary); }
+
+.jr-rps-row { display: flex; gap: var(--s3); justify-content: center; margin-top: var(--s5); }
+.jr-rps-row[hidden] { display: none; }
+.jr-rps-btn {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s2);
+  margin: 0; padding: var(--s3); width: auto; height: auto;
+  border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  background: var(--surface-input); color: var(--text-secondary);
+  font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide);
+  cursor: pointer; transition: all var(--dur-fast) var(--ease);
+}
+.jr-rps-btn:hover { background: var(--accent-tint-10); border-color: var(--line-accent); }
+.jr-rps-btn canvas { width: 64px; height: 64px; }
+
+.jr-game-canvas-wrap { display: flex; justify-content: center; margin-top: var(--s5); }
+#jr-game-canvas { width: 160px; height: 160px; }
+
+.jr-game-line {
+  margin-top: var(--s4); min-height: 1.4em; color: var(--text-primary);
+  font: 500 var(--text-md) var(--font-display);
+}
+.jr-game-score {
+  margin-top: var(--s2); color: var(--text-muted); font-size: var(--text-xs);
+  text-transform: uppercase; letter-spacing: var(--track-wide);
+}

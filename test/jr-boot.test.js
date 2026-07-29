@@ -75,9 +75,11 @@ test('ipc allowlist: game channels follow the games flag (on by default)', () =>
   const on = jrIpcAllowlist(profileFor('jr', DEFAULT_CONTROLS));
   assert.ok(on.has('game:move'));
   assert.ok(on.has('game:score'));
+  assert.ok(on.has('game:line'));
   const off = jrIpcAllowlist(profileFor('jr', { ...DEFAULT_CONTROLS, games: false }));
   assert.ok(!off.has('game:move'));
   assert.ok(!off.has('game:score'));
+  assert.ok(!off.has('game:line'));
 });
 
 test('ipc allowlist: never-list channels are absent no matter what is switched on', () => {
