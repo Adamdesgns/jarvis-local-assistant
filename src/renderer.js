@@ -474,16 +474,23 @@ function startAlarm(seconds) {
 }
 
 function runSelfDestruct(effect) {
-  const seconds = Math.max(0.5, Number(effect?.ms || 4000) / 1000);
+  const seconds = Math.max(0.5, Number(effect?.ms || 8000) / 1000);
+  const pauseMs = Math.max(0, Number(effect?.pauseMs) || 0);
   const punchline = String(effect?.punchline || '');
   if (alarmStop) alarmStop();
   document.body.classList.add('self-destruct');
   alarmStop = startAlarm(seconds);
   setTimeout(() => {
+    // The room drops back to normal the instant the alarm cuts, and then
+    // NOTHING happens for a beat. That silence is the comic timing — a
+    // written laugh was tried here first and the voice engine simply read it
+    // aloud (see core/quips.js), so the pause does the work instead.
     document.body.classList.remove('self-destruct');
     if (alarmStop) { alarmStop(); alarmStop = null; }
-    if (punchline) { setResponse(punchline); speak(punchline); }
-    else setCoreState('ready');
+    if (!punchline) { setCoreState('ready'); return; }
+    // Every failure path above still reaches this line — a gag that dies
+    // silently is worse than no gag at all (Adam, 2026-07-27).
+    setTimeout(() => { setResponse(punchline); speak(punchline); }, pauseMs);
   }, seconds * 1000);
 }
 
@@ -2302,6 +2309,23 @@ function bindEvents() {
       state.settings = await window.jarvis.bootstrap().then((b) => b.settings).catch(() => state.settings);
       updateFolderLabels(); renderSearchRoots();
     }
+  });
+  // The conversation record. Copying goes through the browser clipboard rather
+  // than a main-process call so the text never makes a second trip; an empty
+  // record says so instead of silently copying nothing.
+  $('copy-transcript').addEventListener('click', async () => {
+    const { text } = await window.jarvis.readTranscript();
+    if (!text) { showToast('Nothing said yet today.', 4000); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`Copied ${text.split('\n').filter(Boolean).length} lines to the clipboard.`, 5000);
+    } catch {
+      showToast('Could not reach the clipboard — use OPEN THE TRANSCRIPT FOLDER instead.', 6000);
+    }
+  });
+  $('open-transcript').addEventListener('click', async () => {
+    const result = await window.jarvis.revealTranscript();
+    if (!result.ok) showToast(result.message || 'Could not open the folder.', 6000);
   });
   $('setting-cloud-provider').addEventListener('change', () => {
     state.settings.cloudProvider = $('setting-cloud-provider').value;

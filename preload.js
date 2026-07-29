@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('jarvis', {
   runTerminalCommand: (command, cwd, approved) => ipcRenderer.invoke('terminal:run', { command, cwd, approved }),
   terminalCwd: () => ipcRenderer.invoke('terminal:cwd'),
   recentActivity: (limit) => ipcRenderer.invoke('activity:recent', limit),
+  readTranscript: () => ipcRenderer.invoke('transcript:read'),
+  revealTranscript: () => ipcRenderer.invoke('transcript:reveal'),
   // First-run naming (retail builds). name commits the choice; heard runs
   // the say-it-back mic check on a recorded clip.
   onboarding: {

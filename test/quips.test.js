@@ -137,17 +137,75 @@ test('matchQuip returns the whole entry so the router can carry an effect', () =
   assert.equal(matchQuip('what time is it', {}), null);
 });
 
-test('self destruct stages the full scene: red alert, 4 seconds, then the punchline', () => {
+test('self destruct stages the full scene: red alert, 8 seconds, a pause, then the punchline', () => {
   // Adam, 2026-07-27: "should turn everything red and have an alarm for
   // about 4 seconds then he says I'm kidding."
+  // Adam, 2026-07-28: "dial the alarm to 8 seconds give a pause and say the
+  // I'm kidding line."
   const entry = matchQuip('self destruct', {});
   assert.ok(entry.effect, 'self destruct carries an effect');
   assert.equal(entry.effect.kind, 'self-destruct');
-  assert.equal(entry.effect.ms, 4000);
-  assert.match(entry.effect.punchline, /kidding/i, 'the punchline lands after the alarm');
+  assert.equal(entry.effect.ms, 8000);
+  assert.match(entry.effect.punchline, /kidding/i, 'the punchline lands after the pause');
+  // Beat two is SILENCE, and it has to be long enough to read as timing
+  // rather than as lag.
+  assert.ok(entry.effect.pauseMs >= 1000, 'the pause is a real beat, not a hiccup');
   // The line shown during the alarm must NOT give the joke away early.
   assert.doesNotMatch(entry.reply, /kidding/i);
   assert.match(entry.reply, /self-destruct/i);
+});
+
+test('the self-destruct command still fires when the recognizer mangles it', () => {
+  // Live, 2026-07-28: Adam said "self destruct" and faster-whisper wrote
+  // "self destructive". The old \bself[-\s]?destruct\b missed it (no word
+  // boundary before the "ive") and the brain answered instead.
+  for (const heard of [
+    'self destruct',
+    'self-destruct',
+    'self destructive',
+    'self-destructive',
+    'self destruction',
+    'initiate self-destruct sequence',
+    'initiate self destructive sequence',
+    'activate the self destruct',
+    'jarvis, self destruct now',
+    'Self Destruct.'
+  ]) {
+    assert.equal(matchQuip(heard, {})?.id, 'self-destruct', `should fire on: ${heard}`);
+  }
+});
+
+test('the self-destruct joke NEVER fires on someone describing how they feel', () => {
+  // This is the one failure mode in this file that could actually hurt
+  // somebody: a klaxon, a red screen and a punchline in reply to a person
+  // saying they are in trouble. These must fall through to the brain, which
+  // handles a real disclosure properly.
+  for (const said of [
+    "I've been feeling self destructive lately",
+    'i feel self-destructive',
+    'I am being self destructive',
+    'am i self destructive',
+    'my brother is self destructive',
+    'is drinking self-destructive',
+    'i think this habit is self destructive and I want to stop',
+    'why am I so self-destructive'
+  ]) {
+    assert.equal(matchQuip(said, {}), null, `must NOT fire on: ${said}`);
+  }
+});
+
+test('no quip ever tries to make the voice engine perform a written noise', () => {
+  // Adam, live, 2026-07-28: "the laugh doesn't work he reads it. get rid of
+  // it." A TTS voice delivers written WORDS; handed a written noise it reads
+  // it phoneme by phoneme and the gag dies. This test exists so the idea
+  // cannot quietly come back in a later quip.
+  for (const quip of QUIPS.filter((item) => item.effect)) {
+    assert.equal(quip.effect.laugh, undefined, `${quip.id} must not carry a written laugh`);
+  }
+  const spoken = QUIPS.flatMap((quip) => [quip.reply, quip.effect?.punchline]).filter(Boolean);
+  for (const line of spoken) {
+    assert.doesNotMatch(line, /\b(?:ha){2,}\b|\bhah+\b|\bhee+hee+\b/i, `a written laugh survives in: ${line}`);
+  }
 });
 
 test('every effect declares a kind, a duration and a punchline', () => {
