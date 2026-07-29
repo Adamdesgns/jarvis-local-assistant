@@ -53,16 +53,54 @@ const QUIPS = Object.freeze([
   Object.freeze({
     id: 'self-destruct',
     when: () => true,
-    pattern: /\bself[-\s]?destruct\b/i,
+    // ⚠️ READ THIS BEFORE WIDENING THE PATTERN. It is anchored to the WHOLE
+    // utterance on purpose, and the reason is safety, not tidiness.
+    //
+    // Live on 2026-07-28 Adam said "self destruct" and faster-whisper wrote
+    // "self destructive" — same class of mangle as Skynet -> "SkyDot" below.
+    // The old `\bself[-\s]?destruct\b` missed it (no word boundary before the
+    // "ive"), it fell through to the brain, and the brain read it as a
+    // self-harm disclosure and returned a crisis response with a hotline
+    // number. So the mangle has to be accepted.
+    //
+    // But "self-destructive" is ALSO how a person actually says they are in
+    // trouble. Matching it loosely would mean someone typing "I've been
+    // feeling self destructive lately" gets a klaxon, a red screen and a
+    // punchline. That is the one failure mode here that could genuinely hurt
+    // somebody, and it is much worse than missing a joke.
+    //
+    // Anchoring separates the two cleanly with no cleverness: a COMMAND is
+    // essentially the whole utterance ("self destruct", "initiate
+    // self-destruct sequence"), while a DISCLOSURE never is — it always
+    // carries a subject and a feeling verb around it. Anything that isn't
+    // plainly the command falls through to the brain, which handles the real
+    // thing correctly. Keep it that way.
+    pattern: /^[\s,.]*(?:(?:hey\s+)?jarvis[\s,]+)?(?:please[\s,]+)?(?:initiate|activate|engage|trigger|begin|start|execute|run)?\s*(?:the\s+)?self[\s-]?destruct(?:ive|ion|ed)?(?:\s+sequence)?(?:[\s,]+(?:now|please|jarvis))*[\s.!?]*$/i,
     // A quip may stage a scene as well as say a line. `reply` is what he says
-    // while the alarm runs; `effect` tells the renderer to go red and howl for
-    // four seconds, then deliver `punchline`. The reply must NOT give the joke
-    // away early — the whole gag is the pause (Adam, 2026-07-27).
+    // while the alarm runs; `effect` tells the renderer to go red and howl,
+    // then break character and laugh, then deliver `punchline`. The reply must
+    // NOT give the joke away early — the whole gag is the pause (Adam,
+    // 2026-07-27).
+    //
+    // Three beats: alarm, silence, reveal (Adam, 2026-07-28).
+    //
+    // ⚠️ A WRITTEN LAUGH WAS TRIED HERE AND FAILED — do not add one back.
+    // `laugh: 'Hah! Ha ha ha…'` was passed to the voice engine on the theory
+    // that it would perform it. It does not: it READS it, phoneme by phoneme,
+    // and the gag dies on the spot (Adam, live: "the laugh doesn't work he
+    // reads it. get rid of it"). A TTS voice can deliver written *words*; it
+    // cannot deliver a written *noise*. The only way back to a real laugh is a
+    // sampled audio clip, which means shipping an asset and giving up on it
+    // being in the buyer's chosen voice.
+    //
+    // What replaces it is better anyway: a beat of dead silence after the
+    // alarm cuts. The pause is the comic timing, and it costs nothing.
     reply: 'Self-destruct sequence initiated. Stand by.',
     effect: Object.freeze({
       kind: 'self-destruct',
-      ms: 4000,
-      punchline: "I'm kidding, sir. I don't even have a fuse."
+      ms: 8000,
+      pauseMs: 1600,
+      punchline: "I'm kidding, sir. I don't even have a fuse. But your face — that was worth it."
     })
   }),
   Object.freeze({

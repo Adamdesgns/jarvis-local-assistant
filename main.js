@@ -12,6 +12,7 @@ const { resolveEdition, effectiveLicenseState, defaultAssistantName } = require(
 const { needsNaming, namingPatch, nameHeardIn, normalizeAssistantName } = require('./core/onboarding');
 const { LicenseService } = require('./core/license-service');
 const { ActivityLog } = require('./core/activity-log');
+const { Transcript } = require('./core/transcript');
 const { CrashLog, installProcessHandlers } = require('./core/crash-log');
 const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
@@ -79,6 +80,7 @@ let tray;
 let isQuitting = false;
 let config;
 let log;
+let transcript;
 let memory;
 let tasks;
 let tools;
@@ -599,14 +601,32 @@ function setupIpc() {
     const transcript = await localVoice.transcribe(Buffer.from(payload.bytes), payload.mimeType);
     return { transcript, heard: nameHeardIn(transcript, String(payload?.name || '')) };
   });
-  ipcMain.handle('command:submit', (_event, payload) => {
+  // Every exchange passes through here, which makes it the one honest place to
+  // journal the conversation. The user's line is written BEFORE the router
+  // runs, so a request that crashes or hangs still leaves a record of what was
+  // asked; the reply is written after, and only if there was one.
+  ipcMain.handle('command:submit', async (_event, payload) => {
     const text = typeof payload === 'string' ? payload : payload?.text;
     const project = typeof payload === 'object' && payload ? payload.project : 'general';
-    return router.handle(text, project, {
+    transcript.append('you', text);
+    const result = await router.handle(text, project, {
       onChunk: (piece) => sendEverywhere('ai:stream', { piece }),
       onReset: () => sendEverywhere('ai:stream-reset', {}),
       onStep: (step) => sendEverywhere('agent:step', { index: step.index, tool: step.tool, summary: summarizeAgentStep(step) })
     });
+    transcript.append('jarvis', result?.response);
+    return result;
+  });
+  // The record, as text, ready to paste. Reading it is deliberately a pull:
+  // nothing streams the conversation anywhere on its own.
+  ipcMain.handle('transcript:read', () => ({ text: transcript.read(), folder: transcript.dir }));
+  ipcMain.handle('transcript:reveal', async () => {
+    try {
+      await shell.openPath(transcript.dir);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error && error.message ? error.message : String(error) };
+    }
   });
   // One cancel to stop everything: the brain mid-thought AND the hands
   // mid-step. Escape, the orb stop button and a spoken "stop" all land here.
@@ -1234,6 +1254,11 @@ app.whenReady().then(async () => {
 
   config = new ConfigStore(app.getPath('userData'), safeStorage);
   log = new ActivityLog(app.getPath('userData'));
+  // The rolling 24-48h record of what was said, both sides, in plain text.
+  // Pruned on every append, and once here at boot so a machine that sat idle
+  // for a week does not keep last week's conversations waiting for a message.
+  transcript = new Transcript(app.getPath('userData'));
+  transcript.prune();
   licenseService = new LicenseService({ config });
   // Gated view: Pro flags read false until licensed. Explicit delegation, not
   // a subclass — ConfigStore keeps its private fields and its write paths.

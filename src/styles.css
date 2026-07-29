@@ -42,11 +42,28 @@ button { cursor: pointer; }
 
 /* ---------- stage ---------- */
 .workspace { position: relative; height: calc(100vh - 62px); overflow: hidden; }
-.jarvis-stage { position: absolute; inset: 0 0 132px; transition: all var(--dur-slow) var(--ease); }
-#hologram { width: 100%; height: 100%; display: block; transition: transform .72s var(--ease), opacity .45s, filter .45s; }
-/* Below the sphere, not on it (Adam, 2026-07-27) — the orb stays clean and
-   the state text reads underneath, with his live-caption words under that. */
-.central-copy { position: absolute; left: 50%; bottom: 10.5%; width: 280px; transform: translateX(-50%); text-align: center; pointer-events: none; transition: .4s ease; }
+/* NOTHING sits on the sphere (Adam, 2026-07-28: "I dont want words on the orb
+   at all"), and the orb still has to be BIG ("yes make it bigger").
+   Those pull against each other, and the way out is that a skin does not fill
+   its canvas — it inscribes a circle in it and leaves the rest empty.
+
+   Plasma, the skin Adam runs, draws at `min(w, h) * 0.56` (src/orbs/plasma.js),
+   so on a wide window it is purely HEIGHT-bound and leaves ~22% of the canvas
+   clear above the sphere and ~22% below. The text lives in that natural gap,
+   painted over the canvas rather than carved out of it — which is why these
+   bands are now small breathing room, not text clearance. Every pixel here
+   used to come straight off the orb's diameter.
+
+   ⚠️ Clearance therefore depends on the SKIN's fill ratio, and the skins
+   differ a lot: Plasma fills 56% of its canvas, the original amber hologram
+   fills 88% (radius = h*.44 in hologram.js). On that skin the state text WILL
+   touch the sphere again, and the fix would be per-skin bands. Left undone
+   deliberately — Adam is on Plasma and asked for size. */
+.jarvis-stage { position: absolute; inset: 0 0 132px; --stage-top-band: 40px; --stage-bottom-band: 40px; transition: all var(--dur-slow) var(--ease); }
+#hologram { width: 100%; height: calc(100% - var(--stage-top-band) - var(--stage-bottom-band)); margin-top: var(--stage-top-band); display: block; transition: transform .72s var(--ease), opacity .45s, filter .45s; }
+/* z-index so it paints over the canvas: the text now overlays the sphere's
+   empty upper margin rather than sitting in space carved out of the canvas. */
+.central-copy { position: absolute; z-index: 4; left: 50%; top: 8px; bottom: auto; width: 280px; transform: translateX(-50%); text-align: center; pointer-events: none; transition: .4s ease; }
 .central-copy > span { display: block; color: var(--accent-bright); font: 500 var(--text-xs)/1 var(--font); letter-spacing: var(--track-wide); margin-bottom: var(--s2); text-transform: uppercase; }
 .central-copy > strong { display: block; color: var(--text-primary); font: 300 var(--text-display)/1.1 var(--font-display); letter-spacing: .14em; margin-left: .14em; text-shadow: 0 0 30px rgba(255, 178, 31, .35); }
 .audio-bars { height: 27px; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: var(--s2); }
@@ -185,8 +202,11 @@ button { cursor: pointer; }
 .dock-close { position: absolute; z-index: 2; top: 6px; right: 8px; width: 24px; height: 24px; display: grid; place-content: center; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); font-size: 17px; line-height: 1; cursor: pointer; opacity: 0; transition: all var(--dur-fast) var(--ease) }
 .response-dock:hover .dock-close, .dock-close:focus-visible { opacity: 1 }
 .dock-close:hover { color: var(--text-primary); background: rgba(255, 255, 255, .07) }
-/* What he said, floating under him, when there is no bar to put it in. */
-.orb-reply { position: absolute; z-index: 6; left: 50%; bottom: 3.5%; transform: translateX(-50%); margin: 0; width: min(620px, 76%); text-align: center; color: var(--text-primary); font: 400 var(--text-md)/1.6 var(--font); text-shadow: 0 2px 14px rgba(0, 0, 0, .9); text-wrap: pretty; pointer-events: none; transition: opacity var(--dur-med) var(--ease) }
+/* His live captions, in the clear band under the orb (Adam, 2026-07-28: "when
+   he speaks the captions should be at the bottom"). Clamped to the band on
+   purpose: a long reply must never grow upward onto the sphere, and the full
+   text is in the response dock and the daily transcript either way. */
+.orb-reply { position: absolute; z-index: 6; left: 50%; bottom: 14px; transform: translateX(-50%); margin: 0; width: min(620px, 76%); max-height: calc(var(--stage-bottom-band) - 22px); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-align: center; color: var(--text-primary); font: 400 var(--text-md)/1.6 var(--font); text-shadow: 0 2px 14px rgba(0, 0, 0, .9); text-wrap: pretty; pointer-events: none; transition: opacity var(--dur-med) var(--ease) }
 .orb-reply.fading { opacity: 0 }
 .orb-reply[hidden] { display: none }
 .response-line { height: 42px; display: grid; grid-template-columns: 72px 1fr; align-items: center; padding: 0 var(--s4); border-bottom: 1px solid var(--line) }
@@ -327,7 +347,9 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 @keyframes reform { 0% { opacity: .1; transform: scale(1.5) } 55% { opacity: 1; transform: scale(.94) } 100% { transform: scale(1) } }
 
 @media(max-width:1100px) { .brand { min-width: 220px } .hud-button { padding: 0 8px } .stage-label { display: none } .response-dock { width: calc(100vw - 36px) } .settings-grid { grid-template-columns: 1fr } .wide-setting { grid-column: auto } }
-@media(max-height:720px) { .topbar { height: 52px } .workspace { height: calc(100vh - 52px) } .module-drawer { top: 52px } .jarvis-stage, .module-layer { bottom: 110px } .response-dock { height: 96px } .response-line { height: 34px } .command-form { height: 40px } .voice-line { height: 18px } }
+/* On a short screen the bands give up what little they hold — the sphere's own
+   inscribed margin is doing the clearance work, and every pixel here is orb. */
+@media(max-height:720px) { .topbar { height: 52px } .workspace { height: calc(100vh - 52px) } .module-drawer { top: 52px } .jarvis-stage, .module-layer { bottom: 110px } .jarvis-stage { --stage-top-band: 16px; --stage-bottom-band: 20px } .central-copy { top: 4px } .response-dock { height: 96px } .response-line { height: 34px } .command-form { height: 40px } .voice-line { height: 18px } }
 
 #connect-ollama { margin-right: 5px }
 #connect-ollama:disabled { opacity: .65; cursor: wait }
