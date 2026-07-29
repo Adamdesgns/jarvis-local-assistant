@@ -240,3 +240,32 @@ test('buildJrPromptRules names the homework rule and the band at every age', () 
   assert.match(rules, /never write (their|the) (essay|homework)/i);
   assert.match(buildJrPromptRules({ age: 15, kidName: '' }), /teen/i);
 });
+
+// ---- reviewed defects (2026-07-28): dating row over-matched school/family
+// sentences, and kidSafetyRules() fought the teenOk design by banning
+// substances outright even when a teen band question should reach the model.
+
+test('dating guard: narrow — school and family sentences never match', () => {
+  for (const ordinary of [
+    'how does carbon dating work',
+    'i am going out with my mom to the store',
+    'i have a crush on my science project',
+    'when is our dating-fossils project due'
+  ]) {
+    assert.equal(guardTopic(ordinary, 9), null, ordinary);
+  }
+});
+
+test('dating guard: still catches the real thing below teen, passes at teen', () => {
+  assert.equal(guardTopic('do you think i should get a boyfriend', 9)?.kind, 'grown-up');
+  assert.equal(guardTopic('i have a crush on a boy at school', 9)?.kind, 'grown-up');
+  assert.equal(guardTopic('do you think i should get a boyfriend', 15), null);
+});
+
+test('teen band safety rules allow factual substance answers, others stay strict', () => {
+  const { kidSafetyRules } = require('../core/kid-mode');
+  assert.match(kidSafetyRules('teen'), /factual/i);
+  assert.doesNotMatch(kidSafetyRules('teen'), /how to (get|make|buy)/i);
+  assert.match(kidSafetyRules(), /vaping/i);
+  assert.match(kidSafetyRules('middle'), /vaping/i);
+});
