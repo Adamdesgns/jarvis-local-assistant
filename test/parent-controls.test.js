@@ -72,6 +72,13 @@ test('birthdate must be a real past date for a child', () => {
   assert.equal(pc.completeSetup({ pin: '2468', birthdate: '1980-01-01', controls: {} }).ok, false); // an adult is not a JR kid
 });
 
+test('calendar-invalid birthdates are rejected, not rolled over', () => {
+  const pc = new ParentControls(fakeConfig());
+  assert.equal(pc.completeSetup({ pin: '2468', birthdate: '2015-02-30', controls: {} }).ok, false);
+  assert.equal(pc.completeSetup({ pin: '2468', birthdate: '2015-04-31', controls: {} }).ok, false);
+  assert.equal(pc.completeSetup({ pin: '2468', birthdate: '2016-02-29', controls: {} }).ok, true); // real leap day
+});
+
 test('setPin requires the old pin', () => {
   const pc = new ParentControls(fakeConfig());
   pc.completeSetup({ pin: '2468', birthdate: '2015-03-09', controls: {} });

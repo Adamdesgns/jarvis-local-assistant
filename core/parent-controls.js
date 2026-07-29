@@ -18,8 +18,14 @@ const KID_NAME_MAX = 24;
 function parseBirthdate(value) {
   const text = String(value || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const [, yStr, mStr, dStr] = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  const d = parseInt(dStr, 10);
   const date = new Date(`${text}T00:00:00`);
   if (Number.isNaN(date.getTime())) return null;
+  // Reject dates that rolled over (e.g., Feb 30 → Mar 2)
+  if (date.getFullYear() !== y || date.getMonth() + 1 !== m || date.getDate() !== d) return null;
   return { text, date };
 }
 
