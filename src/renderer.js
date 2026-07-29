@@ -748,6 +748,7 @@ const terminal = (() => {
   let log = null;
   let rain = null;
   let view = null;
+  let shell = null;
   let ready = false;
   let seenActivity = null; // null until the first render, so boot isn't replayed
 
@@ -763,8 +764,9 @@ const terminal = (() => {
     rain = window.JarvisTerminalUI.createRain(canvas);
     view = window.JarvisTerminalUI.createView(list);
     ready = true;
-    push('system', 'JARVIS console · stage 1 · type below to talk to him');
+    push('system', 'JARVIS console · talk to him in plain English, or type a Windows command');
     applyAccent();
+    primeCwd();
   }
 
   function push(stream, text) {
@@ -844,14 +846,55 @@ const terminal = (() => {
     }
   }
 
+  // Stage 2's command runner. Built lazily: terminal-session.js is a separate
+  // <script>, and the interrupt/speech tests require() renderer.js in plain
+  // Node where none of this exists.
+  function ensureShell() {
+    if (shell) return shell;
+    if (typeof window === 'undefined' || !window.JarvisTerminalSession || !window.jarvis) return null;
+    shell = window.JarvisTerminalSession.createConsoleRunner({
+      classify: (command) => window.jarvis.classifyTerminalCommand(command),
+      run: (command, cwd, approved) => window.jarvis.runTerminalCommand(command, cwd, approved),
+      // The same red CONFIRMATION REQUIRED card every other dangerous action
+      // uses. One card to learn, answered locally — see askApproval().
+      confirm: (card) => askApproval(card),
+      emit: (stream, text) => push(stream, text),
+      cwd: '',
+    });
+    return shell;
+  }
+
+  // Where the console thinks it is. The main process decides where it actually
+  // runs, so this is a starting point, not a permission.
+  async function primeCwd() {
+    const runner = ensureShell();
+    if (!runner) return;
+    try {
+      const info = await window.jarvis.terminalCwd();
+      if (info && info.cwd) {
+        runner.setCwd(info.cwd);
+        push('system', `Working in ${info.cwd}`);
+      } else {
+        push('system', 'No approved folders yet, so commands have nowhere safe to run. Add one in Settings → FILES.');
+      }
+    } catch {
+      // The console still talks to JARVIS in English without this.
+    }
+  }
+
   function submit(text) {
     const value = String(text || '').trim();
     if (!value) return;
     $('terminal-input').value = '';
-    // Stage 1 has no shell. Say so plainly instead of letting the router
-    // flounder at "npm install" as though it were English.
-    const hint = window.JarvisTerminal.shellHint(value);
-    if (hint) { push('you', value); push('system', hint); return; }
+    // Shell or English? terminal-log.js owns that decision and the list is
+    // deliberately narrow — "move the invoices" and "type hello into notepad"
+    // are things JARVIS genuinely does, and stealing those words for cmd would
+    // break the assistant to gain a shell nobody asked for.
+    if (window.JarvisTerminal.looksLikeShell(value)) {
+      const runner = ensureShell();
+      // The runner echoes the 'you' line itself, like executeCommand does.
+      if (runner) { runner.submit(value); return; }
+    }
     // executeCommand echoes the 'you' line itself, so every route into
     // JARVIS — command bar, voice, or here — shows up in the console once.
     executeCommand(value);
@@ -1541,15 +1584,50 @@ async function executeCommand(command) {
   }
 }
 
+// Arbitrates the confirm card between the router (which answers over IPC with
+// an approval id) and THE TERMINAL's console (which answers locally, because
+// the renderer classified the command and the renderer runs it — there is no
+// router-side id to post). Logic lives in terminal-session.js so the ordering
+// is testable; see createCardGate there for why order matters.
+const NULL_GATE = { ask: () => Promise.resolve(false), claim: () => null, dismiss: () => {}, isPending: () => false };
+let approvalGate = null;
+function cardGate() {
+  if (approvalGate) return approvalGate;
+  if (typeof window === 'undefined' || !window.JarvisTerminalSession) return NULL_GATE;
+  approvalGate = window.JarvisTerminalSession.createCardGate();
+  return approvalGate;
+}
+
 function showApproval(approval) {
+  // A router card arriving over a console card would otherwise leave the
+  // console's promise pending forever. Dismissing means no, so nothing runs.
+  cardGate().dismiss();
   state.pendingApproval = approval.id;
   $('approval-title').textContent = approval.title;
   $('approval-detail').textContent = approval.detail;
   $('approval-modal').showModal();
 }
 
+// The same red CONFIRMATION REQUIRED card, answered locally.
+function askApproval(card) {
+  const answer = cardGate().ask();
+  state.pendingApproval = '';
+  $('approval-title').textContent = card.title;
+  $('approval-detail').textContent = card.detail;
+  $('approval-modal').showModal();
+  return answer;
+}
+
 async function resolveApproval(approved) {
+  // Claim BEFORE close(): close() fires the dialog's 'close' handler
+  // synchronously, and that handler treats an unclaimed card as a dismissal —
+  // so claiming afterwards would turn every CONFIRM into a silent cancel.
+  const claimed = cardGate().claim();
   $('approval-modal').close();
+  if (claimed) {
+    claimed(Boolean(approved));
+    return;
+  }
   const approvalId = state.pendingApproval;
   try {
     const result = await window.jarvis.resolveApproval(approvalId, approved);
@@ -2248,6 +2326,17 @@ function bindEvents() {
   });
   $('approval-deny').addEventListener('click', () => resolveApproval(false));
   $('approval-accept').addEventListener('click', () => resolveApproval(true));
+  // Esc closes a <dialog> without either button firing. Without this, a
+  // dismissed console card never resolves and the console stays wedged on
+  // "still working on the last one". Dismissing means no.
+  //
+  // Both events on purpose: Esc fires 'cancel' then 'close', and 'close' alone
+  // has proven unobservable in a page that isn't compositing (it is queued on
+  // the user-interaction task source). dismiss() is idempotent, so the pair is
+  // free. Neither BUTTON depends on this — resolveApproval claims the card
+  // itself — so this only covers Esc.
+  $('approval-modal').addEventListener('cancel', () => cardGate().dismiss());
+  $('approval-modal').addEventListener('close', () => cardGate().dismiss());
 
   $('mobile-pair-btn').addEventListener('click', async () => {
     const out = await window.jarvis.mobile.pair();

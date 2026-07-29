@@ -2,22 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>RIG · THE TERMINAL (stage 1)</title>
+<title>RIG · THE TERMINAL (stage 2)</title>
 <!--
   Standalone rig for the terminal module. Loads the REAL tokens, the REAL
-  stylesheet and the REAL terminal modules — only the surrounding app is faked.
-  Serve the repo root and open /test/rigs/terminal.html.
+  stylesheet and the REAL terminal modules — including command-guard.js, so the
+  free/approve/deny verdicts you see here are the shipping ones, not a mock.
 
       npx --yes serve . -l 5190
+      open /test/rigs/terminal.html
 
-  Keep rigs in the repo. The last one lived in a scratchpad and had to be
+  What is faked, and why: `run` cannot spawn a process from a browser page, so
+  it returns canned output. The runner has its own 18 tests in
+  test/command-runner.test.js — this rig exists to prove the VISIBLE half:
+  that the confirm card appears, that answering it does the right thing, and
+  that output renders legibly.
+
+  The card wiring below mirrors renderer.js. The gate itself
+  (JarvisTerminalSession.createCardGate) is the real module, and
+  test/approval-card-order.test.js guards renderer.js's call order separately —
+  that ordering is the one thing a rig copy could get right while the app got
+  it wrong.
+
+  Keep rigs in the repo. The first one lived in a scratchpad and had to be
   rebuilt from scratch the next session.
 -->
 <link rel="stylesheet" href="../../src/tokens.css" />
 <link rel="stylesheet" href="../../src/styles.css" />
 <style>
   body { margin: 0; background: #000; font-family: var(--font); }
-  .rig-bar { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
+  .rig-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
   .rig-bar button {
     font-size: 11px; letter-spacing: .1em; padding: 6px 10px; cursor: pointer;
     color: var(--text-secondary); background: transparent;
@@ -33,8 +46,10 @@
   <div class="rig-bar">
     <button id="rig-gold">GOLD</button>
     <button id="rig-obsidian">OBSIDIAN</button>
-    <button id="rig-fill">FILL 40 LINES</button>
-    <button id="rig-shell">TRY "npm install"</button>
+    <button id="rig-free">FREE · dir</button>
+    <button id="rig-approve">APPROVE · npm install</button>
+    <button id="rig-deny">DENY · format c:</button>
+    <button id="rig-cd">CD · cd apps</button>
     <button id="rig-clear">CLEAR</button>
   </div>
 
@@ -55,11 +70,21 @@
     </article>
   </div>
 
+  <!-- The real card, same markup as src/index.html. -->
+  <dialog id="approval-modal" class="approval-modal">
+    <div class="warning">!</div><span>CONFIRMATION REQUIRED</span><h2 id="approval-title">CONFIRM ACTION</h2><p id="approval-detail"></p><div><button id="approval-deny">CANCEL</button><button id="approval-accept">CONFIRM</button></div>
+  </dialog>
+
 <script src="../../src/terminal-log.js"></script>
 <script src="../../src/terminal-ui.js"></script>
+<script src="../../src/command-guard.js"></script>
+<script src="../../src/terminal-session.js"></script>
 <script>
   const T = window.JarvisTerminal;
   const UI = window.JarvisTerminalUI;
+  const S = window.JarvisTerminalSession;
+  const G = window.JarvisCommandGuard;
+
   const moduleEl = document.querySelector('[data-module="terminal"]');
   const log = T.createLog();
   const rain = UI.createRain(document.getElementById('terminal-rain'));
@@ -72,26 +97,85 @@
     rain.setAccent(hex);
   }
 
+  // ── the confirm card, wired like renderer.js ────────────────────────────
+  const gate = S.createCardGate();
+
+  function askApproval(card) {
+    const answer = gate.ask();
+    document.getElementById('approval-title').textContent = card.title;
+    document.getElementById('approval-detail').textContent = card.detail;
+    document.getElementById('approval-modal').showModal();
+    return answer;
+  }
+
+  function resolveApproval(approved) {
+    // Claim BEFORE close — see test/approval-card-order.test.js.
+    const claimed = gate.claim();
+    document.getElementById('approval-modal').close();
+    if (claimed) claimed(Boolean(approved));
+  }
+
+  document.getElementById('approval-deny').addEventListener('click', () => resolveApproval(false));
+  document.getElementById('approval-accept').addEventListener('click', () => resolveApproval(true));
+  // ⚠️ KNOWN RIG LIMITATION — do not chase this. A <dialog>'s 'close'/'cancel'
+  // events are queued on the user-interaction task source, and Chromium does
+  // not pump that source for a page that is not compositing
+  // (document.visibilityState === 'hidden'). So in a headless/background rig
+  // these NEVER fire, the card's promise never settles, and the console looks
+  // wedged on "Still working on the last one."
+  //
+  // Neither button is affected — resolveApproval claims the card itself — so
+  // CONFIRM and CANCEL are fully testable here. Only Esc-dismissal needs a real
+  // visible window and a human finger.
+  document.getElementById('approval-modal').addEventListener('cancel', () => gate.dismiss());
+  document.getElementById('approval-modal').addEventListener('close', () => gate.dismiss());
+
+  // ── the fake main process ───────────────────────────────────────────────
+  // classify is REAL. run is canned — a browser cannot spawn cmd.exe.
+  const FAKE_OUTPUT = {
+    dir: ' Volume in drive C has no label.\n\n Directory of C:\\Projects\\apps\n\n07/26/2026  09:14 AM    <DIR>          jarvis-local-assistant\n07/26/2026  09:14 AM    <DIR>          material-list\n               2 Dir(s)  418,003,296,256 bytes free',
+    'npm install': 'added 214 packages, and audited 215 packages in 3s\n\nfound 0 vulnerabilities',
+  };
+
+  const runner = S.createConsoleRunner({
+    cwd: 'C:\\Projects\\apps',
+    classify: async (command) => G.classifyCommand(command),
+    run: async (command, cwd, approved) => {
+      await new Promise((r) => setTimeout(r, 120));
+      return {
+        stdout: FAKE_OUTPUT[command] || '',
+        stderr: '',
+        code: 0,
+        cwd,
+        approved,
+      };
+    },
+    confirm: (card) => askApproval(card),
+    emit: (stream, text) => push(stream, text),
+  });
+
+  function send(value) {
+    if (T.looksLikeShell(value)) return runner.submit(value);
+    push('you', value);
+    push('jarvis', `(rig) would route "${value}" to executeCommand`);
+    return Promise.resolve();
+  }
+
   accent('gold');
   rain.start();
-  push('system', 'JARVIS console · stage 1 · type below to talk to him');
+  push('system', 'JARVIS console · talk to him in plain English, or type a Windows command');
+  push('system', 'Working in C:\\Projects\\apps');
   push('you', 'good morning');
   push('jarvis', 'Good morning. Three tasks due today, one overdue.');
   push('agent', 'search_files · query "invoice" · 4 matches');
-  push('activity', 'Find the March invoice · voice');
   push('night', 'Night Shift wrote 2 drafts, spent $0.00');
 
   document.getElementById('rig-gold').onclick = () => accent('gold');
   document.getElementById('rig-obsidian').onclick = () => accent('obsidian');
-  document.getElementById('rig-fill').onclick = () => {
-    for (let i = 1; i <= 40; i += 1) push('activity', `filler line ${i}`);
-  };
-  document.getElementById('rig-shell').onclick = () => {
-    const v = 'npm install';
-    push('you', v);
-    const hint = T.shellHint(v);
-    if (hint) push('system', hint);
-  };
+  document.getElementById('rig-free').onclick = () => send('dir');
+  document.getElementById('rig-approve').onclick = () => send('npm install');
+  document.getElementById('rig-deny').onclick = () => send('format c:');
+  document.getElementById('rig-cd').onclick = () => send('cd apps');
   document.getElementById('rig-clear').onclick = () => { log.clear(); view.reset(); push('system', 'Console cleared.'); };
 
   document.getElementById('terminal-form').addEventListener('submit', (e) => {
@@ -100,13 +184,11 @@
     const v = input.value.trim();
     if (!v) return;
     input.value = '';
-    push('you', v);
-    const hint = T.shellHint(v);
-    push(hint ? 'system' : 'jarvis', hint || `(rig) would route "${v}" to executeCommand`);
+    send(v);
   });
 
   // Handy for automated checks.
-  window.rig = { log, rain, view, push, accent };
+  window.rig = { log, rain, view, push, accent, runner, gate, send };
 </script>
 </body>
 </html>

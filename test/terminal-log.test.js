@@ -7,7 +7,7 @@ const {
   formatClock,
   createLog,
   accentFor,
-  shellHint,
+  looksLikeShell,
 } = require('../src/terminal-log');
 
 test('STREAMS: every stream has an id and a short uppercase label', () => {
@@ -111,20 +111,23 @@ test('accentFor: the console wears the chosen orb colour, defaulting to JARVIS g
   assert.equal(accentFor('chartreuse'), '#ffb21f');
 });
 
-test('shellHint: stage 1 has no raw shell, so bare commands get an honest answer', () => {
-  assert.ok(shellHint('dir'));
-  assert.ok(shellHint('npm install'));
-  assert.ok(shellHint('git status'));
-  assert.ok(shellHint('  IPCONFIG /all '), 'case and padding must not sneak past');
+// shellHint() is gone with stage 1 — it existed only to say "raw commands
+// arrive in stage 2", and they have. looksLikeShell() is the same decision
+// without the apology, and it now picks a pipeline instead of refusing one.
+test('looksLikeShell: bare commands route to the shell', () => {
+  assert.equal(looksLikeShell('dir'), true);
+  assert.equal(looksLikeShell('npm install'), true);
+  assert.equal(looksLikeShell('git status'), true);
+  assert.equal(looksLikeShell('  IPCONFIG /all '), true, 'case and padding must not sneak past');
 });
 
-test('shellHint: plain English is never mistaken for a shell command', () => {
-  assert.equal(shellHint('what is my day like'), null);
-  assert.equal(shellHint('find my compressor manual'), null);
-  assert.equal(shellHint(''), null);
+test('looksLikeShell: plain English is never mistaken for a shell command', () => {
+  assert.equal(looksLikeShell('what is my day like'), false);
+  assert.equal(looksLikeShell('find my compressor manual'), false);
+  assert.equal(looksLikeShell(''), false);
   // Deliberately NOT flagged: these are ordinary English that JARVIS handles.
-  assert.equal(shellHint('type hello world into notepad'), null);
-  assert.equal(shellHint('copy that file to the desktop'), null);
-  assert.equal(shellHint('move the invoices into one folder'), null);
-  assert.equal(shellHint('echo that back to me'), null);
+  assert.equal(looksLikeShell('type hello world into notepad'), false);
+  assert.equal(looksLikeShell('copy that file to the desktop'), false);
+  assert.equal(looksLikeShell('move the invoices into one folder'), false);
+  assert.equal(looksLikeShell('echo that back to me'), false);
 });
