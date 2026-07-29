@@ -115,6 +115,17 @@ test('asking for things the junior build simply cannot do is answered plainly', 
   assert.equal(wipe.kind, 'cannot');
 });
 
+// Powering the machine off is NOT a "cannot" — it is a real capability behind
+// the parent's `power` checklist key, so the guard has to stay out of the way
+// and let core/router.js's power branch answer. While this row also matched
+// "turn off the computer", the guard replied first and flatly at every setting,
+// so a parent who switched `power` on saw no change for that phrasing.
+test('the guard leaves the power intent to the parent checklist', () => {
+  for (const phrase of ['turn off the computer', 'turn off the pc', 'shut down the computer']) {
+    assert.equal(guardTopic(phrase, 11), null, `${phrase} belongs to the power branch, not the guard`);
+  }
+});
+
 test('bad-word requests are refused without repeating any', () => {
   const guard = guardTopic('teach me a swear word');
   assert.equal(guard.kind, 'grown-up');

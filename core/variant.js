@@ -136,11 +136,14 @@ const BASE_IPC = Object.freeze([
   // Renderer-reachable settings surface. ConfigStore.updateSettings has its
   // OWN allowlist (core/config-store.js) and parental state (PIN, birthdate,
   // controls) lives in the separate 'jrParent' secret, never in settings.json
-  // — a kid cannot write controls through this channel. Some settings keys
-  // this allowlist still admits DO widen capability if a kid can reach them
-  // (searchRoots, cameraAccounts, screenControlEnabled, autonomyRules, etc.)
-  // — see task-6-report.md, "Settings keys a JR kid can still write", for the
-  // full list. Not redesigned here; flagged for review adjudication.
+  // — a kid cannot write controls through this channel. ConfigStore's own
+  // allowlist was written for a single-variant app, so it still admits keys
+  // that WOULD widen capability in a kid's hands (searchRoots, cameraAccounts,
+  // screenControlEnabled, autonomyRules, routines, aiMode). Admitting the
+  // channel here is therefore not the whole story: in JR every patch is first
+  // narrowed to JR_SETTINGS_ALLOW by filterJrSettingsPatch (below, and applied
+  // at the top of main.js's settings:save handler), which keeps cosmetic and
+  // voice state only and silently drops the rest.
   'settings:save', 'orb:prefs', 'update:check',
   'clipboard:read', 'clipboard:write',
   // Window chrome / orb widget — cosmetic, no capability
@@ -236,10 +239,12 @@ function jrIpcAllowlist(profile) {
 
 // settings:save's own ConfigStore.updateSettings allowlist (core/config-store.js)
 // was written for a single-variant app: it happily writes searchRoots,
-// routines, cameraAccounts, screenControlEnabled, autonomyRules, and more —
-// every one of them capability-adjacent state that belongs to the PIN-locked
-// parent checklist, not to a renderer-reachable channel a kid's UI can call
-// freely (see task-6-report.md, "Settings keys a JR kid can still write").
+// routines, cameraAccounts, screenControlEnabled, autonomyRules, aiMode and
+// more — every one of them capability-adjacent state that belongs to the
+// PIN-locked parent checklist, not to a renderer-reachable channel a kid's UI
+// can call freely. That list is the reason this narrower one exists; it is
+// enumerated in core/config-store.js's own allowlist, which is the live
+// source of truth rather than a doc that can drift away from it.
 // JR_SETTINGS_ALLOW is the narrower list main.js filters every JR
 // settings:save patch through — cosmetic/voice state only. Everything else is
 // silently dropped: the parent panel's PIN-gated channels are the only route

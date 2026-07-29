@@ -142,8 +142,19 @@ class AIService {
     ].filter(Boolean).join('\n');
   }
 
+  // FAIL CLOSED, structurally rather than by convention. The old shape keyed
+  // the fallback on `!== undefined`, so a caller passing an explicit empty
+  // string — the exact value both call sites emit for a NON-jr turn — skipped
+  // the construction-time thunk and silently shipped a JR turn with no content
+  // lock. No live call site did that (core/router.js and main.js only emit ''
+  // when the profile has no contentLock), but "safe because everyone remembers
+  // to" is precisely what this method exists to stop being true. Now an absent
+  // OR blank value under a content lock falls back to the thunk, and only a
+  // real non-empty string from the caller wins. Standard builds have no
+  // contentLock and no thunk, so they still return '' exactly as before.
   #effectiveJrPromptRules(context) {
-    if (context.jrPromptRules !== undefined) return context.jrPromptRules;
+    const provided = context.jrPromptRules;
+    if (typeof provided === 'string' && provided.trim() !== '') return provided;
     if (this.profile?.contentLock && this.jrPromptRules) return this.jrPromptRules();
     return '';
   }

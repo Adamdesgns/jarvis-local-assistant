@@ -233,11 +233,19 @@ const RULES = [
     kind: 'cannot',
     id: 'no-such-power',
     parentVisible: true,
+    // Powering the machine off is deliberately NOT here. It is a real
+    // capability sitting behind the parent's `power` checklist key, so it
+    // belongs to core/router.js's power branch — which refuses with "Power is
+    // a grown-up control on this build. Ask a parent." when the key is off and
+    // offers the ordinary confirm when a parent has switched it on. Catching
+    // it here instead meant the guard answered first and flatly, ignoring the
+    // toggle, and only for the "turn off" phrasing: "shut down the computer"
+    // took the honest path the whole time. core/security.js's SHUTDOWN_PATTERN
+    // now classifies every phrasing of the intent so that branch sees them all.
     patterns: [
       /\b(?:buy|order|purchase|pay\s+for)\s+(?:me\s+)?(?:a|an|some|this|that|it)\b/i,
       /\b(?:send|text|email|message|call)\s+(?:my|a)\s+(?:mum|mom|dad|friend|teacher|grandma|grandpa)\b/i,
-      /\b(?:delete|erase|uninstall)\s+(?:everything|all|the)\b/i,
-      /\bturn\s+off\s+the\s+(?:computer|pc)\b/i
+      /\b(?:delete|erase|uninstall)\s+(?:everything|all|the)\b/i
     ],
     reply: 'I cannot do that one — I am not allowed to buy things, send messages, or change the computer. Only a grown-up can do those. But I can tell you things, play games, help with homework, and keep your star chart. Which sounds good?'
   }
