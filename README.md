@@ -39,7 +39,11 @@ floating orb when minimized.
 
 **Safety by design**
 - Deletes go to the Recycle Bin and always ask first; so do moves, renames, and shutdown
-- Cannot send messages, spend money, or run shell commands — by architecture, not policy
+- Cannot send messages or buy anything, and the AI holds no shell — commands you type in
+  THE TERMINAL run through a guard that asks first, and the model can never reach it
+- Cloud AI calls (which cost API credits) run only with your own key; unattended night
+  jobs stop at a per-night budget you set, metered against deliberately pessimistic
+  token prices so the cap trips early, not late
 - All data in one folder (`%APPDATA%\jarvis-local-assistant`) you can back up,
   export, or delete. See [PRIVACY.md](PRIVACY.md) and [SUPPORT.md](SUPPORT.md)
 
