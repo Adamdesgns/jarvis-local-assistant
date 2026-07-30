@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Fixed — PRIVACY.md now describes what the app actually does
+- Rewritten from the code rather than from intent. The old version was last
+  edited 2026-07-24, before the Kokoro voice shipped and before the Pro gate was
+  removed, and it was **wrong in seven places** — including its central promise.
+- **"Local mode sends nothing off the PC" was false.** The default TTS engine is
+  Kokoro, whose model (~326 MB) is downloaded from huggingface.co. Setting up
+  local voice also downloads the openWakeWord `hey_jarvis` model and a
+  faster-whisper model. A fresh install talks to the internet before you enable
+  anything. There is now a dedicated "What gets downloaded the first time"
+  section saying so.
+- **"API keys are never written in plain text" was conditionally false.** Only
+  the OpenAI key refuses to save when Windows secure storage is unavailable;
+  every other secret silently falls back to plain text in `settings.json`. The
+  page now names that hole instead of glossing it.
+- **Whole features were missing from "what leaves your computer":** cloud
+  cameras (Ring, Blink at `rest-prod.immedia-semi.com`, Nest via Google), the
+  Browser module (every page you visit, plus DuckDuckGo for typed searches), and
+  the mobile companion's Tailscale-bound server.
+- **The Pro/Lemon Squeezy section described a product that no longer exists.**
+  Replaced with the honest position: the buttons are gone, but the code that
+  could reach `api.lemonsqueezy.com` is still present and still wired to
+  internal channels, and never runs on its own.
+- **The conversation record was undocumented.** JARVIS keeps a rolling
+  plain-text transcript of both sides for ~2 days; that now has its own section
+  explaining what it is and how to delete it.
+- The data-folder listing was incomplete — `schedules.json`, `crash.log`, the
+  dated transcript files, and `cameras\` were all missing.
+
 ### Removed — 223 MB of ffmpeg that never did anything
 - The installer no longer carries `ffmpeg-for-homebridge`'s binary. It arrived
   as a transitive dependency (`ring-client-api` → `@homebridge/camera-utils` →
