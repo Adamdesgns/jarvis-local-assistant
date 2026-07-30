@@ -168,3 +168,23 @@ test('completeSetup stores an optional kidName, trimmed and capped at 24 chars',
   pc3.completeSetup({ pin: '2468', birthdate: '2015-03-09', controls: {} });
   assert.equal(pc3.getKidName(), '');
 });
+
+// Full-settings plan Task 1: kid name and birthdate become editable from the
+// JARVIS JR settings tab — but setProfile must never be a route to the PIN or
+// the checklist, and a refused birthdate must not half-apply.
+test('setProfile: renames the kid and re-dates him, refusing a bad date', () => {
+  const pc = new ParentControls(fakeConfig());
+  pc.completeSetup({ pin: '2468', birthdate: '2016-05-04', controls: {}, kidName: 'Sam' });
+  assert.equal(pc.setProfile({ kidName: '  Samantha  ' }).ok, true);
+  assert.equal(pc.getKidName(), 'Samantha');
+  assert.equal(pc.setProfile({ birthdate: '2015-02-30' }).ok, false);
+  assert.equal(pc.getBirthdate(), '2016-05-04', 'a refused date must not land');
+  assert.equal(pc.setProfile({ birthdate: '1970-01-01' }).ok, false, 'outside the age range');
+  assert.equal(pc.setProfile({ birthdate: '2015-06-01' }).ok, true);
+  assert.equal(pc.getBirthdate(), '2015-06-01');
+  // setProfile must never be a route to the PIN or the checklist.
+  const before = pc.getControls();
+  pc.setProfile({ kidName: 'X', controls: { terminal: true }, pinHash: 'nope' });
+  assert.deepEqual(pc.getControls(), before);
+  assert.equal(pc.verifyPin('2468').ok, true);
+});

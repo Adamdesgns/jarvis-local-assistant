@@ -128,6 +128,26 @@ class ParentControls {
     return { ...data.controls };
   }
 
+  // Kid name and birthdate, editable from the JARVIS JR settings tab. NOT a
+  // route to the PIN or the checklist: it reads the secret, changes at most
+  // those two fields, and writes it back. A rejected birthdate leaves the
+  // stored one untouched rather than half-applying.
+  setProfile({ kidName, birthdate } = {}) {
+    const data = this.#read();
+    if (birthdate !== undefined) {
+      const parsed = parseBirthdate(birthdate);
+      if (!parsed) return { ok: false, reason: 'Birthdate must be a real date, YYYY-MM-DD.' };
+      const age = wholeYears(parsed.date, new Date());
+      if (age < AGE_MIN || age > AGE_MAX) {
+        return { ok: false, reason: `JARVIS JR is for kids aged ${AGE_MIN} to ${AGE_MAX}.` };
+      }
+      data.birthdate = parsed.text;
+    }
+    if (kidName !== undefined) data.kidName = normalizeKidName(kidName);
+    this.#write(data);
+    return { ok: true, kidName: data.kidName || '', birthdate: data.birthdate || '' };
+  }
+
   getBirthdate() {
     return this.#read().birthdate || '';
   }

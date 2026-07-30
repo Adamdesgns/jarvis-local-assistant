@@ -27,19 +27,49 @@ const path = typeof require === 'function' ? require('node:path') : null;
 
 const VARIANTS = Object.freeze(['standard', 'jr']);
 
-// The parent checklist, in panel display order. Every key is a real
-// capability, decided ONLY in the PIN-locked panel.
+// The parent checklist, in display order: what the KID can reach. Every key
+// is a real capability with a kid-facing surface (a router branch, a module
+// card, or an IPC set), decided ONLY behind the parent PIN. Grown-up-only
+// machinery (night shift, schedules, autonomy, the phone bridge) is NOT here
+// — those have no kid-facing surface, so they are ordinary settings the
+// parent flips in the real settings dialog, like the standard build.
 const CONTROL_KEYS = Object.freeze([
   // The base experience — on by default; a parent may still switch any off.
   'games', 'battle', 'quips', 'homework', 'tasks', 'timers',
   // Reach-out features — off until a parent turns them on.
-  'cameras', 'documents', 'files', 'apps', 'browser', 'terminal', 'screenRead', 'power'
+  'cameras', 'documents', 'files', 'apps', 'browser', 'terminal', 'screenRead', 'power',
+  // Grown-up-power features a parent may hand down. All default off.
+  'claudeBridge', 'screenDrive', 'defense'
 ]);
+
+// The single source of display copy for the checklist. The renderer reads it
+// off window.JrVariant (this file is a classic <script> in index.html), so
+// the old hand-maintained mirror in jr-parent-ui.js is gone for good.
+const CONTROL_LABELS = Object.freeze({
+  games: 'Games',
+  battle: 'Battle mode',
+  quips: 'Jokes & quips',
+  homework: 'Homework hints',
+  tasks: 'Tasks',
+  timers: 'Timers',
+  cameras: 'Cameras (view only)',
+  documents: 'Documents — read & summarize',
+  files: 'File search (their own folder)',
+  apps: 'Open apps (parent allowlist)',
+  browser: 'The browser',
+  terminal: 'The terminal',
+  screenRead: 'Screen reading',
+  power: 'Power (restart/shutdown)',
+  claudeBridge: 'Ask Claude (cloud AI — costs money)',
+  screenDrive: 'Let JARVIS click and type on the PC',
+  defense: 'Defense mode'
+});
 
 const DEFAULT_CONTROLS = Object.freeze({
   games: true, battle: true, quips: true, homework: true, tasks: true, timers: true,
   cameras: false, documents: false, files: false, apps: false,
-  browser: false, terminal: false, screenRead: false, power: false
+  browser: false, terminal: false, screenRead: false, power: false,
+  claudeBridge: false, screenDrive: false, defense: false
 });
 
 function resolveVariant(context) {
@@ -73,14 +103,18 @@ const STANDARD_PROFILE = Object.freeze({
   games: true, battle: true, quips: true, homework: true, tasks: true, timers: true,
   cameras: true, documents: true, files: true, apps: true,
   browser: true, terminal: true, screenRead: true, power: true,
-  cameraConfig: true, screenDrive: true, claudeBridge: true,
-  nightShift: true, schedules: true, autonomy: true, phone: true, defense: true
+  screenDrive: true, claudeBridge: true, defense: true,
+  nightShift: true, schedules: true, autonomy: true, phone: true
 });
 
-// The capability profile main.js builds from. A pure function and an
-// ALLOWLIST. In jr, the trailing block is the spine of the build: never
-// constructed at ANY checklist setting — wanting these is what the adult
-// JARVIS is for.
+// The capability profile: what the KID can reach — and nothing else. JR
+// constructs exactly what the standard build constructs (main.js gates no
+// service on this any more); the parent's PIN session decides which IPC
+// channels are reachable beyond the kid surface. The never-block is down to
+// ONE entry: the content lock, which has no off switch at any setting.
+// nightShift/schedules/autonomy/phone are granted true — the variant
+// withholds nothing from the PARENT; those four are ordinary settings with
+// no kid-facing surface (no router branch, no kid channel set).
 function profileFor(variant, controls) {
   if (!isJr(variant)) return { ...STANDARD_PROFILE };
   const on = normalizeControls(controls);
@@ -88,20 +122,14 @@ function profileFor(variant, controls) {
     variant: 'jr',
     productName: 'JARVIS JR',
     ...on,
-    // The never-block: no control key reaches any of these, at any checklist
-    // setting. contentLock lives here too (not before the spread) so a
-    // hostile/malformed controls object can never smuggle a contentLock key
-    // through the spread — it is structurally impossible, not merely safe
-    // because normalizeControls happens to drop unknown keys today.
+    // AFTER the spread, so a hostile/malformed controls object carrying its
+    // own contentLock key is structurally overwritten — not merely dropped
+    // because normalizeControls happens to ignore unknown keys today.
     contentLock: true,
-    cameraConfig: false,
-    screenDrive: false,
-    claudeBridge: false,
-    nightShift: false,
-    schedules: false,
-    autonomy: false,
-    phone: false,
-    defense: false
+    nightShift: true,
+    schedules: true,
+    autonomy: true,
+    phone: true
   };
 }
 
@@ -179,51 +207,44 @@ const FEATURE_IPC = Object.freeze({
   // harmless in the standard build, same as MemoryStore/TaskStore), so this
   // is the only place "games off" actually withholds anything in JR: the
   // router's own branch (core/router.js) never calls detectGame either.
-  games: ['game:move', 'game:score', 'game:line']
-  // documents/apps/browser/power gate no dedicated IPC channel today — they
-  // run through command:submit, gated inside CommandRouter (Task 5) instead.
+  games: ['game:move', 'game:score', 'game:line'],
+  // The grown-up-power checklist keys. defense:zones stays OUT — county
+  // configuration is settings work, admin surface only.
+  defense: ['defense:status', 'defense:enter', 'defense:exit', 'defense:wave-off'],
+  screenDrive: ['screen:drive-stop']
+  // documents/apps/browser/power/claudeBridge gate no dedicated IPC channel
+  // today — they run through command:submit, gated inside CommandRouter.
   // timers has no IPC surface yet in main.js. Nothing to list here until one
   // ships; add it to this set (not BASE_IPC) when it does.
 });
 
-// The parent-lock surface (Task 8's setup gate, this task's IPC channels).
-// Registered unconditionally by main.js — each handler itself returns
-// {ok:false} when !JR — but only ADMITTED into the allowlist here. Every
-// jr:parent:* mutation still demands the PIN in the same call; the renderer
-// never holds an unlocked session token.
+// The parent-lock surface a KID may reach: the setup gate, the PIN prompt,
+// and the session's own read/close. jr:parent:controls and jr:parent:pin are
+// deliberately NOT here any more — they are admin channels, reachable only
+// while the parent session is unlocked, so a kid cannot even reach the
+// handler that edits his checklist. jr:parent:cameras is gone entirely: the
+// real cameras:add-* channels are the admin surface now.
 const JR_IPC = Object.freeze([
-  'jr:status', 'jr:setup:complete', 'jr:parent:verify', 'jr:parent:controls', 'jr:parent:pin',
-  // Camera CONFIG's one doorway: {pin, action, payload}. main.js verifies the
-  // PIN first (same PinGate lockout as every other jr:parent:* mutation),
-  // then dispatches `action` to the same CameraService methods the standard
-  // build's cameras:add-blink/add-ring/add-nest/add-rtsp/remove-account/
-  // set-armed/blink-pin channels call directly — no separate credential path.
-  'jr:parent:cameras'
+  'jr:status', 'jr:setup:complete', 'jr:parent:verify', 'jr:parent:lock', 'jr:parent:session'
 ]);
 
-// NEVER admitted, at any checklist setting — deliberately left OUT of every
-// set above rather than subtracted here, so there is nothing to bypass. This
-// list exists only so a reviewer can see the reasoning in one place:
-//   transcript:reveal                                  — opens raw Explorer
-//   mobile:status/devices/revoke/pair                  — phone is always off in jr (profileFor)
-//   schedule:list/add/update/remove/runNow             — schedules is always off in jr
-//   openai:save-key/remove-key/test                    — cloud API key entry + billing
-//   anthropic:save-key/remove-key/test                 — cloud API key entry + billing
-//   nightshift:status                                  — nightShift is always off in jr
-//   update:open                                        — shell.openExternal(renderer-supplied url)
-//   external:ollama/openai-billing/openai-keys/         — arbitrary external-browser opens,
-//     anthropic-keys/nest-console/buy-pro                 account/billing pages
-//   backup:export/import                               — native OS file dialogs, bypasses
-//                                                          approved-roots entirely
-//   license:status/activate/validate/deactivate         — purchase/license management
-//   defense:status/enter/exit/wave-off/zones            — defense is always off in jr
-//   screen:drive-stop                                   — screenDrive is always off in jr
-//   cameras:add-blink/blink-pin/add-ring/add-nest/       — camera CONFIG: account credentials
-//     add-rtsp/remove-account/set-armed                    and arm/disarm. Never admitted under
-//                                                          their own names, cameras on or off —
-//                                                          reachable only through the PIN-gated
-//                                                          jr:parent:cameras multiplexer (JR_IPC).
+// NOT on the KID surface — reachable only while the parent session is
+// unlocked (the call-time gate in main.js consults ParentSession.admit() for
+// any channel outside jrIpcAllowlist). Deliberately left OUT of every set
+// above rather than subtracted, so there is nothing to bypass:
+//   transcript:reveal, backup:export/import              — raw disk surface
+//   mobile:*, schedule:*, nightshift:status              — grown-up machinery
+//   openai:*/anthropic:* key channels, external:*        — money and accounts
+//   license:*                                            — purchase management
+//   update:open                                          — shell.openExternal
+//   defense:zones                                        — county configuration
+//   cameras:add-blink/blink-pin/add-ring/add-nest/       — camera CONFIG:
+//     add-rtsp/remove-account/set-armed                     credentials + arming
+//   jr:parent:controls, jr:parent:pin                    — the checklist and PIN
 
+// The KID surface for a given profile. What this Set does NOT contain is not
+// dead any more — it is the admin surface, opened per call by the parent
+// session (see jrChannelAllowed below).
 function jrIpcAllowlist(profile) {
   const allowed = new Set([...BASE_IPC, ...JR_IPC]);
   for (const [flag, channels] of Object.entries(FEATURE_IPC)) {
@@ -232,6 +253,25 @@ function jrIpcAllowlist(profile) {
     }
   }
   return allowed;
+}
+
+// The JR IPC gate, as a pure decision. Kid channels short-circuit BEFORE the
+// session is consulted — admitParent() is the idle-timer heartbeat, and a kid
+// playing tic-tac-toe must not keep a parent's settings session alive. Called
+// per invocation (not per registration), which is the whole reason an expired
+// unlock re-blocks without any timer to fire.
+function jrChannelAllowed(channel, kidAllowlist, admitParent) {
+  if (kidAllowlist && kidAllowlist.has(channel)) return true;
+  return typeof admitParent === 'function' ? Boolean(admitParent()) : Boolean(admitParent);
+}
+
+// settings:save's own gate. A locked JR renderer writes cosmetics and nothing
+// else, exactly as before; an unlocked one is a parent at the real settings
+// dialog, so the patch goes through untouched and ConfigStore's own allowlist
+// (core/config-store.js) is the only filter left, same as the standard build.
+function jrSettingsPatch(patch, { jr, unlocked } = {}) {
+  if (!jr || unlocked) return patch || {};
+  return filterJrSettingsPatch(patch || {});
 }
 
 // settings:save's own ConfigStore.updateSettings allowlist (core/config-store.js)
@@ -271,7 +311,10 @@ function filterJrSettingsPatch(patch) {
 const MODULE_PROFILE_KEY = Object.freeze({
   tasks: 'tasks',
   'file-explorer': 'files',
-  'night-shift': 'nightShift',
+  // The night-shift CARD shows the night crew's document summaries —
+  // kid-visible content — so it follows the kid's documents permission, not
+  // the parent's nightShift setting (which the jr profile now always grants).
+  'night-shift': 'documents',
   terminal: 'terminal',
   cameras: 'cameras',
   browser: 'browser',
@@ -300,9 +343,10 @@ function moduleAllowedInProfile(moduleName, profile) {
 }
 
 const api = {
-  VARIANTS, CONTROL_KEYS, DEFAULT_CONTROLS, STANDARD_PROFILE,
+  VARIANTS, CONTROL_KEYS, CONTROL_LABELS, DEFAULT_CONTROLS, STANDARD_PROFILE,
   resolveVariant, isJr, normalizeControls, profileFor,
-  jrUserDataPath, jrIpcAllowlist, JR_SETTINGS_ALLOW, filterJrSettingsPatch,
+  jrUserDataPath, jrIpcAllowlist, jrChannelAllowed, jrSettingsPatch,
+  JR_IPC, FEATURE_IPC, JR_SETTINGS_ALLOW, filterJrSettingsPatch,
   MODULE_PROFILE_KEY, moduleAllowedInProfile
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

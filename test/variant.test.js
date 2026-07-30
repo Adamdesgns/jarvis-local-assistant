@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-  VARIANTS, CONTROL_KEYS, DEFAULT_CONTROLS,
+  VARIANTS, CONTROL_KEYS, CONTROL_LABELS, DEFAULT_CONTROLS, STANDARD_PROFILE,
   resolveVariant, isJr, normalizeControls, profileFor
 } = require('../core/variant');
 
@@ -33,16 +33,35 @@ test('profileFor(standard) grants everything JR gates and no content lock', () =
   assert.equal(p.nightShift, true);
 });
 
-test('profileFor(jr): checklist maps through; never-in-JR stays false with EVERYTHING on', () => {
+test('profileFor(jr): the never-block is now exactly one thing — the content lock', () => {
   const allOn = Object.fromEntries(CONTROL_KEYS.map((k) => [k, true]));
   const p = profileFor('jr', allOn);
   assert.equal(p.contentLock, true);
-  assert.equal(p.files, true);
-  assert.equal(p.browser, true);
-  // The spine of the build — no combination of controls reaches these:
-  for (const never of ['cameraConfig', 'screenDrive', 'claudeBridge', 'nightShift', 'schedules', 'autonomy', 'phone', 'defense']) {
-    assert.equal(p[never], false, `${never} must be false in jr`);
+  for (const key of ['files', 'browser', 'terminal', 'cameras',
+                     'claudeBridge', 'screenDrive', 'defense',
+                     'nightShift', 'schedules', 'autonomy', 'phone']) {
+    assert.equal(p[key], true, `${key} must be parent-enablable in jr`);
   }
+  assert.equal('cameraConfig' in p, false, 'the dead cameraConfig flag is gone');
+  assert.equal('cameraConfig' in STANDARD_PROFILE, false);
+});
+
+test('the three new keys are kid-reach checklist keys, defaulting OFF', () => {
+  for (const key of ['claudeBridge', 'screenDrive', 'defense']) {
+    assert.ok(CONTROL_KEYS.includes(key), `${key} must be a checklist key`);
+    assert.equal(DEFAULT_CONTROLS[key], false, `${key} must default off`);
+    assert.equal(profileFor('jr', DEFAULT_CONTROLS)[key], false);
+  }
+  // The grown-up-only four are NOT kid checklist keys — they are settings.
+  for (const key of ['nightShift', 'schedules', 'autonomy', 'phone']) {
+    assert.ok(!CONTROL_KEYS.includes(key), `${key} is a parent SETTING, not a checklist key`);
+  }
+  assert.equal(CONTROL_KEYS.length, 17);
+});
+
+test('CONTROL_LABELS is the single source of display copy and covers every key', () => {
+  assert.deepEqual(Object.keys(CONTROL_LABELS).sort(), [...CONTROL_KEYS].sort());
+  for (const key of CONTROL_KEYS) assert.ok(String(CONTROL_LABELS[key]).trim().length > 0, key);
 });
 
 test('profileFor(jr) with defaults: base on, reach-out features off', () => {
@@ -58,18 +77,15 @@ test('a birthday changes no feature: profileFor takes no age argument', () => {
   assert.equal(profileFor.length, 2);
 });
 
-// VARIANT-ORDER (final-review blocker): contentLock:true must sit AFTER the
-// controls spread in profileFor's jr branch, in the never-block with its
-// siblings — not before it, where it only survives because normalizeControls
-// drops unknown keys. A hostile/malformed controls object with its own
-// contentLock/cameraConfig/defense keys must never be able to smuggle those
-// through: content lock has no off switch, and the never-block stays false.
-test('content lock has no off switch, and hostile controls cannot smuggle a never-key', () => {
-  const p = profileFor('jr', { contentLock: false, cameraConfig: true, defense: true });
+// The one surviving never-key. contentLock:true sits AFTER the controls
+// spread in profileFor's jr branch, so a hostile/malformed controls object
+// carrying its own contentLock key is structurally overwritten — the content
+// lock has no off switch, whatever a kid-edited blob claims.
+test('the content lock still has no off switch and cannot ride in on a controls object', () => {
+  const p = profileFor('jr', { contentLock: false, games: false, defense: true });
   assert.equal(p.contentLock, true);
-  for (const never of ['cameraConfig', 'screenDrive', 'claudeBridge', 'nightShift', 'schedules', 'autonomy', 'phone', 'defense']) {
-    assert.equal(p[never], false, `${never} must be false in jr`);
-  }
+  assert.equal(p.games, false, 'real checklist keys still map through');
+  assert.equal(p.defense, true, 'defense is a checklist key now — the parent may hand it down');
 });
 
 void VARIANTS; void isJr;

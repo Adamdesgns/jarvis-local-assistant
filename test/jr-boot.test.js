@@ -35,8 +35,9 @@ test('ipc allowlist: base channels always present, at every checklist setting', 
   assert.ok(off.has('jr:status'));
   assert.ok(off.has('jr:setup:complete'));
   assert.ok(off.has('jr:parent:verify'));
-  assert.ok(off.has('jr:parent:controls'));
-  assert.ok(off.has('jr:parent:pin'));
+  // jr:parent:controls / jr:parent:pin are ADMIN channels now — reachable
+  // only through an unlocked parent session, never on the kid surface.
+  // Pinned in test/jr-unlock.test.js.
 });
 
 test('ipc allowlist: feature channels absent when the control is off, present when on', () => {
@@ -89,7 +90,7 @@ test('ipc allowlist: never-list channels are absent no matter what is switched o
   const allOn = jrIpcAllowlist(profileFor('jr', Object.fromEntries(Object.keys(DEFAULT_CONTROLS).map((k) => [k, true]))));
   const never = [
     'mobile:status', 'mobile:pair',
-    'defense:status', 'defense:enter',
+    'defense:zones',
     'schedule:list', 'schedule:add',
     'openai:save-key', 'anthropic:save-key',
     'nightshift:status',
@@ -97,12 +98,25 @@ test('ipc allowlist: never-list channels are absent no matter what is switched o
     'external:openai-keys', 'external:anthropic-keys', 'external:buy-pro',
     'backup:export', 'backup:import',
     'license:activate', 'license:deactivate',
-    'transcript:reveal',
-    'screen:drive-stop'
+    'transcript:reveal'
   ];
   for (const channel of never) {
-    assert.ok(!allOn.has(channel), `${channel} must never be exposed in jr`);
+    assert.ok(!allOn.has(channel), `${channel} must never be on the KID surface in jr`);
   }
+});
+
+test('the new feature sets follow their new checklist keys', () => {
+  const off = jrIpcAllowlist(profileFor('jr', DEFAULT_CONTROLS));
+  for (const c of ['defense:status', 'defense:enter', 'defense:exit', 'defense:wave-off', 'screen:drive-stop']) {
+    assert.ok(!off.has(c), `${c} must be absent with the key off`);
+  }
+  const defenceOn = jrIpcAllowlist(profileFor('jr', { ...DEFAULT_CONTROLS, defense: true }));
+  assert.ok(defenceOn.has('defense:status'));
+  assert.ok(defenceOn.has('defense:wave-off'));
+  // County-zone configuration is settings work, not kid work.
+  assert.ok(!defenceOn.has('defense:zones'));
+  const driveOn = jrIpcAllowlist(profileFor('jr', { ...DEFAULT_CONTROLS, screenDrive: true }));
+  assert.ok(driveOn.has('screen:drive-stop'));
 });
 
 test('ipc allowlist: standard variant is unaffected (jr helper only meaningful for jr profiles)', () => {
@@ -139,10 +153,11 @@ test('ipc allowlist: cameras ON exposes only view channels, never account/arm co
   ]) {
     assert.ok(!on.has(configChannel), `${configChannel} must never be directly reachable, even with cameras on`);
   }
-  // the PIN-gated doorway is present at every checklist setting, cameras on or off
-  assert.ok(on.has('jr:parent:cameras'));
+  // The multiplexer is GONE — the real camera-config channels are admin
+  // surface now, reachable only while the parent session is unlocked.
+  assert.ok(!on.has('jr:parent:cameras'));
   const off = jrIpcAllowlist(profileFor('jr', DEFAULT_CONTROLS));
-  assert.ok(off.has('jr:parent:cameras'));
+  assert.ok(!off.has('jr:parent:cameras'));
   assert.ok(!off.has('cameras:add-blink'));
 });
 
@@ -195,12 +210,23 @@ test('module cards follow the profile', () => {
   assert.equal(moduleAllowedInProfile('tasks', off), true);
   assert.equal(moduleAllowedInProfile('cameras', off), false);
   assert.equal(moduleAllowedInProfile('file-explorer', off), false);
-  assert.equal(moduleAllowedInProfile('night-shift', off), false);   // never in jr
+  assert.equal(moduleAllowedInProfile('night-shift', off), false);   // follows documents, off by default
   assert.equal(moduleAllowedInProfile('terminal', off), false);
   const filesOn = profileFor('jr', { ...DEFAULT_CONTROLS, files: true, cameras: true });
   assert.equal(moduleAllowedInProfile('file-explorer', filesOn), true);
   assert.equal(moduleAllowedInProfile('cameras', filesOn), true);
   assert.equal(moduleAllowedInProfile('anything', STANDARD_PROFILE), true);
+});
+
+// Risk 2 of the full-settings plan: nightShift is a parent SETTING now (the
+// profile grants it), but the night-shift module card shows the night crew's
+// document summaries — kid-visible content. So the CARD follows the kid's
+// documents permission, not the parent's night-shift setting.
+test('the night-shift card follows the kid documents key, not the parent night-shift setting', () => {
+  const off = profileFor('jr', DEFAULT_CONTROLS);
+  assert.equal(moduleAllowedInProfile('night-shift', off), false);
+  const docsOn = profileFor('jr', { ...DEFAULT_CONTROLS, documents: true });
+  assert.equal(moduleAllowedInProfile('night-shift', docsOn), true);
 });
 
 test('module cards follow the profile: the full src/index.html module map', () => {
@@ -237,28 +263,7 @@ test('module cards follow the profile: the full src/index.html module map', () =
   assert.equal(moduleAllowedInProfile('some-future-module', STANDARD_PROFILE), true);
 });
 
-// ROLLUP-11 (final-review blocker): src/jr-parent-ui.js's LABELS map is a
-// HAND-MAINTAINED mirror of core/variant.js's CONTROL_KEYS — jr-parent-ui.js's
-// own comment explains why: preload.js runs sandboxed (main.js webPreferences:
-// { sandbox: true }), so it cannot require project modules the way an
-// un-sandboxed preload could, and nothing exposes the raw key list over IPC
-// today. A future key added to CONTROL_KEYS with no matching LABELS entry
-// would render as a checklist row with no visible label text — silent
-// breakage nobody would notice from a glance at the parent panel.
-//
-// jr-parent-ui.js is a plain <script> (window.JrParentUI is its only global),
-// not a CommonJS module, so it cannot be require()'d in node:test without a
-// DOM. Rather than stand up a fake window/document just to read one object
-// literal, this reads the source text and regexes out LABELS' own keys —
-// no DOM, no sandboxed-preload seam to fake, and it fails exactly when the
-// mirror falls out of sync, which is the one failure mode worth catching.
-test("ROLLUP-11: src/jr-parent-ui.js's LABELS mirrors every core/variant.js CONTROL_KEYS entry", () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'jr-parent-ui.js'), 'utf8');
-  const match = source.match(/var LABELS = \{([\s\S]*?)\n\s*\};/);
-  assert.ok(match, 'LABELS object literal must be findable in jr-parent-ui.js');
-  const keys = Array.from(match[1].matchAll(/^\s*(\w+):/gm)).map((m) => m[1]);
-  assert.ok(keys.length > 0, 'the regex must actually find label keys, not silently match nothing');
-  for (const key of CONTROL_KEYS) {
-    assert.ok(keys.includes(key), `LABELS is missing an entry for CONTROL_KEYS' "${key}"`);
-  }
-});
+// The old ROLLUP-11 regex test died with the hand-mirror it guarded:
+// CONTROL_LABELS now lives in core/variant.js next to CONTROL_KEYS, and
+// test/variant.test.js asserts the two cover each other key for key.
+void fs; void path; void CONTROL_KEYS;
