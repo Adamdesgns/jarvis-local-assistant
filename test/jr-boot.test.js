@@ -267,3 +267,56 @@ test('module cards follow the profile: the full src/index.html module map', () =
 // CONTROL_LABELS now lives in core/variant.js next to CONTROL_KEYS, and
 // test/variant.test.js asserts the two cover each other key for key.
 void fs; void path; void CONTROL_KEYS;
+
+// ---- Task 2 (full-settings plan): main.js wiring, pinned as source text ----
+// main.js pulls in electron, so it cannot be required under node:test. These
+// read it as text — the same seam test/ipc-contract.test.js checks — and pin
+// the wiring facts that would otherwise be invisible until a manual run.
+const MAIN = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+const PRELOAD = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+
+test('main.js: JR constructs the whole app — no service is profile-gated any more', () => {
+  for (const flag of ['autonomy', 'documents', 'cameras', 'claudeBridge', 'screenRead',
+                      'screenDrive', 'defense', 'schedules', 'nightShift', 'phone']) {
+    assert.ok(!new RegExp(`PROFILE\\.${flag}\\s*\\?`).test(MAIN),
+      `PROFILE.${flag} must no longer decide construction — the parent owns that now`);
+  }
+  assert.ok(!/if \(PROFILE\.cameras\)/.test(MAIN), 'the camera construction block must be unconditional');
+});
+
+test('main.js: the IPC gate is consulted per call, through the pure helper', () => {
+  assert.ok(/jrChannelAllowed\(/.test(MAIN), 'the wrap must use the tested pure gate');
+  assert.ok(/parentSession\.admit\(\)/.test(MAIN), 'the gate must be handed the session heartbeat');
+  assert.ok(!/const ALLOWED = jrIpcAllowlist\(PROFILE\);/.test(MAIN),
+    'the static boot-time allowlist Set is gone — it cannot be widened at runtime');
+});
+
+test('main.js: only a verified PIN opens the session; lock and status exist', () => {
+  assert.ok(/parentSession\.unlock\(\)/.test(MAIN));
+  assert.ok(/ipcMain\.handle\('jr:parent:lock'/.test(MAIN));
+  assert.ok(/ipcMain\.handle\('jr:parent:session'/.test(MAIN));
+  // Exactly one unlock call site, and it must be inside jr:parent:verify.
+  assert.equal((MAIN.match(/parentSession\.unlock\(\)/g) || []).length, 1);
+  const verify = MAIN.slice(MAIN.indexOf("ipcMain.handle('jr:parent:verify'"));
+  assert.ok(verify.slice(0, 500).includes('parentSession.unlock()'));
+});
+
+test('main.js: settings:save is filtered by the session, not by the variant alone', () => {
+  assert.ok(/jrSettingsPatch\(/.test(MAIN));
+  assert.ok(!/JR \? filterJrSettingsPatch\(/.test(MAIN), 'the old unconditional JR filter is gone');
+});
+
+test('main.js: the camera multiplexer and the relaunch dance are both gone', () => {
+  assert.ok(!/jr:parent:cameras/.test(MAIN));
+  assert.ok(!/jrParentCameras/.test(PRELOAD));
+  assert.ok(!/app\.relaunch\(\)/.test(MAIN), 'a checklist change hot-applies now');
+  assert.ok(/function applyProfile\(/.test(MAIN));
+  assert.ok(/router\.profile = PROFILE/.test(MAIN));
+  assert.ok(/ai\.profile = PROFILE/.test(MAIN));
+});
+
+test('preload.js: the parent surface is lock/session/profile-events, no PIN plumbing', () => {
+  assert.ok(/jrParentLock:/.test(PRELOAD));
+  assert.ok(/jrParentSession:/.test(PRELOAD));
+  assert.ok(/onJrProfile:/.test(PRELOAD));
+});

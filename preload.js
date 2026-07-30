@@ -187,9 +187,12 @@ contextBridge.exposeInMainWorld('jarvis', {
   jrStatus: () => ipcRenderer.invoke('jr:status'),
   jrSetupComplete: (payload) => ipcRenderer.invoke('jr:setup:complete', payload),
   jrParentVerify: (pin) => ipcRenderer.invoke('jr:parent:verify', { pin }),
-  jrParentControls: (pin, patch) => ipcRenderer.invoke('jr:parent:controls', { pin, patch }),
+  // Admin surface: reachable only while the parent session (opened by a
+  // verified PIN, main-process state) is unlocked. No PIN rides these calls —
+  // there is nothing for the renderer to hold or leak.
+  jrParentControls: (patch, profile) => ipcRenderer.invoke('jr:parent:controls', { patch, profile }),
   jrParentPin: (oldPin, newPin) => ipcRenderer.invoke('jr:parent:pin', { oldPin, newPin }),
-  // Camera CONFIG's one doorway in JR — never the bare cameras:add-* channels,
-  // which are not allowlisted in the JR build (see core/variant.js).
-  jrParentCameras: (pin, action, payload) => ipcRenderer.invoke('jr:parent:cameras', { pin, action, payload })
+  jrParentLock: () => ipcRenderer.invoke('jr:parent:lock'),
+  jrParentSession: () => ipcRenderer.invoke('jr:parent:session'),
+  onJrProfile: (callback) => on('jr:profile', callback)
 });
