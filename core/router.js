@@ -932,7 +932,9 @@ class CommandRouter {
   // and ask-my-documents, all of which pass their own `extra` through here.
   #aiContext(extra = {}) {
     const settings = this.config.getSettings();
-    const jrPromptRules = this.profile.contentLock ? buildJrPromptRules({ age: this.jrAge(), kidName: settings.kidName }) : '';
+    const jrPromptRules = this.profile.contentLock
+      ? buildJrPromptRules({ age: this.jrAge(), kidName: settings.kidName, gameCamera: this.profile.gameCamera === true })
+      : '';
     return { ...extra, profile: this.profile, jrPromptRules };
   }
 

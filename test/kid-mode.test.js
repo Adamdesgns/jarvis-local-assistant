@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
-  clampAge, ageBand, guardTopic, buildKidPrompt, buildJrPromptRules, capabilitiesReply, greeting, RULES, BAND_GUIDE
+  clampAge, ageBand, guardTopic, buildJrPromptRules, capabilitiesReply, greeting, RULES, kidSafetyRules
 } = require('../core/kid-mode');
 
 // Re-aged for JR (2026-07-28 spec): the range is now 3-17, default 11 — was
@@ -22,8 +22,10 @@ test('an age is clamped into the range the prompts are written for', () => {
 });
 
 // Re-aged for JR: the 'little' band (5-7) is gone — the floor now reads as
-// 'middle'. Bands run middle/big/teen instead of little/middle/big.
-test('the JR age bands split where the writing style changes', () => {
+// 'middle'. Bands run middle/big/teen. Since the 2026-07-30 voice fix the
+// bands no longer shape writing style at all — they exist for the guard's
+// teenOk rows and the substances line only.
+test('the JR age bands split where the guard rules change', () => {
   assert.equal(ageBand(5), 'middle');
   assert.equal(ageBand(7), 'middle');
   assert.equal(ageBand(10), 'middle');
@@ -31,20 +33,6 @@ test('the JR age bands split where the writing style changes', () => {
   assert.equal(ageBand(13), 'big');
   assert.equal(ageBand(14), 'teen');
   assert.equal(ageBand(17), 'teen');
-});
-
-// ROLLUP-2 (final-review blocker): BAND_GUIDE's labels are written into the
-// model prompt, so they must describe the SAME range ageBand() actually uses
-// — the old copy said "8 to 10" for middle (which floors at 3, per the clamp
-// test above) and "11 to 12" for big (which actually runs 11-13, per the
-// band-split test above). A prompt that lies about the child's age range is
-// itself a content-safety bug: it can license the model to write for a wider
-// or narrower kid than the one actually on the other end.
-test("BAND_GUIDE's labels do not misstate the ranges ageBand() actually uses", () => {
-  assert.doesNotMatch(BAND_GUIDE.middle.label, /8 to 10/);
-  assert.match(BAND_GUIDE.middle.label, /10/); // still names its ceiling
-  assert.doesNotMatch(BAND_GUIDE.big.label, /11 to 12\b/);
-  assert.match(BAND_GUIDE.big.label, /11 to 13/);
 });
 
 test('distress is caught, answered with care, and never filed for the parent screen', () => {
@@ -168,70 +156,81 @@ test('empty and non-string input is safe', () => {
   assert.equal(guardTopic(42), null);
 });
 
-// Re-aged for JR: age 6 used to land in the 'little' band (label "5 to 7
-// year old"), which no longer exists. Re-aged to the new clamp floor (3) so
-// the floor still gets exercised, landing in 'middle' (unchanged label).
-test('the prompt carries the age, the child, the rules and the chart into the model', () => {
-  const prompt = buildKidPrompt({
-    kidName: 'Mia',
-    age: 3,
-    chores: [{ title: 'Brush teeth', doneToday: true }, { title: 'Make bed', doneToday: false }],
-    memories: [{ text: 'Mia likes horses' }]
-  });
-  assert.match(prompt, /Mia/);
-  assert.match(prompt, /3 years old/);
-  assert.match(prompt, /a kid 10 or younger/);
-  assert.match(prompt, /Brush teeth \(already done today\)/);
-  assert.match(prompt, /Make bed/);
-  assert.match(prompt, /Mia likes horses/);
-  // The rules that must be present on every single turn.
-  assert.match(prompt, /HARD RULES/);
-  assert.match(prompt, /Never frighten a child/);
-  assert.match(prompt, /Never just give the answer/);
-  assert.match(prompt, /no secrets with a child/i);
+// ---- the 2026-07-30 voice fix: content locked, character untouched ----
+//
+// Adam's live verdict on JR was that it spoke like a children's presenter and
+// used emoji. Root cause: the only emoji ban in the codebase sat in the dead
+// JUNIOR buildKidPrompt(), while the live buildJrPromptRules() injected
+// BAND_GUIDE's presenter voice. Both are gone. These tests pin the fix in
+// both directions — what the live rules MUST say and what they MUST NOT.
+
+test('the live rules ban emoji and markdown — the ban is no longer stranded in dead code', () => {
+  const rules = buildJrPromptRules({ age: 11, kidName: 'Kid' });
+  assert.match(rules, /[Nn]ever use emoji/);
+  assert.match(rules, /markdown/);
+  assert.match(rules, /read aloud/);
 });
 
-// Re-aged for JR: 'little' (5) and 'big' (12) are replaced by 'middle' (8)
-// and the new 'teen' band (17), whose length guidance has no fixed word cap
-// ("No padding." instead of "Under N words") so the match target changes too.
-test('the prompt scales with age instead of saying the same thing to an 8 and a 17 year old', () => {
-  const middle = buildKidPrompt({ age: 8 });
-  const teen = buildKidPrompt({ age: 17 });
-  assert.match(middle, /Under 70 words/);
-  assert.match(teen, /No padding/);
-  assert.notEqual(middle, teen);
-  // Both still carry the full safety block.
-  for (const prompt of [middle, teen]) assert.match(prompt, /HARD RULES/);
+test('the live rules tell the model to STAY JARVIS, not merely list bans', () => {
+  const rules = buildJrPromptRules({ age: 9 });
+  assert.match(rules, /still JARVIS/);
+  assert.match(rules, /dry wit/);
+  assert.match(rules, /character is not/);
 });
 
-// Re-aged for JR: AGE_MAX moved from 12 to 17, so an out-of-range age of 25
-// now clamps to 17 ('teen'), not 12 ('big'). A 25-year-old asking now truly
-// gets the teen-band prompt, which is correct — JR's oldest band is a teen.
-test('an out-of-range age in settings clamps to the oldest band this build supports', () => {
-  const prompt = buildKidPrompt({ age: 25 });
-  assert.match(prompt, /17 years old/);
-  assert.match(prompt, /14 to 17 year old/);
+test('the presenter voice is gone: no tone, length, or vocabulary shaping survives', () => {
+  for (const age of [3, 9, 12, 17]) {
+    const rules = buildJrPromptRules({ age });
+    assert.doesNotMatch(rules, /Friendly and curious/, `tone leak at ${age}`);
+    assert.doesNotMatch(rules, /Under \d+ words/, `length cap at ${age}`);
+    assert.doesNotMatch(rules, /Never babyish/, `band tone at ${age}`);
+    assert.doesNotMatch(rules, /babysitter|sharp tutor/, `teen tone at ${age}`);
+    assert.doesNotMatch(rules, /Everyday words/, `vocabulary shaping at ${age}`);
+    // The band name itself stays out of the header — age is a guard input,
+    // not a writing instruction. (kidSafetyRules' teen substances line may
+    // legitimately say "a teen asks", which is content policy, not tone.)
+    assert.doesNotMatch(rules, /"(middle|big|teen)" band/, `band label at ${age}`);
+  }
 });
 
-test('a nameless setup still produces sensible copy', () => {
-  assert.match(buildKidPrompt({}), /belongs to a child/);
-  assert.match(capabilitiesReply('', 8), /^Here is what I can do/);
-  assert.match(capabilitiesReply('Sam', 8), /^Sam, here is what I can do/);
+test('the rules still carry the name, the clamped age, and the full safety block', () => {
+  const rules = buildJrPromptRules({ age: 25, kidName: 'Mia' });
+  assert.match(rules, /Mia/);
+  assert.match(rules, /aged 17/); // 25 clamps to the ceiling
+  assert.match(rules, /HARD RULES/);
+  assert.match(rules, /Never frighten a child/);
+  assert.match(rules, /no secrets with a child/i);
+  assert.match(rules, /HOMEWORK RULE/);
+});
+
+test('the grown-up deflection instruction is plain, not warm — warmth was the tone being removed', () => {
+  assert.match(kidSafetyRules('middle'), /say so plainly and stop/);
+  assert.doesNotMatch(kidSafetyRules('middle'), /say so warmly/);
+});
+
+test('the camera exception tracks the parent checklist so the cannot-see line never lies', () => {
+  // Off (default): the original absolute line, byte-identical.
+  const off = buildJrPromptRules({ age: 11 });
+  assert.match(off, /cannot see, hear, or reach anything outside this chat, and you must never pretend otherwise/);
+  assert.doesNotMatch(off, /through the camera/);
+  // On: the narrow exception, and only for the game.
+  const on = buildJrPromptRules({ age: 11, gameCamera: true });
+  assert.match(on, /rock paper scissors/);
+  assert.match(on, /through the camera/);
+  assert.match(on, /never pretend you can see or hear anything/);
+});
+
+test('the capability answer is JARVIS, not a children\'s television host', () => {
+  assert.match(capabilitiesReply(''), /^The short version:/);
+  assert.match(capabilitiesReply('Sam'), /^Sam — the short version:/);
+  assert.doesNotMatch(capabilitiesReply('Sam'), /star chart|What shall we do\?/);
+  assert.match(capabilitiesReply(''), /without doing the homework/);
+});
+
+test('greetings are unchanged by the voice fix', () => {
   assert.match(greeting('', 9), /^Morning\./);
   assert.match(greeting('Sam', 19), /^Evening, Sam\./);
   assert.match(greeting('Sam', 13), /^Afternoon, Sam\./);
-});
-
-// Re-aged for JR: the 'little' band this test exercised is gone, so
-// capabilitiesReply's short-form branch (which only ever triggered for
-// 'little') is now unreachable — every band gets the full-length answer.
-// Re-aged to the clamp floor (age 3) to keep coverage of that boundary,
-// asserting the reply is sensible rather than asserting a word-count cap
-// that no band still asks for.
-test('the capability answer at the clamp floor (age 3) still reads sensibly out loud', () => {
-  const reply = capabilitiesReply('Ali', 3);
-  assert.match(reply, /^Ali, here is what I can do/);
-  assert.ok(reply.length > 0);
 });
 
 // ---- JR re-aging (2026-07-28 spec): bands run to 17, guard is age-aware ----
