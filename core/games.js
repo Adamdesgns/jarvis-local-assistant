@@ -110,16 +110,22 @@ function rpsThrow(difficulty, history = [], rng = Math.random) {
 // trailing "!" all failed to match, and the miss is silent by design. The
 // fix widens the lead-in and tail to the phrasings kids actually say while
 // keeping both anchors, so mid-sentence mentions still never open a board.
-const GAME_LEAD = "(?:(?:hey )?jarvis[,\\s]+)?(?:please[,\\s]+)?(?:(?:can|could|will|would) (?:we|i|you)[,\\s]+)?(?:(?:do you )?(?:want to|wanna)[,\\s]+)?(?:let'?s[,\\s]+|shall we[,\\s]+)?";
-const GAME_TAIL = "(?:[,\\s]+(?:with me|together|again|now|please))*[\\s.!?]*";
+// Built from real transcripts, not imagination: the first live night missed
+// "Let's play rock-paper-scissors" (Whisper hyphenates compound names — the
+// TTT name allowed hyphens, the RPS name did not) and "We'll play
+// Tic-Tac-Toe" ("we'll" was not a lead-in). Both are in the tests now,
+// verbatim from that activity log.
+const GAME_LEAD = "(?:(?:hey )?jarvis[,\\s]+)?(?:please[,\\s]+)?(?:(?:can|could|will|would|shall) (?:we|i|you)[,\\s]+)?(?:(?:i|we|you|do you)[,\\s]+)?(?:(?:want|wanna|would like)(?:[,\\s]+to)?[,\\s]+)?(?:let'?s[,\\s]+|we'?ll[,\\s]+)?";
+const GAME_TAIL = "(?:[,\\s]+(?:with me|with you|together|again|now|please))*[\\s.!?]*";
 function gameTriggers(name) {
   return Object.freeze([
     new RegExp(`^${GAME_LEAD}play (?:a (?:game|round) of )?${name}${GAME_TAIL}$`, 'i'),
+    new RegExp(`^(?:how about|what about) (?:a (?:game|round) of )?${name}${GAME_TAIL}$`, 'i'),
     new RegExp(`^${name}${GAME_TAIL}$`, 'i')
   ]);
 }
 const TTT_PATTERNS = gameTriggers('tic[- ]?tac[- ]?toe');
-const RPS_PATTERNS = gameTriggers('rock[,\\s]*paper[,\\s]*scissors?');
+const RPS_PATTERNS = gameTriggers('rock[-,\\s]*paper[-,\\s]*scissors?');
 
 function detectGame(text) {
   const trimmed = String(text || '').trim();

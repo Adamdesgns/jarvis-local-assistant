@@ -132,7 +132,16 @@ test('the phrasings kids actually use open rock paper scissors', () => {
     'play rock paper scissors again',
     'rock paper scissors',
     'rock paper scissors!',
-    'Rock, paper, scissors.'
+    'Rock, paper, scissors.',
+    // Verbatim from the first live night's activity log — Whisper hyphenates
+    // compound names, and this exact line fell through to the model:
+    'Let\'s play rock-paper-scissors',
+    'rock-paper-scissors',
+    'i want to play rock paper scissors',
+    'we wanna play rock paper scissors',
+    'can I play rock paper scissors with you',
+    'how about rock paper scissors',
+    'what about a game of rock paper scissors?'
   ]) {
     assert.deepEqual(detectGame(phrase), { game: 'rps' }, phrase);
   }
@@ -145,7 +154,9 @@ test('the phrasings kids actually use open tic tac toe', () => {
     'can we play tic tac toe?',
     "let's play a game of tic tac toe",
     'wanna play tic tac toe',
-    'tic tac toe'
+    'tic tac toe',
+    // Verbatim from the first live night's activity log:
+    "We'll play Tic-Tac-Toe"
   ]) {
     assert.deepEqual(detectGame(phrase), { game: 'ttt' }, phrase);
   }
