@@ -39,7 +39,8 @@
     board: null,          // ttt: array(9) of null | 'X' | 'O'
     history: [],          // rps: the kid's PREVIOUS throws this session, oldest first
     busy: false,          // true while a move/round is in flight — taps ignored
-    cameraArmed: false    // rps camera mode live (parent's gameCamera key + working webcam)
+    cameraArmed: false,   // rps camera mode live (parent's gameCamera key + working webcam)
+    cameraVetoed: false   // kid tapped a chip: buttons for this session, even if the arm is still in flight
   };
 
   // Bumped by every open()/close(). A move/round in flight (gameMove/gameScore
@@ -380,9 +381,13 @@
   // core/games.js's own rpsThrow, which cannot see the kid's current move.
   function runRpsRound(kidShape) {
     if (state.busy) return;
-    // Tapping a chip while the camera is armed is the kid choosing buttons:
-    // camera mode stands down for the session, predictably, rather than the
-    // two input styles fighting over the same round.
+    // Tapping a chip is the kid choosing buttons: camera mode stands down
+    // for the session, predictably, rather than the two input styles
+    // fighting over the same round. The veto also covers an arm still in
+    // flight — getUserMedia + worker init take a couple of seconds, and a
+    // chip tapped inside that window must win (live-caught race: the camera
+    // armed mid-round and sat idle with the preview on and no loop running).
+    state.cameraVetoed = true;
     if (state.cameraArmed) disarmCamera();
     var gen = generation;
     state.busy = true;
@@ -448,7 +453,7 @@
     if (!wrap || !video || !window.JrHandCamera) return;
     wrap.hidden = false;
     window.JrHandCamera.start(video).then(function () {
-      if (gen !== generation || state.game !== 'rps') {
+      if (gen !== generation || state.game !== 'rps' || state.cameraVetoed) {
         window.JrHandCamera.stop();
         wrap.hidden = true;
         return;
@@ -539,6 +544,7 @@
     state.board = game === 'ttt' ? new Array(9).fill(null) : null;
     state.history = [];
     state.busy = false;
+    state.cameraVetoed = false; // a fresh open is a fresh choice
     var overlay = $('jr-games');
     if (!overlay) return;
     overlay.hidden = false;
