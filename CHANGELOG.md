@@ -44,6 +44,21 @@
   ordinary sentence — no overlay, no special refusal, and the game
   IPC channels are structurally absent, not just hidden.
 
+### Fixed — the parent's Power switch now governs every way of asking
+- **"Turn off the computer" and "shut down the computer" finally mean the
+  same thing.** The first used to get a flat "I cannot do that" no matter
+  what a parent had chosen, while the second respected the Power switch —
+  one intent, two answers, and the switch looked broken. Both now take the
+  same path: **Power off** → "Power is a grown-up control on this build.
+  Ask a parent"; **Power on** → the ordinary confirm before anything
+  happens. "Turn off the lights" is untouched and still ordinary.
+- **In the standard (grown-up) build**, "turn off the computer" now asks
+  for the same confirmation "shut down the computer" always has, instead
+  of being treated as small talk.
+- The kids' content lock can no longer be dropped by a caller handing over
+  a blank rules block — under a content lock JARVIS JR falls back to the
+  rules it was built with, rather than trusting every caller to remember.
+
 ### Added — THE BROWSER (stage 1): surf inside JARVIS
 - A new **Browser** module (Modules → Browser): tabs (up to five), address bar,
   back/forward/reload, dressed in your skin with the active-tab underline in

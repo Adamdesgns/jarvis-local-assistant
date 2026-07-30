@@ -665,6 +665,27 @@ test('security classifies safe, confirmation, and blocked commands', () => {
   assert.equal(classifyCommand('send the email').level, 'blocked');
 });
 
+// Every phrasing of "power the machine off" has to reach the SAME branch, or
+// JR's parent `power` toggle appears to work for one sentence and not another
+// (it did: "turn off the computer" used to classify safe and get caught by
+// kid-mode's guard instead, flatly, whatever the parent had chosen).
+test('every phrasing of the power intent asks for confirmation', () => {
+  for (const phrase of [
+    'shut down the computer', 'shutdown', 'restart the computer', 'reboot the pc',
+    'turn off the computer', 'turn off the pc', 'power off the machine', 'turn off my laptop'
+  ]) {
+    assert.equal(classifyCommand(phrase).level, 'confirm', phrase);
+  }
+});
+
+// ...and the object is required, so turning off something that is not the
+// computer stays ordinary. A kid asking for the lights off is not a power event.
+test('turning off something other than the computer stays safe', () => {
+  for (const phrase of ['turn off the lights', 'turn off the music', 'turn off the timer']) {
+    assert.equal(classifyCommand(phrase).level, 'safe', phrase);
+  }
+});
+
 test('router trashes a deleted file at once, with no approval card', async () => {
   let trashed = '';
   const router = new CommandRouter({

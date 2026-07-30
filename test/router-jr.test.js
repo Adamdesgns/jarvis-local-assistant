@@ -194,6 +194,50 @@ test('ordinary talk threads jrPromptRules through context for ai-service to cons
   assert.equal(seenContext.profile.contentLock, true);
 });
 
+// The power toggle used to answer one intent two ways: "turn off the computer"
+// hit kid-mode's `no-such-power` guard row first and got a flat "I cannot do
+// that" whatever the parent had chosen, while "shut down the computer" honoured
+// the checklist. Both phrasings now land on the same branch at both settings.
+test('the power checklist key governs EVERY phrasing of the power intent', async () => {
+  const PHRASINGS = ['shut down the computer', 'turn off the computer', 'turn off the pc', 'restart the computer'];
+
+  const off = jrRouter({ ...DEFAULT_CONTROLS, power: false });
+  for (const phrase of PHRASINGS) {
+    const result = await off.handle(phrase);
+    assert.equal(result.source, 'jr-gate', `${phrase} must refuse at the jr gate when power is off`);
+    assert.match(result.response, /grown-up control/i, phrase);
+    assert.notEqual(result.guardId, 'no-such-power', `${phrase} must not be swallowed by the content guard`);
+  }
+
+  const on = jrRouter({ ...DEFAULT_CONTROLS, power: true });
+  for (const phrase of PHRASINGS) {
+    const result = await on.handle(phrase);
+    assert.ok(result.approval, `${phrase} must offer the confirm when a parent has switched power on`);
+    assert.match(result.approval.title, /SHUTDOWN|RESTART/, phrase);
+  }
+});
+
+// FAIL CLOSED: an explicit empty jrPromptRules is exactly what both live call
+// sites emit for a NON-jr turn. If one ever emitted it on a JR turn, the
+// content lock must still ride — the construction-time thunk is the backstop,
+// and it must beat a blank string, not just an absent key.
+test('a blank jrPromptRules cannot strip the content lock off a JR instance', () => {
+  const rules = buildJrPromptRules({ age: 11, kidName: 'Kid' });
+  const ai = new AIService({ getSettings: () => ({}), getSecret: () => '' }, null, {
+    profile: profileFor('jr', DEFAULT_CONTROLS),
+    jrPromptRules: () => rules
+  });
+  const settings = { assistantName: 'JARVIS', profileName: 'Kid', personality: 'Witty, composed.' };
+  for (const blank of [undefined, '', '   ']) {
+    const assembled = ai.prompt(settings, blank === undefined ? {} : { jrPromptRules: blank });
+    assert.match(assembled, /CONTENT LOCK/, `jrPromptRules=${JSON.stringify(blank)} must still carry the lock`);
+    assert.match(assembled, /HARD RULES/, `jrPromptRules=${JSON.stringify(blank)}`);
+  }
+  // A standard instance has no profile and no thunk: still silent, as before.
+  const plain = new AIService({ getSettings: () => ({}), getSecret: () => '' });
+  assert.doesNotMatch(plain.prompt(settings, { jrPromptRules: '' }), /CONTENT LOCK/);
+});
+
 test('standard profile: behaviour unchanged — no guard, no gates', async () => {
   const router = jrRouter(DEFAULT_CONTROLS);
   router.profile = { ...STANDARD_PROFILE };
