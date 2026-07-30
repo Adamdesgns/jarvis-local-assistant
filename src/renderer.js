@@ -2132,9 +2132,33 @@ async function loadJrTab() {
     box.type = 'checkbox';
     box.dataset.jrControl = key;
     box.checked = Boolean(result.controls?.[key]);
+    // The tab's copy promises "Changes apply immediately" — so a toggle IS
+    // the save. Requiring the SAVE button for checkboxes was the "settings
+    // are not saving" bug Adam hit live: flip a box, click the dialog's
+    // OTHER save (or let the parent session lapse first), reopen, reverted.
+    // The name/birthdate fields still use the button; capability flags don't
+    // wait on it.
+    box.addEventListener('change', saveJrControls);
     row.append(text, box, document.createElement('i'));
     return row;
   }));
+}
+
+// Save ONLY the checklist — no profile fields, so a blank birthdate box can
+// never veto a capability change. Called on every checkbox toggle.
+async function saveJrControls() {
+  const patch = {};
+  document.querySelectorAll('#jr-tab-controls input[data-jr-control]').forEach((box) => {
+    patch[box.dataset.jrControl] = box.checked;
+  });
+  const result = await window.jarvis.jrParentControls(patch).catch(() => ({ ok: false, expired: true }));
+  const note = $('jr-tab-status');
+  if (result?.expired) { closeSettingsForExpiredSession(); return; }
+  note.hidden = false;
+  note.textContent = result?.ok ? 'Applied — no save needed, no restart.' : (result?.reason || 'Could not apply that. Try again.');
+  // On failure, re-render from the stored truth so the boxes never show a
+  // state that did not actually take.
+  if (!result?.ok) loadJrTab();
 }
 
 async function saveJrTab() {
