@@ -36,8 +36,12 @@ const VARIANTS = Object.freeze(['standard', 'jr']);
 const CONTROL_KEYS = Object.freeze([
   // The base experience — on by default; a parent may still switch any off.
   'games', 'battle', 'quips', 'homework', 'tasks', 'timers',
-  // Reach-out features — off until a parent turns them on.
-  'cameras', 'documents', 'files', 'apps', 'browser', 'terminal', 'screenRead', 'power',
+  // Reach-out features — off until a parent turns them on. gameCamera is
+  // "the webcam watches the kid's hand during rock paper scissors" and is
+  // deliberately its OWN key, not a rider on 'cameras': that key means "the
+  // kid may view the household cameras", and conflating the two would let
+  // one checkbox silently mean both.
+  'cameras', 'gameCamera', 'documents', 'files', 'apps', 'browser', 'terminal', 'screenRead', 'power',
   // Grown-up-power features a parent may hand down. All default off.
   'claudeBridge', 'screenDrive', 'defense'
 ]);
@@ -53,6 +57,7 @@ const CONTROL_LABELS = Object.freeze({
   tasks: 'Tasks',
   timers: 'Timers',
   cameras: 'Cameras (view only)',
+  gameCamera: 'Rock paper scissors camera (webcam reads their hand, on this PC only)',
   documents: 'Documents — read & summarize',
   files: 'File search (their own folder)',
   apps: 'Open apps (parent allowlist)',
@@ -67,7 +72,7 @@ const CONTROL_LABELS = Object.freeze({
 
 const DEFAULT_CONTROLS = Object.freeze({
   games: true, battle: true, quips: true, homework: true, tasks: true, timers: true,
-  cameras: false, documents: false, files: false, apps: false,
+  cameras: false, gameCamera: false, documents: false, files: false, apps: false,
   browser: false, terminal: false, screenRead: false, power: false,
   claudeBridge: false, screenDrive: false, defense: false
 });
@@ -101,7 +106,7 @@ const STANDARD_PROFILE = Object.freeze({
   productName: 'JARVIS',
   contentLock: false,
   games: true, battle: true, quips: true, homework: true, tasks: true, timers: true,
-  cameras: true, documents: true, files: true, apps: true,
+  cameras: true, gameCamera: true, documents: true, files: true, apps: true,
   browser: true, terminal: true, screenRead: true, power: true,
   screenDrive: true, claudeBridge: true, defense: true,
   nightShift: true, schedules: true, autonomy: true, phone: true

@@ -1607,7 +1607,12 @@ async function executeCommand(command) {
     // variant (state.profile is populated at boot for both variants — see
     // initialize() above). Also a no-op on the jr-gate refusal when games is
     // off (that result never carries .game at all).
-    if (result.game && state.profile?.variant === 'jr' && window.JrGamesUI) window.JrGamesUI.open(result.game);
+    if (result.game && state.profile?.variant === 'jr' && window.JrGamesUI) {
+      // gameCamera rides the live profile, so a parent flipping the key
+      // hot-applies to the very next game with no relaunch, like every
+      // other checklist key.
+      window.JrGamesUI.open(result.game, { gameCamera: state.profile?.gameCamera === true });
+    }
     if (result.files) {
       state.searchResults = result.files;
       renderFileRows(result.files, true);

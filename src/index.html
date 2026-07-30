@@ -711,6 +711,15 @@
           <button type="button" class="jr-rps-btn" data-shape="scissors"><canvas width="64" height="64"></canvas><span>Scissors</span></button>
         </div>
 
+        <!-- Camera RPS (parent's gameCamera checklist key). The preview is
+             mirrored like a mirror because that is how kids expect to see
+             themselves; the classifier does not care. The dot is the honest
+             tell: whenever this block is visible, the webcam is on. -->
+        <div id="jr-cam-wrap" class="jr-cam-wrap" hidden>
+          <video id="jr-cam-video" autoplay playsinline muted></video>
+          <span id="jr-cam-dot" class="jr-cam-dot">&#9679; CAMERA ON</span>
+        </div>
+
         <div class="jr-game-canvas-wrap">
           <canvas id="jr-game-canvas" width="160" height="160"></canvas>
         </div>
@@ -739,6 +748,8 @@
     <script src="terminal-ui.js"></script>
     <script src="terminal-session.js"></script>
     <script src="jr-parent-ui.js"></script>
+    <script src="../core/hand-shapes.js"></script>
+    <script src="jr-hand-camera.js"></script>
     <script src="jr-games-ui.js"></script>
     <script src="../core/variant.js"></script>
     <script src="renderer.js"></script>

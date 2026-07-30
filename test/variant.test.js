@@ -46,8 +46,8 @@ test('profileFor(jr): the never-block is now exactly one thing — the content l
   assert.equal('cameraConfig' in STANDARD_PROFILE, false);
 });
 
-test('the three new keys are kid-reach checklist keys, defaulting OFF', () => {
-  for (const key of ['claudeBridge', 'screenDrive', 'defense']) {
+test('the added keys are kid-reach checklist keys, defaulting OFF', () => {
+  for (const key of ['claudeBridge', 'screenDrive', 'defense', 'gameCamera']) {
     assert.ok(CONTROL_KEYS.includes(key), `${key} must be a checklist key`);
     assert.equal(DEFAULT_CONTROLS[key], false, `${key} must default off`);
     assert.equal(profileFor('jr', DEFAULT_CONTROLS)[key], false);
@@ -56,7 +56,19 @@ test('the three new keys are kid-reach checklist keys, defaulting OFF', () => {
   for (const key of ['nightShift', 'schedules', 'autonomy', 'phone']) {
     assert.ok(!CONTROL_KEYS.includes(key), `${key} is a parent SETTING, not a checklist key`);
   }
-  assert.equal(CONTROL_KEYS.length, 17);
+  assert.equal(CONTROL_KEYS.length, 18);
+});
+
+test('gameCamera is its own key, never a rider on cameras — the two mean different things', () => {
+  // 'cameras' = the kid may VIEW the household cameras. 'gameCamera' = the
+  // webcam may READ the kid's hand during rock paper scissors. A parent
+  // granting one must never silently grant the other, in either direction.
+  const camerasOnly = profileFor('jr', { ...DEFAULT_CONTROLS, cameras: true });
+  assert.equal(camerasOnly.cameras, true);
+  assert.equal(camerasOnly.gameCamera, false, 'cameras must not drag gameCamera on');
+  const gameOnly = profileFor('jr', { ...DEFAULT_CONTROLS, gameCamera: true });
+  assert.equal(gameOnly.gameCamera, true);
+  assert.equal(gameOnly.cameras, false, 'gameCamera must not drag cameras on');
 });
 
 test('CONTROL_LABELS is the single source of display copy and covers every key', () => {

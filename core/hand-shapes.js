@@ -84,4 +84,12 @@ function createStableRead({ need = 3 } = {}) {
   };
 }
 
-module.exports = { classifyHand, createStableRead, FINGERS, EXTENDED_RATIO };
+// Dual export, same pattern as core/variant.js: require() for node and the
+// tests, self.JrHandShapes for the classic worker (src/jr-hand-worker.js)
+// that pulls this in via importScripts.
+const api = { classifyHand, createStableRead, FINGERS, EXTENDED_RATIO };
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = api;
+} else if (typeof self !== 'undefined') {
+  self.JrHandShapes = api;
+}

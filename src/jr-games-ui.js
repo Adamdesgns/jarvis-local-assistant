@@ -38,7 +38,8 @@
     difficulty: 'normal', // remembered per session, re-pickable per game
     board: null,          // ttt: array(9) of null | 'X' | 'O'
     history: [],          // rps: the kid's PREVIOUS throws this session, oldest first
-    busy: false           // true while a move/round is in flight — taps ignored
+    busy: false,          // true while a move/round is in flight — taps ignored
+    cameraArmed: false    // rps camera mode live (parent's gameCamera key + working webcam)
   };
 
   // Bumped by every open()/close(). A move/round in flight (gameMove/gameScore
@@ -93,6 +94,16 @@
   function showConfused() {
     var el = $('jr-game-line');
     if (el) el.textContent = "Hmm, that move confused me — let's try that again.";
+  }
+
+  // A fixed line (camera-round mechanics, not table flavor — same precedent
+  // as showConfused above): straight to the strip, spoken unless told not to.
+  function sayLine(text, speakIt) {
+    var el = $('jr-game-line');
+    if (el) el.textContent = text;
+    if (text && speakIt !== false && window.JrSpeak) {
+      try { window.JrSpeak(text); } catch (error) { /* voice hiccups never block the game */ }
+    }
   }
 
   // ---- canvas drawing: polar loop per the games spec, theta 0..2π step
@@ -331,11 +342,48 @@
   }
 
   // ---- rock paper scissors ----
+  // The shared back half of every RPS round, button or camera: reveal
+  // JARVIS's throw, judge, score, talk, and clean up. `jarvisShape` was
+  // locked BEFORE this is called — see the wire-honesty note on both
+  // callers. Resolves after cleanup; never rejects.
+  function revealAndScore(kidShape, jarvisShape, gen) {
+    return morph('orb', jarvisShape)
+      .then(function () { return delay(900); })
+      .then(function () { if (gen === generation) return morph(jarvisShape, 'orb'); })
+      .then(function () {
+        if (gen !== generation) return;
+        var outcome = rpsJudge(kidShape, jarvisShape);
+        state.history.push(kidShape);
+        var scoreOutcome = outcome === 'tie' ? 'draw' : outcome;
+        return window.jarvis.gameScore({ game: 'rps', outcome: scoreOutcome }).then(function (scores) {
+          if (gen !== generation) return;
+          updateScoreStrip(scores);
+          var occasion = scoreOutcome === 'kid' ? 'kidWins' : scoreOutcome === 'jarvis' ? 'jarvisWins' : 'draw';
+          return showLine(occasion).then(function () {
+            if (gen !== generation) return;
+            if (scoreOutcome === 'kid' && scores.rps && scores.rps.streak >= 3) {
+              return delay(1100).then(function () { if (gen === generation) return showLine('streak3'); });
+            }
+          });
+        });
+      })
+      .catch(function () { if (gen === generation) showConfused(); })
+      .then(function () {
+        if (gen !== generation) return;
+        state.busy = false;
+        drawIdleOrb();
+      });
+  }
+
   // Wire honesty: request JARVIS's throw BEFORE telling main what the kid
   // threw (history only carries throws already resolved) — mirrors
   // core/games.js's own rpsThrow, which cannot see the kid's current move.
   function runRpsRound(kidShape) {
     if (state.busy) return;
+    // Tapping a chip while the camera is armed is the kid choosing buttons:
+    // camera mode stands down for the session, predictably, rather than the
+    // two input styles fighting over the same round.
+    if (state.cameraArmed) disarmCamera();
     var gen = generation;
     state.busy = true;
     var difficulty = state.difficulty;
@@ -346,34 +394,133 @@
         var jarvisShape = result && result.shape;
         if (['rock', 'paper', 'scissors'].indexOf(jarvisShape) === -1) throw new Error('bad shape');
         showLine('rpsCountdown');
-        return bounceOrb(3, 1200)
-          .then(function () { if (gen === generation) return morph('orb', jarvisShape); })
-          .then(function () { return delay(900); })
-          .then(function () { if (gen === generation) return morph(jarvisShape, 'orb'); })
-          .then(function () {
-            if (gen !== generation) return;
-            var outcome = rpsJudge(kidShape, jarvisShape);
-            state.history.push(kidShape);
-            var scoreOutcome = outcome === 'tie' ? 'draw' : outcome;
-            return window.jarvis.gameScore({ game: 'rps', outcome: scoreOutcome }).then(function (scores) {
-              if (gen !== generation) return;
-              updateScoreStrip(scores);
-              var occasion = scoreOutcome === 'kid' ? 'kidWins' : scoreOutcome === 'jarvis' ? 'jarvisWins' : 'draw';
-              return showLine(occasion).then(function () {
-                if (gen !== generation) return;
-                if (scoreOutcome === 'kid' && scores.rps && scores.rps.streak >= 3) {
-                  return delay(1100).then(function () { if (gen === generation) return showLine('streak3'); });
-                }
-              });
-            });
-          });
+        return bounceOrb(3, 1200).then(function () {
+          if (gen === generation) return revealAndScore(kidShape, jarvisShape, gen);
+        });
       })
-      .catch(function () { if (gen === generation) showConfused(); })
-      .then(function () {
+      .catch(function () {
         if (gen !== generation) return;
+        showConfused();
         state.busy = false;
         drawIdleOrb();
       });
+  }
+
+  // ---- the camera round (parent's gameCamera key) ----
+  // The kid shows a hand instead of tapping. Honesty is structural, same as
+  // the buttons: JARVIS's throw is locked via gameMove BEFORE the countdown
+  // starts — before a single capture frame exists — so nothing seen through
+  // the lens can inform it. The camera result is only ever compared against
+  // an already-decided shape. core/games.js's rpsThrow cannot take the
+  // current throw at all (test-pinned), and this flow preserves exactly that
+  // property one layer up.
+  var CAMERA_BEATS_MS = 2800;     // "Rock. Paper. Scissors. Shoot." — 4 beats
+  var CAPTURE_OPEN_MS = 2000;     // sampling opens just before "shoot"
+  var CAPTURE_WINDOW_MS = 2400;   // and stays open long enough for slow hands
+
+  // Pump frames through the stability gate until a confident read, the
+  // timeout, or the round dying (generation bump). Resolves shape or null.
+  function waitForStableShape(need, timeoutMs, gen) {
+    return new Promise(function (resolve) {
+      if (!window.JrHandShapes || !window.JrHandCamera) return resolve(null);
+      var gate = window.JrHandShapes.createStableRead({ need: need });
+      var done = false;
+      function finish(shape) {
+        if (done) return;
+        done = true;
+        window.JrHandCamera.stopSampling();
+        resolve(shape);
+      }
+      var timer = setTimeout(function () { finish(null); }, timeoutMs);
+      window.JrHandCamera.startSampling(function (shape) {
+        if (done) return;
+        if (gen !== generation) { clearTimeout(timer); finish(null); return; }
+        var stable = gate.push(shape);
+        if (stable) { clearTimeout(timer); finish(stable); }
+      });
+    });
+  }
+
+  function armCamera() {
+    var gen = generation;
+    var wrap = $('jr-cam-wrap');
+    var video = $('jr-cam-video');
+    if (!wrap || !video || !window.JrHandCamera) return;
+    wrap.hidden = false;
+    window.JrHandCamera.start(video).then(function () {
+      if (gen !== generation || state.game !== 'rps') {
+        window.JrHandCamera.stop();
+        wrap.hidden = true;
+        return;
+      }
+      state.cameraArmed = true;
+      runCameraRpsRound();
+    }).catch(function () {
+      wrap.hidden = true;
+      if (gen === generation) sayLine('The camera is not playing along today. The buttons work.', false);
+    });
+  }
+
+  function disarmCamera() {
+    state.cameraArmed = false;
+    if (window.JrHandCamera) window.JrHandCamera.stop();
+    var wrap = $('jr-cam-wrap');
+    if (wrap) wrap.hidden = true;
+  }
+
+  function runCameraRpsRound() {
+    if (!state.cameraArmed || state.busy) return;
+    var gen = generation;
+    sayLine('Show me your hand.');
+    // Readiness: any confident shape means a hand is in frame. These frames
+    // are pre-throw by definition — the throw happens at "shoot", and
+    // JARVIS's own move is locked before the countdown even begins.
+    waitForStableShape(2, 25000, gen).then(function (seen) {
+      if (gen !== generation || !state.cameraArmed || state.busy) return;
+      if (!seen) {
+        sayLine('I did not see a hand. The buttons work too.', false);
+        return;
+      }
+      state.busy = true;
+      var historySnapshot = state.history.slice();
+      window.jarvis.gameMove({ game: 'rps', history: historySnapshot, difficulty: state.difficulty })
+        .then(function (result) {
+          if (gen !== generation) return;
+          var jarvisShape = result && result.shape;
+          if (['rock', 'paper', 'scissors'].indexOf(jarvisShape) === -1) throw new Error('bad shape');
+          // Throw is LOCKED. Only now does the countdown - and any frame
+          // that could show the kid's actual throw - begin.
+          sayLine('Rock. Paper. Scissors. Shoot.');
+          var beats = bounceOrb(4, CAMERA_BEATS_MS);
+          var capture = delay(CAPTURE_OPEN_MS).then(function () {
+            return waitForStableShape(2, CAPTURE_WINDOW_MS, gen);
+          });
+          return Promise.all([beats, capture]).then(function (results) {
+            if (gen !== generation) return;
+            var kidShape = results[1];
+            if (!kidShape) {
+              sayLine('I did not catch your hand that time. Use the buttons for this one.');
+              state.busy = false;
+              drawIdleOrb();
+              return;
+            }
+            return revealAndScore(kidShape, jarvisShape, gen).then(function () {
+              // Next round, hands-free, until the overlay closes or the kid
+              // switches to buttons.
+              if (gen !== generation || !state.cameraArmed) return;
+              return delay(1800).then(function () {
+                if (gen === generation && state.cameraArmed && !state.busy) runCameraRpsRound();
+              });
+            });
+          });
+        })
+        .catch(function () {
+          if (gen !== generation) return;
+          showConfused();
+          state.busy = false;
+          drawIdleOrb();
+        });
+    });
   }
 
   // ---- overlay lifecycle ----
@@ -384,9 +531,10 @@
     }
   }
 
-  function open(game) {
+  function open(game, options) {
     if (game !== 'ttt' && game !== 'rps') return;
     generation += 1; // invalidate any move/round still in flight from before
+    if (state.cameraArmed) disarmCamera(); // reopening always starts clean
     state.game = game;
     state.board = game === 'ttt' ? new Array(9).fill(null) : null;
     state.history = [];
@@ -408,10 +556,19 @@
     // src/renderer.js, and speaking both would overlap.
     showLine('gameStart', false);
     refreshScoreStrip();
+    // Camera mode only when the PARENT's checklist says so (the flag rides
+    // in from renderer.js off the live jr profile) and the machine can
+    // actually do it. The buttons stay on screen either way — the camera is
+    // an addition, never a wall.
+    if (game === 'rps' && options && options.gameCamera === true &&
+        window.JrHandCamera && window.JrHandCamera.available()) {
+      armCamera();
+    }
   }
 
   function close() {
     generation += 1; // invalidate any move/round still in flight
+    disarmCamera(); // stream and OS camera light die with the overlay
     var overlay = $('jr-games');
     if (overlay) overlay.hidden = true; // ESC/CLOSE mid-game records nothing
     state.game = null;
