@@ -754,6 +754,16 @@ function moduleAllowedForCurrentProfile(name) {
   return window.JrVariant.moduleAllowedInProfile(name, state.profile);
 }
 
+// The three audiences the settings dialog has: the grown-up build, a JR
+// parent who has entered the PIN (main-process session open), and a JR kid.
+// Only the parent may touch admin IPC — a kid calling mobile:status or
+// schedule:list gets a throw from the main-process gate, which would blow up
+// openSettings() halfway through — so the dialog renders from this answer.
+function settingsAudience() {
+  const jr = state.profile?.variant === 'jr';
+  return { jr, unlocked: !jr || Boolean(state.jrSession?.unlocked) };
+}
+
 function renderModuleVisibility() {
   document.querySelectorAll('[data-module]').forEach((module) => {
     const name = module.dataset.module;
@@ -1887,21 +1897,27 @@ function updateFolderLabels() {
 // under the header shows one group at a time. Groups live in settings-tabs.js.
 function selectSettingsTab(id) {
   const tabs = window.SettingsTabs;
-  const active = tabs ? tabs.normalizeTab(id) : id;
+  if (!tabs) return;
+  const audience = tabs.tabsFor(settingsAudience());
+  const active = tabs.normalizeTab(id, audience.tabs);
   document.querySelectorAll('#settings-tabs button').forEach((button) => {
     const isActive = button.dataset.tab === active;
     button.classList.toggle('active', isActive);
     button.setAttribute('aria-selected', String(isActive));
   });
   document.querySelectorAll('#settings-modal .settings-grid > section').forEach((section) => {
-    section.hidden = tabs ? tabs.sectionHidden(section.dataset.tab, active) : false;
+    section.hidden = tabs.sectionHidden(section.dataset.tab, active, audience);
   });
 }
 
+// Re-runnable on purpose (replaceChildren): openSettings() calls it every
+// time, so a PIN unlock mid-session re-renders the strip from one tab
+// (the kid's LOOKS) to all of them, and a lock shrinks it back.
 function initSettingsTabs() {
   const strip = $('settings-tabs');
   if (!strip || !window.SettingsTabs) return;
-  strip.replaceChildren(...window.SettingsTabs.TABS.map((tab) => {
+  const audience = window.SettingsTabs.tabsFor(settingsAudience());
+  strip.replaceChildren(...audience.tabs.map((tab) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.tab = tab.id;
@@ -1977,16 +1993,46 @@ function openSettings(tab = 'general') {
   $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
   $('setting-screen-drive').checked = Boolean(state.settings.screenDriveEnabled);
   $('setting-schedules').checked = Boolean(state.settings.schedulesEnabled);
-  populateDefenseSettings();
   updateScheduleFormVisibility();
-  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured); refreshMobileSection(); refreshScheduleList();
+  updateFolderLabels(); renderSearchRoots(); renderVoiceStatus(state.voiceStatus); renderCloudStatus(state.cloudConfigured); renderClaudeStatus(state.anthropicConfigured);
+  // Admin-IPC refreshers: a locked JR kid's dialog is LOOKS-only, and these
+  // channels (mobile:status, schedule:list, defense:zones) would throw at
+  // the main-process gate anyway. The parent (or the standard build) gets
+  // them exactly as before.
+  if (settingsAudience().unlocked) {
+    populateDefenseSettings();
+    refreshMobileSection();
+    refreshScheduleList();
+  }
+  if (settingsAudience().jr && settingsAudience().unlocked) loadJrTab();
   if (!state.updateUrl) applyUpdateInfo({ current: state.version });
+  initSettingsTabs();
   selectSettingsTab(tab);
   $('settings-modal').showModal();
+  startJrSessionWatch();
 }
 
 async function saveSettings(event) {
   event.preventDefault();
+  // The kid's dialog is LOOKS-only, so its save sends ONLY what that tab
+  // shows. main.js's jrSettingsPatch would drop the rest anyway (the belt);
+  // building the honest patch here means the dialog never PRETENDS to save
+  // something the build then silently discards (the braces).
+  if (!settingsAudience().unlocked) {
+    const kidPatch = {
+      minimizeToOrb: $('setting-orb').checked,
+      motionMode: $('setting-motion').value,
+      skin: $('setting-skin').value,
+      orbSkin: $('setting-orb-skin').value || 'original',
+      orbColor: $('setting-orb-color').value || 'gold',
+      windowGlass: $('setting-glass').value || 'glass'
+    };
+    state.settings = await window.jarvis.saveSettings(kidPatch);
+    applyGlass(state.settings.windowGlass);
+    $('settings-modal').close();
+    showToast('Looks saved.');
+    return;
+  }
   const patch = {
     profileName: $('setting-profile-name').value.trim() || 'User',
     // The rename option. main.js normalizes it (same rules as first-run
@@ -2049,6 +2095,98 @@ async function saveSettings(event) {
   renderVoiceStatus(state.voiceStatus);
   $('settings-modal').close();
   showToast('Settings saved locally.');
+}
+
+/* ---- JARVIS JR tab (parent side of the real settings dialog) ----------- */
+
+// Loads name/birthdate/age + the kid-reach checklist. Admin channel: only
+// answers while the parent session is open (jr:parent:controls with no args
+// is a read).
+async function loadJrTab() {
+  const result = await window.jarvis.jrParentControls().catch(() => null);
+  if (!result?.ok) return;
+  $('jr-tab-name').value = result.kidName || '';
+  $('jr-tab-birthdate').value = result.birthdate || '';
+  $('jr-tab-age').textContent = result.kidName
+    ? `${result.kidName} is ${result.age}. The content lock talks to that age — it has no off switch.`
+    : `Age ${result.age}. The content lock talks to that age — it has no off switch.`;
+  $('jr-tab-kid-label').textContent = (result.kidName || 'YOUR KID').toUpperCase();
+  const keys = window.JrVariant?.CONTROL_KEYS || [];
+  const labels = window.JrVariant?.CONTROL_LABELS || {};
+  $('jr-tab-controls').replaceChildren(...keys.map((key) => {
+    const row = document.createElement('label');
+    row.className = 'toggle-row';
+    const text = document.createElement('span');
+    const title = document.createElement('b');
+    title.textContent = (labels[key] || key).toUpperCase();
+    text.appendChild(title);
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.dataset.jrControl = key;
+    box.checked = Boolean(result.controls?.[key]);
+    row.append(text, box, document.createElement('i'));
+    return row;
+  }));
+}
+
+async function saveJrTab() {
+  const patch = {};
+  document.querySelectorAll('#jr-tab-controls input[data-jr-control]').forEach((box) => {
+    patch[box.dataset.jrControl] = box.checked;
+  });
+  const profile = {
+    kidName: $('jr-tab-name').value,
+    birthdate: $('jr-tab-birthdate').value || undefined
+  };
+  const result = await window.jarvis.jrParentControls(patch, profile).catch(() => ({ ok: false, expired: true }));
+  const note = $('jr-tab-status');
+  note.hidden = false;
+  if (result?.expired) { closeSettingsForExpiredSession(); return; }
+  note.textContent = result?.ok ? 'Saved. Applied immediately — no restart.' : (result?.reason || 'Could not save.');
+  if (result?.ok) loadJrTab();
+}
+
+async function saveJrPin() {
+  const result = await window.jarvis.jrParentPin($('jr-tab-old-pin').value, $('jr-tab-new-pin').value)
+    .catch(() => ({ ok: false, expired: true }));
+  const note = $('jr-tab-pin-status');
+  note.hidden = false;
+  if (result?.expired) { closeSettingsForExpiredSession(); return; }
+  note.textContent = result?.ok ? 'PIN changed.' : (result?.reason || result?.message || (result?.locked ? `Locked — try again in ${result.retryInSeconds}s.` : 'Could not change the PIN.'));
+  if (result?.ok) { $('jr-tab-old-pin').value = ''; $('jr-tab-new-pin').value = ''; }
+}
+
+function closeSettingsForExpiredSession() {
+  state.jrSession = { unlocked: false, expiresInSeconds: 0 };
+  stopJrSessionWatch();
+  $('settings-modal').close();
+  showToast('Parent settings locked — enter the PIN to continue.');
+}
+
+// A 1 Hz watch while the dialog is open: keeps the countdown honest and
+// closes the dialog the moment the session dies (idle cap or ceiling).
+// jr:parent:session is a KID channel and a pure read — polling it never
+// keeps the session alive (that is admit()'s job, and only admin calls
+// reach admit()).
+let jrSessionTimer = null;
+function startJrSessionWatch() {
+  const audience = settingsAudience();
+  if (!audience.jr || !audience.unlocked) return;
+  stopJrSessionWatch();
+  jrSessionTimer = setInterval(async () => {
+    const session = await window.jarvis.jrParentSession().catch(() => null);
+    state.jrSession = session || { unlocked: false, expiresInSeconds: 0 };
+    const note = $('jr-tab-session');
+    if (note && session?.unlocked) {
+      const minutes = Math.floor(session.expiresInSeconds / 60);
+      const seconds = String(session.expiresInSeconds % 60).padStart(2, '0');
+      note.textContent = `Parent settings unlocked — locks itself in ${minutes}:${seconds} (or the moment you close this dialog).`;
+    }
+    if (!session?.unlocked) closeSettingsForExpiredSession();
+  }, 1000);
+}
+function stopJrSessionWatch() {
+  if (jrSessionTimer) { clearInterval(jrSessionTimer); jrSessionTimer = null; }
 }
 
 const diagnostics = { data: null, micTest: null, wakeTimer: null, wakeCountdown: null };
@@ -2267,9 +2405,33 @@ function bindEvents() {
 
   initSettingsTabs();
   $('settings-button').addEventListener('click', () => openSettings());
-  // Cameras module: ＋ ADD sends you to the one place linking happens.
-  $('camera-add-toggle')?.addEventListener('click', () => openSettings('cameras'));
+  // Cameras module: ＋ ADD sends you to the one place linking happens — for a
+  // locked JR kid that place does not exist, so it lands on LOOKS instead.
+  $('camera-add-toggle')?.addEventListener('click', () => openSettings(settingsAudience().unlocked ? 'cameras' : 'looks'));
   document.querySelectorAll('[data-close-settings]').forEach((button) => button.addEventListener('click', () => $('settings-modal').close()));
+  // Closing the dialog LOCKS the parent session, every path (Save, Cancel,
+  // Esc): the unlocked window exists for the dialog and dies with it.
+  $('settings-modal').addEventListener('close', () => {
+    stopJrSessionWatch();
+    if (settingsAudience().jr && state.jrSession?.unlocked) {
+      state.jrSession = { unlocked: false, expiresInSeconds: 0 };
+      window.jarvis.jrParentLock?.().catch(() => {});
+    }
+  });
+  // JR tab controls (present in the DOM on every build; only reachable in an
+  // unlocked JR dialog — tabsFor never offers the tab elsewhere).
+  // The PIN sheet's one job: hand the parent the REAL dialog once main.js
+  // has opened the session. jr-parent-ui.js never touches settings itself.
+  window.JrOpenSettings = (tab, session) => {
+    if (session) state.jrSession = session;
+    openSettings(tab || 'jr');
+  };
+  $('jr-tab-save')?.addEventListener('click', saveJrTab);
+  $('jr-tab-pin-save')?.addEventListener('click', saveJrPin);
+  $('jr-tab-lock')?.addEventListener('click', () => $('settings-modal').close());
+  // The checklist changed (this dialog or a future surface): module cards
+  // follow immediately, no relaunch.
+  window.jarvis.onJrProfile?.((profile) => { state.profile = profile; renderModuleVisibility(); });
   $('settings-form').addEventListener('submit', saveSettings);
   $('setting-defense-state').addEventListener('change', () => fillDefenseCounties($('setting-defense-state').value, ''));
   $('defense-feed-add').addEventListener('click', () => {
@@ -2656,6 +2818,7 @@ async function initialize() {
     // is only null if the IPC call itself failed above; moduleAllowedFor
     // CurrentProfile treats null the same as unlocked, matching standard.
     state.profile = jrStatus?.profile || null;
+    state.jrSession = jrStatus?.session || { unlocked: false, expiresInSeconds: 0 };
     state.settings = bootstrap.settings;
     // Retail first run: he needs a name before anything else happens. Await
     // it so the greeting below uses whatever the buyer just chose.

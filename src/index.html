@@ -420,20 +420,23 @@
             <label>ASSISTANT NAME<input id="setting-assistant-name" value="" maxlength="32" placeholder="JARVIS"></label>
             <label class="toggle-row"><span><b>SPOKEN REPLIES</b><small>Use Windows system voices</small></span><input id="setting-voice" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b id="setting-wake-label">WAKE WORD</b><small>Always-listening local wake word</small></span><input id="setting-wake" type="checkbox"><i></i></label>
-            <label class="toggle-row"><span><b>MINIMIZE TO ORB</b><small>Keep the sphere working in the background</small></span><input id="setting-orb" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>ALWAYS ON TOP</b><small>Keep the small orb visible</small></span><input id="setting-top" type="checkbox"><i></i></label>
             <label class="toggle-row"><span><b>START WITH WINDOWS</b><small>Launch automatically at sign-in</small></span><input id="setting-startup" type="checkbox"><i></i></label>
-            <label>ANIMATION MODE<select id="setting-motion"><option value="cinematic">FULL CINEMATIC</option><option value="fast">FAST</option><option value="reduced">REDUCED MOTION</option></select></label>
-            <label>SKIN<select id="setting-skin"><option value="classic">CLASSIC AMBER</option><option value="command-center">COMMAND CENTER BLUE</option></select></label>
-                <label>ORB SKIN<select id="setting-orb-skin"></select></label>
-                <label>ORB COLOR<select id="setting-orb-color"><option value="gold">GOLD</option><option value="obsidian">OBSIDIAN</option></select></label>
-                <label>WINDOW GLASS<select id="setting-glass"></select></label>
             <label>VOICE ENGINE<select id="setting-tts-engine"><option value="kokoro">JARVIS VOICE · NEURAL</option><option value="system">WINDOWS VOICES</option></select></label>
             <label>JARVIS VOICE<select id="setting-kokoro-voice"></select></label>
             <label>WINDOWS VOICE<select id="setting-voice-name"><option value="">AUTO · BRITISH IF AVAILABLE</option></select></label>
             <button type="button" id="audition-voice" class="outline-action">▶ HEAR THIS VOICE</button>
             <small id="tts-status-note">JARVIS's own voice runs on this PC's graphics card — nothing is sent anywhere. The first launch downloads the voice model (about 326 MB); until it finishes he speaks with a Windows voice.</small>
             <small>The Windows voice above is the fallback. For a better one: Windows Settings → Time &amp; Language → Speech → Add voices → English (United Kingdom), then pick “Ryan” or “George”.</small>
+          </section>
+          <section data-tab="looks">
+            <h3>LOOKS</h3>
+            <label class="toggle-row"><span><b>MINIMIZE TO ORB</b><small>Keep the sphere working in the background</small></span><input id="setting-orb" type="checkbox"><i></i></label>
+            <label>ANIMATION MODE<select id="setting-motion"><option value="cinematic">FULL CINEMATIC</option><option value="fast">FAST</option><option value="reduced">REDUCED MOTION</option></select></label>
+            <label>SKIN<select id="setting-skin"><option value="classic">CLASSIC AMBER</option><option value="command-center">COMMAND CENTER BLUE</option></select></label>
+            <label>ORB SKIN<select id="setting-orb-skin"></select></label>
+            <label>ORB COLOR<select id="setting-orb-color"><option value="gold">GOLD</option><option value="obsidian">OBSIDIAN</option></select></label>
+            <label>WINDOW GLASS<select id="setting-glass"></select></label>
           </section>
           <section data-tab="automation">
             <h3>NIGHT SHIFT</h3>
@@ -568,6 +571,24 @@
             <button type="button" id="open-transcript" class="outline-action">OPEN THE TRANSCRIPT FOLDER</button>
             <small id="transcript-status">Everything said, both sides, in plain text. Kept for today and yesterday only, then deleted automatically — this is a scratchpad, not an archive. Never leaves this computer.</small>
           </section>
+          <section class="wide-setting" data-tab="jr">
+            <h3>JARVIS JR</h3>
+            <p class="jr-note" id="jr-tab-session"></p>
+            <label>KID'S NAME<input id="jr-tab-name" maxlength="24" autocomplete="off"></label>
+            <label>BIRTHDATE<input id="jr-tab-birthdate" type="date"></label>
+            <p class="jr-note" id="jr-tab-age"></p>
+            <h4>WHAT <span id="jr-tab-kid-label">YOUR KID</span> CAN REACH</h4>
+            <div id="jr-tab-controls" class="jr-checklist"></div>
+            <p class="jr-note">Changes apply immediately. Turning something off takes it away from the kid — it does not uninstall it.</p>
+            <button type="button" id="jr-tab-save" class="primary-action">SAVE JARVIS JR SETTINGS</button>
+            <p id="jr-tab-status" class="jr-note" hidden></p>
+            <h4>PARENT PIN</h4>
+            <label>CURRENT PIN<input id="jr-tab-old-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+            <label>NEW PIN (4–8 NUMBERS)<input id="jr-tab-new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+            <button type="button" id="jr-tab-pin-save" class="outline-action">CHANGE PIN</button>
+            <p id="jr-tab-pin-status" class="jr-note" hidden></p>
+            <button type="button" id="jr-tab-lock" class="outline-action">LOCK PARENT SETTINGS NOW</button>
+          </section>
         </div>
         <footer><span>Local data stays on this computer. Cloud mode sends conversation text to your chosen provider. · <b id="app-version">VERSION</b></span><div><button type="button" data-close-settings>CANCEL</button><button type="submit" class="save-button">SAVE SETTINGS</button></div></footer>
       </form>
@@ -656,66 +677,14 @@
     </div>
     <div id="jr-parent" class="jr-overlay" hidden>
       <div class="jr-sheet">
-        <h2>PARENT PANEL</h2>
+        <h2>GROWN-UPS ONLY</h2>
+        <p class="jr-note">Enter the parent PIN to open the full JARVIS settings. It locks itself again when you close them.</p>
         <label>PIN <input id="jr-parent-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
         <button type="button" id="jr-parent-unlock">Unlock</button>
-        <div id="jr-parent-body" hidden>
-          <div id="jr-parent-controls" class="jr-checklist"></div>
-          <button type="button" id="jr-parent-save-controls">Save changes</button>
-          <p class="jr-note" id="jr-parent-relaunch" hidden>Saved. Changes apply the next time JARVIS JR starts.</p>
-          <details id="jr-cameras" open>
-            <summary>Cameras</summary>
-            <p class="jr-note" id="jr-cameras-off-note" hidden></p>
-            <div id="jr-cameras-list" class="jr-cameras-list"></div>
-            <div id="jr-cameras-add" hidden>
-              <div class="jr-camera-tabs">
-                <button type="button" class="active" data-jr-cam-brand="rtsp">LOCAL (RTSP)</button>
-                <button type="button" data-jr-cam-brand="blink">BLINK</button>
-                <button type="button" data-jr-cam-brand="ring">RING</button>
-                <button type="button" data-jr-cam-brand="nest">NEST</button>
-              </div>
-              <div id="jr-cam-pane-rtsp" class="jr-camera-pane">
-                <label>Camera name <input id="jr-cam-rtsp-name" placeholder="Front Door" autocomplete="off"></label>
-                <label>Address <input id="jr-cam-rtsp-url" placeholder="rtsp://username:password@camera-address/stream" autocomplete="off"></label>
-                <button type="button" id="jr-cam-rtsp-add">Add camera</button>
-              </div>
-              <div id="jr-cam-pane-blink" class="jr-camera-pane" hidden>
-                <label>Blink email <input id="jr-cam-blink-email" type="email" autocomplete="off"></label>
-                <label>Blink password <input id="jr-cam-blink-password" type="password" autocomplete="off"></label>
-                <button type="button" id="jr-cam-blink-signin">Sign in</button>
-                <div id="jr-cam-blink-pin-row" hidden>
-                  <label>PIN from the Blink email <input id="jr-cam-blink-pin" inputmode="numeric" autocomplete="off"></label>
-                  <button type="button" id="jr-cam-blink-verify">Verify PIN</button>
-                </div>
-              </div>
-              <div id="jr-cam-pane-ring" class="jr-camera-pane" hidden>
-                <label>Ring email <input id="jr-cam-ring-email" type="email" autocomplete="off"></label>
-                <label>Ring password <input id="jr-cam-ring-password" type="password" autocomplete="off"></label>
-                <button type="button" id="jr-cam-ring-signin">Sign in</button>
-                <div id="jr-cam-ring-code-row" hidden>
-                  <label>Code from Ring <input id="jr-cam-ring-code" inputmode="numeric" autocomplete="off"></label>
-                  <button type="button" id="jr-cam-ring-verify">Verify code</button>
-                </div>
-              </div>
-              <div id="jr-cam-pane-nest" class="jr-camera-pane" hidden>
-                <label>Device Access project ID <input id="jr-cam-nest-project" autocomplete="off"></label>
-                <label>OAuth client ID <input id="jr-cam-nest-client-id" autocomplete="off"></label>
-                <label>OAuth client secret <input id="jr-cam-nest-client-secret" type="password" autocomplete="off"></label>
-                <button type="button" id="jr-cam-nest-signin">Start Google sign-in</button>
-              </div>
-              <p id="jr-cam-status" class="jr-note" role="status" hidden></p>
-            </div>
-          </details>
-          <details>
-            <summary>Change PIN</summary>
-            <label>New PIN <input id="jr-new-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
-            <button type="button" id="jr-pin-save">Save PIN</button>
-            <p id="jr-pin-note" class="jr-note" hidden></p>
-          </details>
-        </div>
         <p id="jr-parent-error" class="jr-error" hidden></p>
-        <button type="button" id="jr-parent-close">Close</button>
+        <button type="button" id="jr-parent-close">Back</button>
       </div>
+    </div>
     </div>
 
     <!-- JARVIS JR: the games overlay (tic tac toe / rock paper scissors) — see
