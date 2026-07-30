@@ -38,6 +38,15 @@
         <div class="stage-label left"><span>Operating mode</span><b>Local · Private</b></div>
         <div class="stage-label right"><span>Active project</span><b id="active-project">GENERAL</b></div>
         <canvas id="hologram" aria-label="Animated JARVIS holographic sphere"></canvas>
+        <!-- JR's rock paper scissors: the orb ITSELF morphs into the throw.
+             A sibling canvas over #hologram's box (src/orb-shape-layer.js) —
+             sibling on purpose, the skin swap clones the hologram node. The
+             pill is the honest camera tell; the 2px video feeds the hand
+             reader and is near-invisible rather than display:none so
+             Chromium keeps decoding frames. -->
+        <canvas id="orb-shape" aria-hidden="true"></canvas>
+        <span id="rps-cam-pill" class="rps-cam-pill" hidden>&#9679; CAMERA ON</span>
+        <video id="rps-cam-video" autoplay playsinline muted></video>
         <div class="central-copy">
           <span id="core-kicker">AWAITING DIRECTIVE</span>
           <strong id="core-state">READY</strong>
@@ -687,14 +696,14 @@
     </div>
     </div>
 
-    <!-- JARVIS JR: the games overlay (tic tac toe / rock paper scissors) — see
-         src/jr-games-ui.js, which only ever opens this when a router result
-         carries a truthy .game ('ttt'|'rps', source 'jr-game'). Stays hidden
-         and inert on the standard build, same as #jr-setup/#jr-parent above:
-         the router branch that sets .game never fires there. -->
+    <!-- JARVIS JR: the tic-tac-toe overlay — see src/jr-games-ui.js, opened
+         only when a router result carries .game === 'ttt'. Rock paper
+         scissors left this sheet on 2026-07-30: it is the ORB's voice game
+         on the main screen now (src/jr-rps-voice.js + orb-shape-layer.js).
+         Stays hidden and inert on the standard build. -->
     <div id="jr-games" class="jr-overlay jr-games-overlay" hidden>
       <div class="jr-sheet jr-games-sheet">
-        <h2 id="jr-games-title">GAME</h2>
+        <h2 id="jr-games-title">TIC TAC TOE</h2>
         <button type="button" id="jr-games-close" class="jr-games-close" aria-label="Close game">✕</button>
 
         <div id="jr-game-difficulty" class="jr-game-diff-row">
@@ -704,21 +713,6 @@
         </div>
 
         <div id="jr-board" class="jr-board" hidden></div>
-
-        <div id="jr-rps" class="jr-rps-row" hidden>
-          <button type="button" class="jr-rps-btn" data-shape="rock"><canvas width="64" height="64"></canvas><span>Rock</span></button>
-          <button type="button" class="jr-rps-btn" data-shape="paper"><canvas width="64" height="64"></canvas><span>Paper</span></button>
-          <button type="button" class="jr-rps-btn" data-shape="scissors"><canvas width="64" height="64"></canvas><span>Scissors</span></button>
-        </div>
-
-        <!-- Camera RPS (parent's gameCamera checklist key). The preview is
-             mirrored like a mirror because that is how kids expect to see
-             themselves; the classifier does not care. The dot is the honest
-             tell: whenever this block is visible, the webcam is on. -->
-        <div id="jr-cam-wrap" class="jr-cam-wrap" hidden>
-          <video id="jr-cam-video" autoplay playsinline muted></video>
-          <span id="jr-cam-dot" class="jr-cam-dot">&#9679; CAMERA ON</span>
-        </div>
 
         <div class="jr-game-canvas-wrap">
           <canvas id="jr-game-canvas" width="160" height="160"></canvas>
@@ -750,6 +744,8 @@
     <script src="jr-parent-ui.js"></script>
     <script src="../core/hand-shapes.js"></script>
     <script src="jr-hand-camera.js"></script>
+    <script src="orb-shape-layer.js"></script>
+    <script src="jr-rps-voice.js"></script>
     <script src="jr-games-ui.js"></script>
     <script src="../core/variant.js"></script>
     <script src="renderer.js"></script>

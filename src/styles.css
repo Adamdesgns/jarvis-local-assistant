@@ -90,6 +90,34 @@ button { cursor: pointer; }
 .searching .central-copy { opacity: 0; transform: translateX(-50%) scale(1.4); }
 .reforming #hologram { animation: reform .8s var(--ease); }
 
+/* ---------- the orb shape layer (JR's rock paper scissors) ----------
+   A sibling canvas over #hologram's exact box (sibling, never a child ref —
+   skin swaps clone the #hologram node). While a throw is shown, the soul
+   dims to a ghost (the .searching trick without the scale) and this layer
+   IS the orb. z-index 3: under the state text (4) and captions (6). */
+#orb-shape {
+  position: absolute; left: 0; right: 0;
+  top: var(--stage-top-band); bottom: var(--stage-bottom-band);
+  width: 100%; height: calc(100% - var(--stage-top-band) - var(--stage-bottom-band));
+  z-index: 3; pointer-events: none; opacity: 0; transition: opacity .35s var(--ease);
+}
+body.orb-shape-active #orb-shape { opacity: 1; }
+body.orb-shape-active #hologram { opacity: .06; filter: blur(3px); }
+
+/* The honest tell that the webcam is live during a camera game, and the
+   hidden element that feeds it. The video is NOT display:none — Chromium
+   throttles invisible video decode; near-invisible keeps frames flowing. */
+.rps-cam-pill {
+  position: absolute; z-index: 5; top: 10px; right: 232px;
+  color: #e05c5c; font: 600 10px var(--font); letter-spacing: var(--track-wide);
+  text-shadow: 0 0 6px rgba(0, 0, 0, .8); pointer-events: none;
+}
+.rps-cam-pill[hidden] { display: none; }
+#rps-cam-video {
+  position: absolute; bottom: 2px; right: 2px; width: 2px; height: 2px;
+  opacity: .01; pointer-events: none;
+}
+
 /* ---------- floating modules ---------- */
 .module-layer { position: absolute; inset: 0 0 132px; z-index: 10; pointer-events: none; }
 .module { position: absolute; min-width: 260px; min-height: 190px; display: flex; flex-direction: column; pointer-events: auto; background: var(--surface-glass); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-soft), var(--inset-highlight); backdrop-filter: blur(20px); overflow: hidden; transition: opacity .25s, transform var(--dur-med) var(--ease), border-color var(--dur-fast), box-shadow var(--dur-med) var(--ease); }
@@ -1057,37 +1085,11 @@ body.jr-locked #cc-root {
 .jr-cell[data-mark="X"] { color: var(--accent-bright); }
 .jr-cell[data-mark="O"] { color: var(--text-secondary); }
 
-.jr-rps-row { display: flex; gap: var(--s3); justify-content: center; margin-top: var(--s5); }
-.jr-rps-row[hidden] { display: none; }
-.jr-rps-btn {
-  display: flex; flex-direction: column; align-items: center; gap: var(--s2);
-  margin: 0; padding: var(--s3); width: auto; height: auto;
-  border: 1px solid var(--line-strong); border-radius: var(--r-md);
-  background: var(--surface-input); color: var(--text-secondary);
-  font: 500 var(--text-xs) var(--font); letter-spacing: var(--track-wide);
-  cursor: pointer; transition: all var(--dur-fast) var(--ease);
-}
-.jr-rps-btn:hover { background: var(--accent-tint-10); border-color: var(--line-accent); }
-.jr-rps-btn canvas { width: 64px; height: 64px; }
-
+/* The chips, camera preview, and reveal-morph styles that lived here left
+   with the overlay's RPS half (2026-07-30): the orb plays on the main
+   screen now — see #orb-shape and .rps-cam-pill up in the stage section. */
 .jr-game-canvas-wrap { display: flex; justify-content: center; margin-top: var(--s5); }
 #jr-game-canvas { width: 160px; height: 160px; }
-
-/* Camera RPS: a small mirrored preview with an unmissable live-camera tell.
-   Mirroring is cosmetic (kids expect a mirror); the classifier is
-   distance-based and does not care. */
-.jr-cam-wrap { position: relative; margin-top: var(--s4); display: flex; justify-content: center; }
-.jr-cam-wrap[hidden] { display: none; }
-.jr-cam-wrap video {
-  width: 220px; height: 165px; object-fit: cover; transform: scaleX(-1);
-  border: 1px solid var(--line-strong); border-radius: var(--r-md);
-  background: #000;
-}
-.jr-cam-dot {
-  position: absolute; top: var(--s2); left: 50%; transform: translateX(calc(-110px + var(--s2)));
-  color: #e05c5c; font: 600 10px var(--font); letter-spacing: var(--track-wide);
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8); pointer-events: none;
-}
 
 .jr-game-line {
   margin-top: var(--s4); min-height: 1.4em; color: var(--text-primary);

@@ -1608,11 +1608,14 @@ async function executeCommand(command) {
     // initialize() above). Also a no-op on the jr-gate refusal when games is
     // off (that result never carries .game at all).
     if (result.game && state.profile?.variant === 'jr' && window.JrGamesUI) {
-      // gameCamera rides the live profile, so a parent flipping the key
-      // hot-applies to the very next game with no relaunch, like every
-      // other checklist key.
-      window.JrGamesUI.open(result.game, { gameCamera: state.profile?.gameCamera === true });
+      // Tic-tac-toe's overlay (a board needs touch). Rock paper scissors no
+      // longer carries .game — it is the orb's voice game below.
+      window.JrGamesUI.open(result.game);
     }
+    // The voice RPS session (core/router.js): invite arms the camera, shoot
+    // morphs the orb and reads the hand, reveal morphs for an honor answer,
+    // stop tears everything down. The driver owns all of it.
+    if (result.rps && window.JrRpsVoice) window.JrRpsVoice.handle(result.rps);
     if (result.files) {
       state.searchResults = result.files;
       renderFileRows(result.files, true);
