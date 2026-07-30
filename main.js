@@ -963,6 +963,12 @@ function setupIpc() {
     const { game, outcome } = payload || {};
     return game && outcome ? gameScores.record(game, outcome) : gameScores.get();
   });
+  // The voice RPS round's camera report: the renderer read a hand, the
+  // router judges it against the throw it locked at "shoot". Fails closed
+  // in the router when no session/throw is pending.
+  ipcMain.handle('game:rps-outcome', (_event, payload) => router.rpsOutcome(String(payload?.shape || '')));
+  ipcMain.handle('game:rps-camera-failed', () => router.rpsCameraFailed());
+  ipcMain.handle('game:rps-expired', () => router.rpsExpire());
   // The games UI's trash-talk lines (core/game-lines.js), age-banded off the
   // same parentControls.age() the router uses for its own gameStart line
   // (core/router.js). gameLine() throws on an unknown occasion — caught here
@@ -1648,7 +1654,8 @@ app.whenReady().then(async () => {
   router = new CommandRouter({
     config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras,
     claude: claudeBridge, screen: screenReader, hands, defense,
-    profile: PROFILE, jrAge: () => (parentControls ? parentControls.age() : 11)
+    profile: PROFILE, jrAge: () => (parentControls ? parentControls.age() : 11),
+    scores: gameScores
   });
   // ScheduleStore/ScheduleService gate on PROFILE.schedules; NightShiftService
   // gates separately on PROFILE.nightShift (both are always off in JR, but

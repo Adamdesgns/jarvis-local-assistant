@@ -6,8 +6,16 @@ const { matchQuip } = require('./quips');
 const { buildDrivePlan, describePlan } = require('./screen-planner');
 const { STANDARD_PROFILE } = require('./variant');
 const { guardTopic, buildJrPromptRules } = require('./kid-mode');
-const { detectGame } = require('./games');
+const {
+  detectGame, detectShoot, detectThrowAnswer, detectStop, detectDifficulty,
+  rpsThrow, rpsJudge, rpsRevealPrefix
+} = require('./games');
 const { gameLine } = require('./game-lines');
+
+// A quiet rock-paper-scissors game expires on its own so the camera can
+// never sit armed on a kid who wandered off. Checked lazily on the next
+// utterance; the renderer runs a matching timer for the camera itself.
+const RPS_IDLE_MS = 5 * 60 * 1000;
 
 // An approved drive plan must be exactly what was shown on the card — frozen
 // all the way down before it is stored, so nothing between approval and
@@ -88,7 +96,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense, profile, jrAge }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense, profile, jrAge, scores }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -108,6 +116,129 @@ class CommandRouter {
     // explicitly hands it a jr profile.
     this.profile = profile || { ...STANDARD_PROFILE };
     this.jrAge = jrAge || (() => 11);
+    // The game-scores store (main.js's gameScores). Optional and null-safe:
+    // every existing caller omits it and only the RPS voice game reads it.
+    this.scores = scores || null;
+    // The live rock-paper-scissors session — the redesign's "next utterance
+    // answers me" state, the first of its kind in this router. Null when no
+    // game is on. The ORB plays on the main screen; there is no overlay.
+    this.rps = null;
+  }
+
+  // ---- rock paper scissors, the voice game --------------------------------
+  // The kid's chant is the clock. JARVIS's throw is LOCKED the moment the
+  // shoot phrase arrives — from history only, via rpsThrow, which cannot
+  // take the current throw (test-pinned) — before the renderer captures a
+  // single camera frame or, in honor mode, before the kid is even asked.
+  // The camera result is only ever compared against an already-decided shape.
+
+  // Consumes an utterance while a session is live, or returns null to let
+  // ordinary routing proceed (session intact). Narrow on purpose: only the
+  // shoot chant, an honor answer, a difficulty word, or a stop phrase.
+  #rpsTurn(text) {
+    if (!this.rps) return null;
+    if (Date.now() - this.rps.lastAt > RPS_IDLE_MS) {
+      // Expired quietly — the utterance that woke us routes normally.
+      this.rps = null;
+      return null;
+    }
+    this.rps.lastAt = Date.now();
+    if (detectStop(text)) {
+      const recap = this.#rpsRecap();
+      this.rps = null;
+      return this.#result(recap, 'jr-game', { rps: { phase: 'stop' }, success: true });
+    }
+    const difficulty = detectDifficulty(text);
+    if (difficulty) {
+      this.rps.difficulty = difficulty;
+      return this.#result(
+        difficulty === 'easy' ? 'Easy mode. I shall try to lose convincingly.'
+          : difficulty === 'hard' ? 'Hard mode. My condolences in advance.'
+            : 'Normal mode it is.',
+        'jr-game', { rps: { phase: 'difficulty', difficulty }, success: true }
+      );
+    }
+    if (this.rps.awaitingAnswer) {
+      const kidShape = detectThrowAnswer(text);
+      if (kidShape) {
+        const resolved = this.#rpsResolve(kidShape);
+        return this.#result(resolved.line, 'jr-game', {
+          rps: { phase: 'reveal', jarvisShape: resolved.jarvisShape, kidShape, outcome: resolved.outcome },
+          success: true
+        });
+      }
+    }
+    if (!this.rps.awaitingAnswer && detectShoot(text)) {
+      // Locked stays locked: a re-shoot after a missed camera read keeps the
+      // same throw — the kid may have shown a hand nothing recorded, and
+      // re-rolling after that would be a cheat vector in spirit even though
+      // rpsThrow structurally cannot see it.
+      if (!this.rps.pendingThrow) this.rps.pendingThrow = rpsThrow(this.rps.difficulty, this.rps.history);
+      const jarvisShape = this.rps.pendingThrow;
+      if (this.rps.camera) {
+        // Silent result: the renderer morphs the orb and reads the webcam,
+        // then reports through rpsOutcome() below, which speaks.
+        return this.#result('', 'jr-game', { rps: { phase: 'shoot', jarvisShape }, success: true });
+      }
+      // Honor mode: do NOT reveal the shape yet — the orb morphs at reveal,
+      // after the kid has committed, or the answer could be chosen to win.
+      this.rps.awaitingAnswer = true;
+      return this.#result('What did you throw?', 'jr-game', { rps: { phase: 'ask' }, success: true });
+    }
+    return null;
+  }
+
+  // Shared back half: judge, remember, score, speak. Caller owns phrasing
+  // of the result envelope; this owns the words.
+  #rpsResolve(kidShape) {
+    const jarvisShape = this.rps.pendingThrow;
+    const outcome = rpsJudge(kidShape, jarvisShape); // 'tie' | 'kid' | 'jarvis'
+    this.rps.history.push(kidShape);
+    this.rps.pendingThrow = null;
+    this.rps.awaitingAnswer = false;
+    this.rps.tally[outcome === 'tie' ? 'draw' : outcome] += 1;
+    let scores = null;
+    try { scores = this.scores ? this.scores.record('rps', outcome === 'tie' ? 'draw' : outcome) : null; } catch { /* scores are flavor, never fatal */ }
+    const occasion = outcome === 'kid' ? 'kidWins' : outcome === 'jarvis' ? 'jarvisWins' : 'draw';
+    let line = `${rpsRevealPrefix(kidShape, jarvisShape)} ${gameLine(occasion, { age: this.jrAge() })}`;
+    if (outcome === 'kid' && scores?.rps?.streak >= 3) {
+      line += ` ${gameLine('streak3', { age: this.jrAge() })}`;
+    }
+    return { line, outcome, jarvisShape };
+  }
+
+  #rpsRecap() {
+    const tally = this.rps.tally;
+    const played = tally.kid + tally.jarvis + tally.draw;
+    if (!played) return 'Good game — such as it was. Come back when your hand is warmed up.';
+    if (tally.kid > tally.jarvis) return `Good game. ${tally.kid} to ${tally.jarvis} — yours. I want a rematch, obviously.`;
+    if (tally.jarvis > tally.kid) return `Good game. ${tally.jarvis} to ${tally.kid} — mine. I shall be humble about it, briefly.`;
+    return `Good game. ${tally.kid} all — a diplomatic result.`;
+  }
+
+  // The camera path's report (main.js: game:rps-outcome). Fails closed: no
+  // session or no locked throw means nothing to judge and nothing recorded.
+  rpsOutcome(kidShape) {
+    if (!this.rps || !this.rps.pendingThrow) return { ok: false };
+    if (!['rock', 'paper', 'scissors'].includes(kidShape)) return { ok: false };
+    this.rps.lastAt = Date.now();
+    const resolved = this.#rpsResolve(kidShape);
+    return { ok: true, ...resolved };
+  }
+
+  // The renderer's camera failed to start (no device, permission, worker
+  // death). The session survives — the round degrades to honor mode.
+  rpsCameraFailed() {
+    if (this.rps) this.rps.camera = false;
+    return { ok: true };
+  }
+
+  // The renderer's idle timer fired (mirror of RPS_IDLE_MS): fold the game
+  // quietly. Returns whether a session actually ended.
+  rpsExpire() {
+    const had = Boolean(this.rps);
+    this.rps = null;
+    return { ok: true, ended: had };
   }
 
   // "Who's at the front door?" — match a camera by name, grab a fresh frame,
@@ -246,6 +377,17 @@ class CommandRouter {
       }
     }
 
+    // A live rock-paper-scissors session gets the utterance next — AFTER
+    // safety and the content guard (a kid saying something serious mid-game
+    // must reach the care rows, never be swallowed by game state), BEFORE
+    // everything else. Only the narrow game phrases are consumed; anything
+    // else routes normally with the session still standing.
+    const rpsTurn = this.#rpsTurn(text);
+    if (rpsTurn) {
+      this.#log(text, rpsTurn);
+      return rpsTurn;
+    }
+
     if (security.level === 'confirm') {
       if (!this.profile.power) {
         return this.#result('Power is a grown-up control on this build. Ask a parent.', 'jr-gate', { success: false });
@@ -290,6 +432,28 @@ class CommandRouter {
     if (this.profile.games && this.profile.contentLock) {
       const detectedGame = detectGame(text);
       if (detectedGame) {
+        // Tic-tac-toe keeps its overlay (a board needs touch). Rock paper
+        // scissors is the ORB's game now: no overlay, no chips — the router
+        // arms a session and the kid runs the countdown by voice (Adam's
+        // spec, live: "hey jarvis let's play rock paper scissors. He says
+        // ok are you ready. Then you say Jarvis rock, paper, scissor,
+        // shoot"). Re-asking mid-session just re-invites; score carries.
+        if (detectedGame.game === 'rps') {
+          const camera = this.profile.gameCamera === true;
+          this.rps = {
+            difficulty: this.rps?.difficulty || 'normal',
+            history: this.rps?.history || [],
+            tally: this.rps?.tally || { kid: 0, jarvis: 0, draw: 0 },
+            camera,
+            pendingThrow: null,
+            awaitingAnswer: false,
+            lastAt: Date.now()
+          };
+          const invite = `${gameLine('gameStart', { age: this.jrAge() })} Ready when you are — say: Jarvis, rock, paper, scissors, shoot.`;
+          const armResult = this.#result(invite, 'jr-game', { rps: { phase: 'invite', camera }, success: true });
+          this.#log(text, armResult);
+          return armResult;
+        }
         const gameResult = this.#result(
           gameLine('gameStart', { age: this.jrAge() }),
           'jr-game',

@@ -1,7 +1,10 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { TTT_LINES, tttWinner, tttBestMove, tttMove, DIFFICULTIES, RPS, rpsJudge, rpsThrow, detectGame } = require('../core/games');
+const {
+  TTT_LINES, tttWinner, tttBestMove, tttMove, DIFFICULTIES, RPS, rpsJudge, rpsThrow, detectGame,
+  detectShoot, detectThrowAnswer, detectStop, detectDifficulty, rpsRevealPrefix
+} = require('../core/games');
 
 const E = null;
 
@@ -160,6 +163,56 @@ test('the phrasings kids actually use open tic tac toe', () => {
   ]) {
     assert.deepEqual(detectGame(phrase), { game: 'ttt' }, phrase);
   }
+});
+
+// ---- the voice round (the orb plays; these fire only inside a live session) ----
+
+test('the shoot chant lands in every shape a kid or Whisper produces', () => {
+  for (const phrase of [
+    'shoot',
+    'Shoot!',
+    'rock paper scissors shoot',
+    'rock, paper, scissors, shoot!',
+    'rock-paper-scissors shoot',
+    'jarvis rock paper scissors shoot',
+    'Jarvis, rock, paper, scissor, shoot.',
+    'hey jarvis rock paper scissors shoot'
+  ]) {
+    assert.equal(detectShoot(phrase), true, phrase);
+  }
+  for (const phrase of ['rock paper scissors', 'shoot the ball', 'i want to shoot hoops', '']) {
+    assert.equal(detectShoot(phrase), false, phrase || '(empty)');
+  }
+});
+
+test('honor-mode answers parse to a shape, sloppy phrasings included', () => {
+  assert.equal(detectThrowAnswer('rock'), 'rock');
+  assert.equal(detectThrowAnswer('Paper!'), 'paper');
+  assert.equal(detectThrowAnswer('i threw scissors'), 'scissors');
+  assert.equal(detectThrowAnswer('jarvis i picked a rock'), 'rock');
+  assert.equal(detectThrowAnswer('scissor'), 'scissors'); // singular normalizes
+  assert.equal(detectThrowAnswer('i threw a shoe'), null);
+  assert.equal(detectThrowAnswer('rock and roll'), null);
+});
+
+test('kids end games in kid ways', () => {
+  for (const phrase of ['stop', 'stop playing', "we're done", 'that’s enough', 'game over', 'jarvis stop the game']) {
+    assert.equal(detectStop(phrase), true, phrase);
+  }
+  assert.equal(detectStop('stop copying me'), false);
+});
+
+test('difficulty by voice, no tabs anywhere', () => {
+  assert.equal(detectDifficulty('easy mode'), 'easy');
+  assert.equal(detectDifficulty('jarvis make it hard'), 'hard');
+  assert.equal(detectDifficulty('normal'), 'normal');
+  assert.equal(detectDifficulty('this is hard'), null);
+});
+
+test('the reveal prefix names the shapes before the trash talk', () => {
+  assert.equal(rpsRevealPrefix('rock', 'paper'), 'Paper beats rock.');
+  assert.equal(rpsRevealPrefix('scissors', 'paper'), 'Scissors beats paper.');
+  assert.equal(rpsRevealPrefix('rock', 'rock'), 'Both rock.');
 });
 
 test('ordinary sentences that merely mention a game still fall through to the model', () => {

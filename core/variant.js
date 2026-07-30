@@ -241,7 +241,11 @@ const FEATURE_IPC = Object.freeze({
   // harmless in the standard build, same as MemoryStore/TaskStore), so this
   // is the only place "games off" actually withholds anything in JR: the
   // router's own branch (core/router.js) never calls detectGame either.
-  games: ['game:move', 'game:score', 'game:line'],
+  // game:rps-outcome/camera-failed/expired belong to the voice RPS round —
+  // outcome fails closed in the router (no session or no locked throw =
+  // nothing judged), so the widest thing this admits is telling the router
+  // a shape it then compares against an already-locked throw.
+  games: ['game:move', 'game:score', 'game:line', 'game:rps-outcome', 'game:rps-camera-failed', 'game:rps-expired'],
   // The grown-up-power checklist keys. defense:zones stays OUT — county
   // configuration is settings work, admin surface only.
   defense: ['defense:status', 'defense:enter', 'defense:exit', 'defense:wave-off'],

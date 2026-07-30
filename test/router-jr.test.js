@@ -267,10 +267,16 @@ test('games ON: narrow "play tic tac toe" / "play rock paper scissors" phrasings
     assert.equal(result.game, 'ttt', phrase);
     assert.equal(result.success, true, phrase);
   }
+  // RPS no longer carries .game — that key opened the overlay, and the
+  // 2026-07-30 redesign made rock paper scissors the ORB's voice game
+  // instead (Adam: "That is not the orb. I never wanted to leave the main
+  // screen"). The rps phrases now arm a session; test/router-rps.test.js
+  // owns the full machine.
   for (const phrase of rps) {
     const result = await router.handle(phrase);
     assert.equal(result.source, 'jr-game', phrase);
-    assert.equal(result.game, 'rps', phrase);
+    assert.equal('game' in result, false, `${phrase}: no overlay key`);
+    assert.equal(result.rps?.phase, 'invite', phrase);
     assert.equal(result.success, true, phrase);
   }
 });

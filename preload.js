@@ -63,6 +63,10 @@ contextBridge.exposeInMainWorld('jarvis', {
   gameMove: (payload) => ipcRenderer.invoke('game:move', payload),
   gameScore: (payload) => ipcRenderer.invoke('game:score', payload),
   gameLine: (occasion) => ipcRenderer.invoke('game:line', { occasion }),
+  // The voice RPS round (the orb plays; no overlay). Same 'games' gate.
+  gameRpsOutcome: (shape) => ipcRenderer.invoke('game:rps-outcome', { shape }),
+  gameRpsCameraFailed: () => ipcRenderer.invoke('game:rps-camera-failed'),
+  gameRpsExpired: () => ipcRenderer.invoke('game:rps-expired'),
   cameras: {
     bootstrap: () => ipcRenderer.invoke('cameras:bootstrap'),
     addRtsp: (payload) => ipcRenderer.invoke('cameras:add-rtsp', payload),

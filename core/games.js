@@ -124,8 +124,62 @@ function gameTriggers(name) {
     new RegExp(`^${name}${GAME_TAIL}$`, 'i')
   ]);
 }
+const RPS_NAME = 'rock[-,\\s]*paper[-,\\s]*scissors?';
 const TTT_PATTERNS = gameTriggers('tic[- ]?tac[- ]?toe');
-const RPS_PATTERNS = gameTriggers('rock[-,\\s]*paper[-,\\s]*scissors?');
+const RPS_PATTERNS = gameTriggers(RPS_NAME);
+
+// ---- the voice round (2026-07-30 redesign: the orb plays, no overlay) ----
+// These are only ever consulted while a live RPS session exists in the
+// router, so a bare "shoot" or "rock" in ordinary conversation never reaches
+// them. All tolerate a leading wake word (transcripts keep it — see
+// GAME_LEAD's note) and Whisper's hyphens/commas/punctuation.
+
+// "Jarvis rock, paper, scissors, shoot" — the kid runs the countdown, the
+// word "shoot" is the moment. The chant part is optional: a kid who just
+// says "shoot" (or whose transcript only caught the tail) still throws.
+const SHOOT_PATTERN = new RegExp(
+  `^(?:(?:hey )?jarvis[,\\s]+)?(?:${RPS_NAME}[-,\\s]+)?shoot[\\s.!?]*$`, 'i'
+);
+
+// Honor mode (no camera): "what did you throw?" → "rock" / "I threw paper".
+const THROW_ANSWER_PATTERN = /^(?:(?:hey )?jarvis[,\s]+)?(?:i\s+(?:threw|did|picked|chose|got|had)\s+)?(?:a\s+)?(rock|paper|scissors?)[\s.!?]*$/i;
+
+// Ending the game, in the ways kids actually end things.
+const STOP_PATTERN = /^(?:(?:hey )?jarvis[,\s]+)?(?:stop(?:\s+(?:playing|the game))?|we(?:'|’)?re done|i(?:'|’)?m done|that(?:'|’)?s enough|end (?:the )?game|quit(?:\s+the game)?|no more|game over)[\s.!?]*$/i;
+
+// Difficulty without tabs: "easy mode" / "make it hard" — in-session only.
+const DIFFICULTY_PATTERN = /^(?:(?:hey )?jarvis[,\s]+)?(?:(?:set|make) (?:it|the game) )?(easy|normal|hard)(?:\s+mode)?(?:\s+please)?[\s.!?]*$/i;
+
+function detectShoot(text) {
+  return SHOOT_PATTERN.test(String(text || '').trim());
+}
+
+function detectThrowAnswer(text) {
+  const match = String(text || '').trim().match(THROW_ANSWER_PATTERN);
+  if (!match) return null;
+  const shape = match[1].toLowerCase();
+  return shape === 'scissor' ? 'scissors' : shape;
+}
+
+function detectStop(text) {
+  return STOP_PATTERN.test(String(text || '').trim());
+}
+
+function detectDifficulty(text) {
+  const match = String(text || '').trim().match(DIFFICULTY_PATTERN);
+  return match ? match[1].toLowerCase() : null;
+}
+
+// The spoken outcome opens by naming the shapes — showmanship AND clarity,
+// since the kid can't see a chip UI any more: "Paper beats rock." then the
+// table's trash talk takes over.
+function rpsRevealPrefix(kidShape, jarvisShape) {
+  if (kidShape === jarvisShape) return `Both ${kidShape}.`;
+  const kidWins = BEATS[kidShape] === jarvisShape;
+  const winner = kidWins ? kidShape : jarvisShape;
+  const loser = kidWins ? jarvisShape : kidShape;
+  return `${winner.charAt(0).toUpperCase()}${winner.slice(1)} beats ${loser}.`;
+}
 
 function detectGame(text) {
   const trimmed = String(text || '').trim();
@@ -134,4 +188,7 @@ function detectGame(text) {
   return null;
 }
 
-module.exports = { DIFFICULTIES, TTT_LINES, tttWinner, tttBestMove, tttMove, RPS, rpsJudge, rpsThrow, detectGame };
+module.exports = {
+  DIFFICULTIES, TTT_LINES, tttWinner, tttBestMove, tttMove, RPS, rpsJudge, rpsThrow, detectGame,
+  detectShoot, detectThrowAnswer, detectStop, detectDifficulty, rpsRevealPrefix
+};
