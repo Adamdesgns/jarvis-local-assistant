@@ -101,18 +101,25 @@ function rpsThrow(difficulty, history = [], rng = Math.random) {
   return uniform();
 }
 
-// Narrow, anchored patterns — deliberately strict so an ordinary sentence
-// that merely mentions the game ("my brother won't play tic tac toe with
-// me") never opens a board. The router only ever parses; it never decides
-// how the games are played.
-const TTT_PATTERNS = Object.freeze([
-  /^(?:let'?s )?play (?:a game of )?tic[- ]?tac[- ]?toe$/i,
-  /^tic[- ]?tac[- ]?toe$/i
-]);
-const RPS_PATTERNS = Object.freeze([
-  /^(?:let'?s )?play rock[,\s]*paper[,\s]*scissors$/i,
-  /^rock paper scissors$/i
-]);
+// Anchored on both ends, deliberately — an ordinary sentence that merely
+// mentions the game ("we played rock paper scissors at school") must keep
+// falling through to the model as small talk (see the router's games
+// branch). The original patterns were SO strict they were the bug Adam
+// reported as "I could never get rock paper scissors to work": "play rock
+// paper scissors with me", "can we play rock paper scissors", and even a
+// trailing "!" all failed to match, and the miss is silent by design. The
+// fix widens the lead-in and tail to the phrasings kids actually say while
+// keeping both anchors, so mid-sentence mentions still never open a board.
+const GAME_LEAD = "(?:(?:hey )?jarvis[,\\s]+)?(?:please[,\\s]+)?(?:(?:can|could|will|would) (?:we|i|you)[,\\s]+)?(?:(?:do you )?(?:want to|wanna)[,\\s]+)?(?:let'?s[,\\s]+|shall we[,\\s]+)?";
+const GAME_TAIL = "(?:[,\\s]+(?:with me|together|again|now|please))*[\\s.!?]*";
+function gameTriggers(name) {
+  return Object.freeze([
+    new RegExp(`^${GAME_LEAD}play (?:a (?:game|round) of )?${name}${GAME_TAIL}$`, 'i'),
+    new RegExp(`^${name}${GAME_TAIL}$`, 'i')
+  ]);
+}
+const TTT_PATTERNS = gameTriggers('tic[- ]?tac[- ]?toe');
+const RPS_PATTERNS = gameTriggers('rock[,\\s]*paper[,\\s]*scissors?');
 
 function detectGame(text) {
   const trimmed = String(text || '').trim();

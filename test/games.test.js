@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { TTT_LINES, tttWinner, tttBestMove, tttMove, DIFFICULTIES, RPS, rpsJudge, rpsThrow } = require('../core/games');
+const { TTT_LINES, tttWinner, tttBestMove, tttMove, DIFFICULTIES, RPS, rpsJudge, rpsThrow, detectGame } = require('../core/games');
 
 const E = null;
 
@@ -107,4 +107,62 @@ test('normal with no history is roughly uniform', () => {
   const counts = { rock: 0, paper: 0, scissors: 0 };
   for (let i = 0; i < 900; i++) counts[rpsThrow('normal', [], rng)] += 1;
   for (const shape of RPS) assert.ok(counts[shape] > 200, `${shape}: ${counts[shape]}/900`);
+});
+
+// ---- triggers (2026-07-30). The old patterns were so strict that "play
+// rock paper scissors with me" silently opened nothing — the router lets an
+// unmatched phrase fall through to small talk by design, so the game just
+// never started and JARVIS chatted back instead. That was Adam's "I could
+// never get rock paper scissors to work". Every phrasing here is one a kid
+// actually said or plausibly says. ----
+
+test('the phrasings kids actually use open rock paper scissors', () => {
+  for (const phrase of [
+    'play rock paper scissors',
+    'play rock paper scissors with me',
+    'play rock, paper, scissors!',
+    'can we play rock paper scissors',
+    'can you play rock paper scissors with me?',
+    'wanna play rock paper scissors',
+    'do you want to play rock paper scissors',
+    "let's play rock paper scissors!",
+    'jarvis, play rock paper scissors',
+    'hey jarvis play rock paper scissors please',
+    'play a round of rock paper scissors',
+    'play rock paper scissors again',
+    'rock paper scissors',
+    'rock paper scissors!',
+    'Rock, paper, scissors.'
+  ]) {
+    assert.deepEqual(detectGame(phrase), { game: 'rps' }, phrase);
+  }
+});
+
+test('the phrasings kids actually use open tic tac toe', () => {
+  for (const phrase of [
+    'play tic tac toe',
+    'play tic-tac-toe with me',
+    'can we play tic tac toe?',
+    "let's play a game of tic tac toe",
+    'wanna play tic tac toe',
+    'tic tac toe'
+  ]) {
+    assert.deepEqual(detectGame(phrase), { game: 'ttt' }, phrase);
+  }
+});
+
+test('ordinary sentences that merely mention a game still fall through to the model', () => {
+  for (const phrase of [
+    'i hate rock paper scissors',
+    'we played rock paper scissors at school today',
+    'what is rock paper scissors',
+    'rock paper scissors is a game people play',
+    'who invented rock paper scissors?',
+    "my brother won't play tic tac toe with me",
+    'tell me about tic tac toe strategy',
+    'i want to play outside',
+    ''
+  ]) {
+    assert.equal(detectGame(phrase), null, phrase || '(empty)');
+  }
 });
