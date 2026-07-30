@@ -61,7 +61,9 @@
       "INSTALL-OLLAMA.url",
       "DISCLAIMER.txt",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!node_modules/ffmpeg-for-homebridge/ffmpeg.exe",
+      "!node_modules/ffmpeg-for-homebridge/.build/**"
     ],
     "win": {
       "target": "nsis",

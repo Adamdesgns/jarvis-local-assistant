@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Removed — 223 MB of ffmpeg that never did anything
+- The installer no longer carries `ffmpeg-for-homebridge`'s binary. It arrived
+  as a transitive dependency (`ring-client-api` → `@homebridge/camera-utils` →
+  `ffmpeg-for-homebridge`) and was packed twice, once as `ffmpeg.exe` and once
+  as its own download cache — **223 MB for something no line of JARVIS ever
+  called.** The installer drops from 282 MB to 209 MB.
+- **Cameras are unaffected**, because none of them used it: local and Nest
+  cameras hand a plain `rtsp://` URL to `go2rtc.exe`, and Ring's live view
+  sends the renderer's WebRTC offer straight to Ring's cloud with no local
+  helper at all. `ring-client-api`'s ffmpeg features (`streamVideo`,
+  `recordToFile`) are the ones that need it, and JARVIS calls neither — it
+  never even calls `setFfmpegPath`.
+- **The binary goes, the JS module stays.** `@homebridge/camera-utils` does a
+  static top-level `import` of `ffmpeg-for-homebridge`, so deleting the whole
+  package would break that import and take Ring down with it. The package's own
+  `index.js` checks whether the binary exists and exports `undefined` when it
+  doesn't, and camera-utils then falls back to `'ffmpeg'` on PATH — a missing
+  binary is an anticipated state, not a crash. Verified by renaming the binary
+  away and re-running everything: 798/798 tests, 25/25 camera tests, and a load
+  probe across camera-utils, ring-client-api, and JARVIS's own Ring driver.
+- **Why it matters beyond size:** the binary is built `--enable-gpl
+  --enable-nonfree` and declares no licence. FFmpeg's own documentation says
+  nonfree builds are unredistributable, so shipping it in a public download was
+  never legal regardless of GPL compliance. Harmless on your own machine;
+  a blocker for any published release.
+- Not yet confirmed against real hardware: a live Ring stream. The code path is
+  proven, the account test is Adam's.
+
 ### Added — THE BROWSER (stage 1): surf inside JARVIS
 - A new **Browser** module (Modules → Browser): tabs (up to five), address bar,
   back/forward/reload, dressed in your skin with the active-tab underline in
