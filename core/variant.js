@@ -145,6 +145,32 @@ function jrUserDataPath(appDataDir) {
   return path.join(String(appDataDir || ''), 'jarvis-jr');
 }
 
+// The grown-up build's voice folder. JR's DATA is isolated (that separation is
+// load-bearing — see jrUserDataPath), but the Python speech engine underneath
+// is a ~500 MB READ-ONLY runtime, not user data. Making every JR install
+// download a second copy of an engine already sitting on the machine is pure
+// waste, and in practice it meant the wake word silently did not work in JR at
+// all: a fresh JR profile has no engine and no obvious way to notice.
+function standardVoiceRoot(appDataDir) {
+  return path.join(String(appDataDir || ''), 'jarvis-local-assistant', 'voice');
+}
+
+// Which folder holds the python interpreter JR should RUN. Its own always
+// wins, so a Repair/Install into JR's own folder immediately takes precedence
+// and a shared engine can never override a local one. Only when JR has no
+// engine of its own does it borrow the grown-up build's. With neither present
+// it stays on its own root, so the installer puts the engine where it belongs.
+//
+// NOTE this is the ENGINE root only. main.js keeps the voice WORKING directory
+// (logs, the service's cwd, anything written) on JR's own userData — borrowing
+// an interpreter must never turn into JR writing inside the grown-up folder.
+function resolveVoiceEngineRoot({ ownRoot, sharedRoot, hasEngine } = {}) {
+  const check = typeof hasEngine === 'function' ? hasEngine : () => false;
+  if (check(ownRoot)) return ownRoot;
+  if (sharedRoot && check(sharedRoot)) return sharedRoot;
+  return ownRoot;
+}
+
 // Base channels: reachable in JR at every checklist setting. None of these
 // grant a capability the parent checklist gates — they are the app's own
 // pulse (bootstrap, the command loop, voice in/out, memory, cosmetic
@@ -345,7 +371,8 @@ function moduleAllowedInProfile(moduleName, profile) {
 const api = {
   VARIANTS, CONTROL_KEYS, CONTROL_LABELS, DEFAULT_CONTROLS, STANDARD_PROFILE,
   resolveVariant, isJr, normalizeControls, profileFor,
-  jrUserDataPath, jrIpcAllowlist, jrChannelAllowed, jrSettingsPatch,
+  jrUserDataPath, standardVoiceRoot, resolveVoiceEngineRoot,
+  jrIpcAllowlist, jrChannelAllowed, jrSettingsPatch,
   JR_IPC, FEATURE_IPC, JR_SETTINGS_ALLOW, filterJrSettingsPatch,
   MODULE_PROFILE_KEY, moduleAllowedInProfile
 };

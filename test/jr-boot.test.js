@@ -320,3 +320,39 @@ test('preload.js: the parent surface is lock/session/profile-events, no PIN plum
   assert.ok(/jrParentSession:/.test(PRELOAD));
   assert.ok(/onJrProfile:/.test(PRELOAD));
 });
+
+// ---- Shared voice engine -------------------------------------------------
+// JR gets its own userData (that isolation is load-bearing), but the Python
+// speech engine is a 500 MB READ-ONLY runtime, not user data. Making every JR
+// install download a second copy of the engine the grown-up build already has
+// is waste — and on Adam's PC it meant the wake word simply did not work.
+test('voice engine: JR uses its own engine when it has one', () => {
+  const { resolveVoiceEngineRoot } = require('../core/variant');
+  const has = (p) => p === 'JRROOT';
+  assert.equal(resolveVoiceEngineRoot({ ownRoot: 'JRROOT', sharedRoot: 'STDROOT', hasEngine: has }), 'JRROOT');
+});
+
+test('voice engine: JR falls back to the grown-up build engine rather than nothing', () => {
+  const { resolveVoiceEngineRoot } = require('../core/variant');
+  const has = (p) => p === 'STDROOT';
+  assert.equal(resolveVoiceEngineRoot({ ownRoot: 'JRROOT', sharedRoot: 'STDROOT', hasEngine: has }), 'STDROOT');
+});
+
+test('voice engine: with neither installed it stays on its OWN root, so Repair installs locally', () => {
+  const { resolveVoiceEngineRoot } = require('../core/variant');
+  assert.equal(resolveVoiceEngineRoot({ ownRoot: 'JRROOT', sharedRoot: 'STDROOT', hasEngine: () => false }), 'JRROOT');
+});
+
+test('voice engine: own root always wins — a shared engine never overrides a local one', () => {
+  const { resolveVoiceEngineRoot } = require('../core/variant');
+  assert.equal(resolveVoiceEngineRoot({ ownRoot: 'JRROOT', sharedRoot: 'STDROOT', hasEngine: () => true }), 'JRROOT');
+  // No shared root offered (the standard build): own root, always.
+  assert.equal(resolveVoiceEngineRoot({ ownRoot: 'OWN', sharedRoot: null, hasEngine: () => false }), 'OWN');
+});
+
+test('voice engine: the shared root points at the grown-up build voice folder', () => {
+  const { standardVoiceRoot } = require('../core/variant');
+  const p = standardVoiceRoot('C:\Users\kid\AppData\Roaming');
+  assert.match(p, /jarvis-local-assistant/);
+  assert.match(p, /voice$/);
+});

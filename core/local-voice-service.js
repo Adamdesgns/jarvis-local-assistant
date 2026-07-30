@@ -27,8 +27,15 @@ function shouldRestartVoice(previous = {}, updated = {}) {
 }
 
 class LocalVoiceService {
-  constructor({ voiceRoot, scriptPath, config, emit }) {
+  // voiceRoot is where the service WORKS (its cwd, anything it writes).
+  // engineRoot is where the python interpreter LIVES, and defaults to the
+  // same place. They differ only in JARVIS JR, which may borrow the grown-up
+  // build's read-only engine (core/variant.js resolveVoiceEngineRoot) rather
+  // than download a second 500 MB copy — while still writing only into its
+  // own userData.
+  constructor({ voiceRoot, engineRoot, scriptPath, config, emit }) {
     this.voiceRoot = voiceRoot;
+    this.engineRoot = engineRoot || voiceRoot;
     this.scriptPath = scriptPath;
     this.config = config;
     this.emit = emit || (() => {});
@@ -40,8 +47,8 @@ class LocalVoiceService {
 
   pythonPath() {
     return process.platform === 'win32'
-      ? path.join(this.voiceRoot, '.venv', 'Scripts', 'python.exe')
-      : path.join(this.voiceRoot, '.venv', 'bin', 'python');
+      ? path.join(this.engineRoot, '.venv', 'Scripts', 'python.exe')
+      : path.join(this.engineRoot, '.venv', 'bin', 'python');
   }
 
   getStatus() {
@@ -55,6 +62,12 @@ class LocalVoiceService {
     }
     const settings = this.config.getSettings();
     let child;
+    // The working directory has to exist before spawn, or Windows fails the
+    // whole launch with ENOENT and the only symptom is a wake word that never
+    // wakes. It is normally created by the installer — but when engineRoot is
+    // borrowed (JARVIS JR using the grown-up build's engine) nothing has ever
+    // written to this build's own voice folder, so it may not be there yet.
+    try { fs.mkdirSync(this.voiceRoot, { recursive: true }); } catch {}
     try {
       child = spawn(this.pythonPath(), ['-u', this.scriptPath, '--service'], {
         cwd: this.voiceRoot,

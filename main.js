@@ -7,7 +7,7 @@ const {
   Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
-const { resolveVariant, isJr, profileFor, jrUserDataPath, jrIpcAllowlist, jrChannelAllowed, jrSettingsPatch } = require('./core/variant');
+const { resolveVariant, isJr, profileFor, jrUserDataPath, standardVoiceRoot, resolveVoiceEngineRoot, jrIpcAllowlist, jrChannelAllowed, jrSettingsPatch } = require('./core/variant');
 const { ParentControls } = require('./core/parent-controls');
 const { ParentSession } = require('./core/parent-session');
 const { buildJrPromptRules } = require('./core/kid-mode');
@@ -484,6 +484,24 @@ function packagedScript(name) {
 
 function voiceDataRoot() {
   return path.join(app.getPath('userData'), 'voice');
+}
+
+// Where the python interpreter lives, which is NOT always where the voice
+// service works. In the standard build they are the same folder. In JR they
+// differ when JR has no engine of its own: it borrows the grown-up build's
+// read-only runtime instead of making every family download a second 500 MB
+// copy — which is why the wake word did nothing in a fresh JR profile. Its
+// own engine always wins, so Install/Repair (which installs into JR's own
+// voiceDataRoot) takes over the moment it finishes. Nothing is ever written
+// to the borrowed folder: voiceRoot, not this, is the service's cwd.
+function voiceEngineRoot() {
+  const ownRoot = voiceDataRoot();
+  if (!JR) return ownRoot;
+  return resolveVoiceEngineRoot({
+    ownRoot,
+    sharedRoot: standardVoiceRoot(app.getPath('appData')),
+    hasEngine: (root) => fs.existsSync(path.join(root, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python'))
+  });
 }
 
 let voiceSetupChild = null;
@@ -1670,6 +1688,7 @@ app.whenReady().then(async () => {
   });
   localVoice = new LocalVoiceService({
     voiceRoot: voiceDataRoot(),
+    engineRoot: voiceEngineRoot(),
     scriptPath: packagedScript('local_voice.py'),
     config,
     emit: sendEverywhere
