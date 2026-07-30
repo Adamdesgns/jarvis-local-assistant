@@ -659,11 +659,16 @@ class CommandRouter {
         // root before anything is touched. Checked as a pre-flight pass over
         // the WHOLE routine, before any tools.openPath call, so one bad entry
         // in settings.json can't be used to smuggle a peek at an arbitrary
-        // folder alongside the routine's legitimate ones. Only computed once
-        // the apps/files gates above have already passed — hasFolders &&
-        // !profile.files refuses first, so a files-off build never touches
-        // this.documents at all (matches the "files off never reaches a
-        // service" invariant every other JR gate holds to).
+        // folder alongside the routine's legitimate ones.
+        //
+        // `this.documents` is always constructed now (JR builds what the
+        // standard build builds — what the KID may reach is profile, not what
+        // EXISTS), so this check runs for every files-on routine rather than
+        // being skipped when the documents checklist item happened to be off.
+        // The `&& this.documents` guard and the refusal below stay as the
+        // fail-closed path for any caller that injects no document service:
+        // if the roots cannot be verified, the routine is refused, never run
+        // unchecked.
         const badTarget = (hasFolders && this.profile.files && this.profile.contentLock && this.documents)
           ? (routine.folders || [])
               .map((folder) => (settings.projects || {})[folder] || folder)
