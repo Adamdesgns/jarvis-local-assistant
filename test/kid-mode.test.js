@@ -193,6 +193,16 @@ test('the presenter voice is gone: no tone, length, or vocabulary shaping surviv
   }
 });
 
+test('JR is a gaming expert — with an honesty rule so the small model cannot invent recipes', () => {
+  const rules = buildJrPromptRules({ age: 10, kidName: 'Kid' });
+  assert.match(rules, /Minecraft/);
+  assert.match(rules, /Roblox/);
+  assert.match(rules, /never invent a crafting recipe/i);
+  assert.match(rules, /not certain.*say so/i);
+  // Still JARVIS: the gaming line must not turn him into a hype channel.
+  assert.doesNotMatch(rules, /hype|awesome sauce|so cool/i);
+});
+
 test('the rules still carry the name, the clamped age, and the full safety block', () => {
   const rules = buildJrPromptRules({ age: 25, kidName: 'Mia' });
   assert.match(rules, /Mia/);
