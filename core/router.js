@@ -11,11 +11,17 @@ const {
   rpsThrow, rpsJudge, rpsRevealPrefix
 } = require('./games');
 const { gameLine } = require('./game-lines');
+const {
+  detectAdhdOn, detectAdhdOff, detectStepNav, splitSteps, stepLine, restLine
+} = require('./adhd-mode');
 
 // A quiet rock-paper-scissors game expires on its own so the camera can
 // never sit armed on a kid who wandered off. Checked lazily on the next
 // utterance; the renderer runs a matching timer for the camera itself.
 const RPS_IDLE_MS = 5 * 60 * 1000;
+// A half-walked set of steps forgets itself after ten quiet minutes, so a
+// stale "next" much later starts nothing.
+const ADHD_STEP_IDLE_MS = 10 * 60 * 1000;
 
 // An approved drive plan must be exactly what was shown on the card — frozen
 // all the way down before it is stored, so nothing between approval and
@@ -96,7 +102,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense, profile, jrAge, scores }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense, profile, jrAge, scores, persistAdhdMode }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -123,6 +129,16 @@ class CommandRouter {
     // answers me" state, the first of its kind in this router. Null when no
     // game is on. The ORB plays on the main screen; there is no overlay.
     this.rps = null;
+    // ADHD (simple-steps) mode's half-walked list: { list, index, lastAt } or
+    // null. The mode ON/OFF itself is a persisted setting (settings.adhdMode);
+    // this is just the position within one instruction being walked.
+    this.steps = null;
+    // The router's config is the GATED READ view (main.js: gatedConfig = {
+    // getSettings }), which deliberately has no write path. ADHD mode is the
+    // one setting the router flips, so main.js hands it this narrow writer —
+    // least privilege, same pattern as scores/jrAge. Null-safe: omitted in the
+    // standard-shape tests that never toggle the mode.
+    this.persistAdhdMode = typeof persistAdhdMode === 'function' ? persistAdhdMode : null;
   }
 
   // ---- rock paper scissors, the voice game --------------------------------
@@ -239,6 +255,50 @@ class CommandRouter {
     const had = Boolean(this.rps);
     this.rps = null;
     return { ok: true, ended: had };
+  }
+
+  // ---- ADHD (simple-steps) mode --------------------------------------------
+  // The toggle and the step-walk in one place. Returns a result to send, or
+  // null to let ordinary routing proceed. The mode ON/OFF is a persisted
+  // setting; `this.steps` is only the position within one walk.
+  #adhdTurn(text) {
+    const settings = this.config.getSettings();
+    // The toggle answers first, and works even mid-walk — "normal mode" both
+    // turns the mode off AND abandons any half-walked steps.
+    if (detectAdhdOff(text)) {
+      this.steps = null;
+      if (settings.adhdMode && this.persistAdhdMode) this.persistAdhdMode(false);
+      return this.#result('Back to normal — I’ll give you the whole answer at once.', 'local-core', { adhd: 'off', success: true });
+    }
+    if (detectAdhdOn(text)) {
+      if (!settings.adhdMode && this.persistAdhdMode) this.persistAdhdMode(true);
+      return this.#result('Simple-steps mode on. I’ll take it one step at a time — say “next” when you’re ready for each one.', 'local-core', { adhd: 'on', success: true });
+    }
+    // Step navigation only while a walk is live and fresh.
+    if (!this.steps) return null;
+    if (Date.now() - this.steps.lastAt > ADHD_STEP_IDLE_MS) { this.steps = null; return null; }
+    const nav = detectStepNav(text);
+    if (!nav) return null; // an unrelated question mid-walk — route it, the walk waits
+    this.steps.lastAt = Date.now();
+    if (nav === 'stop') {
+      this.steps = null;
+      return this.#result('Okay, we’ll stop there.', 'local-core', { adhd: 'stop', success: true });
+    }
+    if (nav === 'rest') {
+      const line = restLine(this.steps.list, this.steps.index);
+      this.steps = null;
+      return this.#result(line, 'local-core', { adhd: 'rest', success: true });
+    }
+    if (nav === 'repeat') {
+      return this.#result(stepLine(this.steps.list, this.steps.index), 'local-core', { adhd: 'repeat', success: true });
+    }
+    // 'next'
+    if (this.steps.index >= this.steps.list.length - 1) {
+      this.steps = null;
+      return this.#result('That’s the last one — you did it. Anything else?', 'local-core', { adhd: 'done', success: true });
+    }
+    this.steps.index += 1;
+    return this.#result(stepLine(this.steps.list, this.steps.index), 'local-core', { adhd: 'step', success: true });
   }
 
   // "Who's at the front door?" — match a camera by name, grab a fresh frame,
@@ -386,6 +446,16 @@ class CommandRouter {
     if (rpsTurn) {
       this.#log(text, rpsTurn);
       return rpsTurn;
+    }
+
+    // ADHD mode: the toggle ("adhd mode" / "normal mode") and step navigation
+    // ("next" / "again" / "stop" / "the rest") while a set of steps is being
+    // walked. Same placement rationale as the game — safety and the guard
+    // have already had the utterance.
+    const adhdTurn = this.#adhdTurn(text);
+    if (adhdTurn) {
+      this.#log(text, adhdTurn);
+      return adhdTurn;
     }
 
     if (security.level === 'confirm') {
@@ -1025,14 +1095,28 @@ class CommandRouter {
       // text and the profile through context so ai-service can splice them
       // in; see task-5-report.md and Task 7. #aiContext (below) is the one
       // place that computes both, shared by every this.ai. call site.
-      const aiResult = await this.ai.reply(text, this.#aiContext({ memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true }));
+      // ADHD mode reformats the answer into one spoken step at a time, so it
+      // must NOT stream: a streamed multi-step answer would spoil the whole
+      // list on screen before the walk begins. Off, the live stream is intact.
+      const adhd = settings.adhdMode === true;
+      const streamCbs = adhd ? {} : { onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep };
+      const aiResult = await this.ai.reply(text, this.#aiContext({ memories, project, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true, ...streamCbs }));
       const extra = { detail: aiResult.detail, success: aiResult.ok };
       // When the brain used a tool that changed local state, hand the fresh
       // list back so the modules redraw instead of showing stale data.
       const usedTools = aiResult.usedTools || [];
       if (usedTools.includes('add_task')) extra.tasks = this.tasks.list({ status: 'open' });
       if (usedTools.includes('remember_note')) extra.memories = this.memory.list(30);
-      result = this.#result(aiResult.text, aiResult.source, extra);
+      // In ADHD mode, a multi-step answer becomes a walk: store the list and
+      // speak only step one. A one-or-two-sentence answer (a fact, a
+      // greeting) has no numbered list, so it just speaks as-is.
+      const steps = adhd ? splitSteps(aiResult.text) : [];
+      if (steps.length >= 2) {
+        this.steps = { list: steps, index: 0, lastAt: Date.now() };
+        result = this.#result(stepLine(steps, 0), aiResult.source, { ...extra, adhd: 'start' });
+      } else {
+        result = this.#result(aiResult.text, aiResult.source, extra);
+      }
     }
     this.#log(text, result);
     return result;

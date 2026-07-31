@@ -1655,7 +1655,11 @@ app.whenReady().then(async () => {
     config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras,
     claude: claudeBridge, screen: screenReader, hands, defense,
     profile: PROFILE, jrAge: () => (parentControls ? parentControls.age() : 11),
-    scores: gameScores
+    scores: gameScores,
+    // The router's config is the gated READ view; ADHD mode is the one setting
+    // it flips, so hand it a narrow writer against the REAL store. updateSettings
+    // has its own allowlist, so this can only ever persist adhdMode.
+    persistAdhdMode: (on) => { try { config.updateSettings({ adhdMode: on === true }); } catch { /* never let a toggle crash a turn */ } }
   });
   // ScheduleStore/ScheduleService gate on PROFILE.schedules; NightShiftService
   // gates separately on PROFILE.nightShift (both are always off in JR, but

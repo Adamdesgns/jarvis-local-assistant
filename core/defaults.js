@@ -146,7 +146,11 @@ const DEFAULT_SETTINGS = {
   routines: {
     'start work': { apps: ['chrome'], folders: ['anvil'] }
   },
-  personality: 'Witty, composed, loyal, and lightly sarcastic. Reads like a sharp human assistant with dry humor, never like a chatbot or movie script. Casual greetings get casual answers before any offer to help.'
+  personality: 'Witty, composed, loyal, and lightly sarcastic. Reads like a sharp human assistant with dry humor, never like a chatbot or movie script. Casual greetings get casual answers before any offer to help.',
+  // Delivery style, not a capability: when on, instructions come one small
+  // step at a time and are advanced by voice. Toggled by "adhd mode" /
+  // "normal mode" and persisted here so it survives a restart. Both builds.
+  adhdMode: false
 };
 
 module.exports = { DEFAULT_SETTINGS };

@@ -1,6 +1,7 @@
 const { toolSpecs, executeToolCall, filterRegistryForProfile } = require('./tool-registry');
 const { runAgent } = require('./agent-loop');
 const { normalizeOllama, normalizeAnthropic, anthropicTools, OpenAIResponsesSession } = require('./brain-adapters');
+const { STYLE_RULES: ADHD_STYLE_RULES } = require('./adhd-mode');
 
 // Unattended runs (scheduled tasks firing with nobody watching) get an
 // allowlisted tool registry, not a denylisted one: a tool is only offered
@@ -123,6 +124,10 @@ class AIService {
       '- "Delete" means the Windows Recycle Bin, and JARVIS refuses it when the bin cannot hold the item. Permanently erasing files is not something you can do. Sending, buying, and power controls remain outside your tools.',
       '- Match effort to the question: simple question, one-sentence answer.',
       '- Casual greetings and "how are you" are small talk: answer naturally in one short sentence, and do not ask what needs doing unless he asks for help.',
+      // ADHD (simple-steps) mode — FORMAT only, never persona. When on, the
+      // model lays how-to answers out as a numbered list the router walks one
+      // step at a time. Gated on the setting, so it rides BOTH builds.
+      settings.adhdMode ? ADHD_STYLE_RULES : '',
       `Saved notes that may be relevant:\n${memories}`,
       `Open tasks:\n${tasks}`,
       // jr's content-lock rules ride every model turn from right here — this

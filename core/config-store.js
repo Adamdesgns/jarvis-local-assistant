@@ -126,7 +126,10 @@ class ConfigStore {
       // auto-triggers) — same silent-reset bug, same guard.
       'nightShiftEnabled', 'nightShiftStart', 'nightShiftEnd', 'nightShiftMaxJobs',
       'nightShiftMaxMinutes', 'nightShiftCloudBudgetUsd', 'nightShiftFolder',
-      'heartbeatEnabled', 'heartbeatMinutes', 'defense'
+      'heartbeatEnabled', 'heartbeatMinutes', 'defense',
+      // ADHD (simple-steps) mode — a voice-toggled delivery style, persisted
+      // so it survives a restart. The router writes it via updateSettings.
+      'adhdMode'
       // 'license' is intentionally NOT in this list: settings:save is
       // renderer-reachable, and license state must only ever be written by
       // the main-process LicenseService through setLicenseState below.
