@@ -10,12 +10,19 @@
 // this file even hears about the round.
 (function () {
   var CAPTURE_MS = 2600;   // the kid holds the throw up a beat — natural
+  var REARM_CAPTURE_MS = 4200; // wider window when the lens had to wake first
   var STABLE_NEED = 2;     // consecutive agreeing frames
   var HOLD_MS = 1500;      // how long the orb stays the shape after the call
   var IDLE_MS = 5 * 60 * 1000; // mirror of the router's RPS_IDLE_MS
+  // Adam's rule: the webcam does not idle on. Twenty seconds with no round
+  // activity and the tracks stop (OS camera light off, pill off) even though
+  // the GAME session stays live — the next chant re-arms the lens itself and
+  // simply holds the capture window open a little longer while it wakes.
+  var CAMERA_NAP_MS = 20 * 1000;
 
   var cameraUp = false;
   var idleTimer = null;
+  var napTimer = null;
 
   function pill(show) {
     var el = document.getElementById('rps-cam-pill');
@@ -37,8 +44,27 @@
     }, IDLE_MS);
   }
 
+  // The camera's nap: stop the TRACKS after quiet, keep the game alive.
+  function napCamera() {
+    if (napTimer) { clearTimeout(napTimer); napTimer = null; }
+    if (cameraUp && window.JrHandCamera) window.JrHandCamera.stop();
+    cameraUp = false;
+    pill(false);
+  }
+
+  function armNap() {
+    if (napTimer) clearTimeout(napTimer);
+    if (!cameraUp) return;
+    napTimer = setTimeout(napCamera, CAMERA_NAP_MS);
+  }
+
+  function clearNap() {
+    if (napTimer) { clearTimeout(napTimer); napTimer = null; }
+  }
+
   function teardown() {
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    clearNap();
     if (cameraUp && window.JrHandCamera) window.JrHandCamera.stop();
     cameraUp = false;
     pill(false);
@@ -53,6 +79,7 @@
     return window.JrHandCamera.start(video).then(function () {
       cameraUp = true;
       pill(true);
+      armNap();
     });
   }
 
@@ -79,27 +106,47 @@
   }
 
   function runCameraRound(jarvisShape) {
+    clearNap(); // a round is live — the lens stays up for all of it
+    // If the camera napped between rounds, wake it now: the morph is the
+    // theatre that covers the wake-up, and the capture window widens so the
+    // kid's held throw is still there when the first frame arrives.
+    var napped = !cameraUp;
+    var ready = napped ? startCamera() : Promise.resolve();
     // Morph and read together: JARVIS shows his hand as he reads yours,
     // exactly like the playground version.
     var morph = window.OrbShapeLayer ? window.OrbShapeLayer.morphTo(jarvisShape) : Promise.resolve();
-    var read = captureShape(CAPTURE_MS);
+    var read = ready.then(function () {
+      return captureShape(napped ? REARM_CAPTURE_MS : CAPTURE_MS);
+    }).catch(function () {
+      // The lens would not wake (device gone, permission pulled). Degrade
+      // the SESSION to honor mode — the locked throw survives, so "shoot"
+      // again stays honest — and say so plainly.
+      if (window.jarvis.gameRpsCameraFailed) window.jarvis.gameRpsCameraFailed().catch(function () {});
+      return null;
+    });
     Promise.all([morph, read]).then(function (results) {
       var kidShape = results[1];
       if (!kidShape) {
-        say('I did not catch your hand. Hold it up and say shoot again.');
+        say(cameraUp
+          ? 'I did not catch your hand. Hold it up and say shoot again.'
+          : 'The camera is not playing along. Say shoot again and then tell me what you threw.');
+        armNap();
         return window.OrbShapeLayer ? window.OrbShapeLayer.morphBack() : null;
       }
       return window.jarvis.gameRpsOutcome(kidShape).then(function (outcome) {
         if (!outcome || !outcome.ok) {
           // The session vanished under us (stop/expiry racing the read).
+          armNap();
           return window.OrbShapeLayer ? window.OrbShapeLayer.morphBack() : null;
         }
         say(outcome.line);
         return new Promise(function (resolve) { setTimeout(resolve, HOLD_MS); }).then(function () {
+          armNap(); // the between-rounds clock starts once the reveal is over
           if (window.OrbShapeLayer) return window.OrbShapeLayer.morphBack();
         });
       });
     }).catch(function () {
+      armNap();
       if (window.OrbShapeLayer) window.OrbShapeLayer.morphBack();
     });
   }
