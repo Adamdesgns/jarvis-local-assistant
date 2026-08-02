@@ -150,29 +150,29 @@ function jrUserDataPath(appDataDir) {
   return path.join(String(appDataDir || ''), 'jarvis-jr');
 }
 
-// The grown-up build's voice folder. JR's DATA is isolated (that separation is
-// load-bearing — see jrUserDataPath), but the Python speech engine underneath
-// is a ~500 MB READ-ONLY runtime, not user data. Making every JR install
-// download a second copy of an engine already sitting on the machine is pure
-// waste, and in practice it meant the wake word silently did not work in JR at
-// all: a fresh JR profile has no engine and no obvious way to notice.
+// The grown-up build's voice folder. Kept ONLY so a machine that already has
+// the standard build can be recognised — JR no longer runs anything out of it.
+// See resolveVoiceEngineRoot below for why the borrowing was removed.
 function standardVoiceRoot(appDataDir) {
   return path.join(String(appDataDir || ''), 'jarvis-local-assistant', 'voice');
 }
 
-// Which folder holds the python interpreter JR should RUN. Its own always
-// wins, so a Repair/Install into JR's own folder immediately takes precedence
-// and a shared engine can never override a local one. Only when JR has no
-// engine of its own does it borrow the grown-up build's. With neither present
-// it stays on its own root, so the installer puts the engine where it belongs.
+// Which folder holds the python interpreter JR should RUN: ALWAYS its own.
 //
-// NOTE this is the ENGINE root only. main.js keeps the voice WORKING directory
-// (logs, the service's cwd, anything written) on JR's own userData — borrowing
-// an interpreter must never turn into JR writing inside the grown-up folder.
-function resolveVoiceEngineRoot({ ownRoot, sharedRoot, hasEngine } = {}) {
-  const check = typeof hasEngine === 'function' ? hasEngine : () => false;
-  if (check(ownRoot)) return ownRoot;
-  if (sharedRoot && check(sharedRoot)) return sharedRoot;
+// JR used to borrow the grown-up build's engine when it had none of its own,
+// to save a second ~500 MB download. That optimisation made JR silently
+// dependent on a second product being installed: on a PC with no standard
+// JARVIS there was nothing to borrow and nothing of its own, so JR came up
+// with no speech at all and no way for the user to tell why. It looked fine on
+// any machine that happened to have the grown-up build — which is exactly the
+// machine a developer tests on, and never the machine a family installs on.
+//
+// JR is a standalone product and must be 100% self-sufficient. It resolves to
+// its own root unconditionally; when that root has no engine, main.js installs
+// one there (runLocalVoiceSetup already targets voiceDataRoot). sharedRoot and
+// hasEngine are still accepted so callers need not change, but neither can
+// route JR at another product's runtime.
+function resolveVoiceEngineRoot({ ownRoot } = {}) {
   return ownRoot;
 }
 

@@ -7,7 +7,7 @@ const {
   Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
-const { resolveVariant, isJr, profileFor, jrUserDataPath, standardVoiceRoot, resolveVoiceEngineRoot, jrIpcAllowlist, jrChannelAllowed, jrSettingsPatch } = require('./core/variant');
+const { resolveVariant, isJr, profileFor, jrUserDataPath, resolveVoiceEngineRoot, jrIpcAllowlist, jrChannelAllowed, jrSettingsPatch } = require('./core/variant');
 const { ParentControls } = require('./core/parent-controls');
 const { ParentSession } = require('./core/parent-session');
 const { buildJrPromptRules } = require('./core/kid-mode');
@@ -486,21 +486,37 @@ function voiceDataRoot() {
   return path.join(app.getPath('userData'), 'voice');
 }
 
-// Where the python interpreter lives, which is NOT always where the voice
-// service works. In the standard build they are the same folder. In JR they
-// differ when JR has no engine of its own: it borrows the grown-up build's
-// read-only runtime instead of making every family download a second 500 MB
-// copy — which is why the wake word did nothing in a fresh JR profile. Its
-// own engine always wins, so Install/Repair (which installs into JR's own
-// voiceDataRoot) takes over the moment it finishes. Nothing is ever written
-// to the borrowed folder: voiceRoot, not this, is the service's cwd.
+// Where the python interpreter lives. Every build — JR included — runs its own,
+// out of its own userData. JR used to borrow the grown-up build's runtime when
+// it had none, which made a standalone product silently depend on a second one
+// AND on that product's optional ~500 MB engine download having been run. On a
+// machine where either was missing, JR simply had no speech and said nothing
+// about why. It now installs its own (see ensureOwnVoiceEngine below).
+function hasVoiceEngine(root) {
+  return fs.existsSync(path.join(
+    root,
+    '.venv',
+    process.platform === 'win32' ? 'Scripts' : 'bin',
+    process.platform === 'win32' ? 'python.exe' : 'python'
+  ));
+}
+
 function voiceEngineRoot() {
-  const ownRoot = voiceDataRoot();
-  if (!JR) return ownRoot;
-  return resolveVoiceEngineRoot({
-    ownRoot,
-    sharedRoot: standardVoiceRoot(app.getPath('appData')),
-    hasEngine: (root) => fs.existsSync(path.join(root, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python'))
+  return resolveVoiceEngineRoot({ ownRoot: voiceDataRoot() });
+}
+
+// JR ships self-sufficient: if its own root has no interpreter, install one
+// there at boot rather than waiting for a user to discover Repair Voice. The
+// standard build keeps its existing manual flow — it has never had the
+// "borrowed engine hid the gap" problem this solves.
+function ensureOwnVoiceEngine() {
+  if (!JR) return;
+  if (hasVoiceEngine(voiceDataRoot())) return;
+  const result = runLocalVoiceSetup();
+  sendEverywhere('voice:setup-progress', {
+    line: result?.started === false && result?.message
+      ? result.message
+      : 'Installing JARVIS JR’s voice. This runs once and takes a few minutes.'
   });
 }
 
@@ -1740,6 +1756,9 @@ app.whenReady().then(async () => {
   createMainWindow();
   createTray();
   applyLoginSetting(config.getSettings().startWithWindows);
+  // JR with no engine of its own installs one now. Nothing to discover, and no
+  // dependence on the grown-up build being present.
+  ensureOwnVoiceEngine();
   localVoice.start();
   // Loading ~326 MB of model takes a moment, so start it now rather than on the
   // first thing JARVIS says. Until it is ready every caller falls back to the

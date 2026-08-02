@@ -321,21 +321,24 @@ test('preload.js: the parent surface is lock/session/profile-events, no PIN plum
   assert.ok(/onJrProfile:/.test(PRELOAD));
 });
 
-// ---- Shared voice engine -------------------------------------------------
-// JR gets its own userData (that isolation is load-bearing), but the Python
-// speech engine is a 500 MB READ-ONLY runtime, not user data. Making every JR
-// install download a second copy of the engine the grown-up build already has
-// is waste — and on Adam's PC it meant the wake word simply did not work.
+// ---- JR's own voice engine ------------------------------------------------
+// JR is a standalone product: it must never depend on the grown-up build being
+// installed, or on that build's OPTIONAL ~500 MB engine download having been
+// run. Borrowing hid the gap on any machine that happened to have the standard
+// engine — a developer's PC — and produced a JR with no speech at all, and no
+// stated reason, on the machines families actually install it on.
 test('voice engine: JR uses its own engine when it has one', () => {
   const { resolveVoiceEngineRoot } = require('../core/variant');
   const has = (p) => p === 'JRROOT';
   assert.equal(resolveVoiceEngineRoot({ ownRoot: 'JRROOT', sharedRoot: 'STDROOT', hasEngine: has }), 'JRROOT');
 });
 
-test('voice engine: JR falls back to the grown-up build engine rather than nothing', () => {
+test('voice engine: JR NEVER borrows the grown-up build engine, even when only that one exists', () => {
   const { resolveVoiceEngineRoot } = require('../core/variant');
   const has = (p) => p === 'STDROOT';
-  assert.equal(resolveVoiceEngineRoot({ ownRoot: 'JRROOT', sharedRoot: 'STDROOT', hasEngine: has }), 'STDROOT');
+  // The old behaviour returned STDROOT here. That made JR silently dependent
+  // on a second product; main.js now installs an engine into JR's own root.
+  assert.equal(resolveVoiceEngineRoot({ ownRoot: 'JRROOT', sharedRoot: 'STDROOT', hasEngine: has }), 'JRROOT');
 });
 
 test('voice engine: with neither installed it stays on its OWN root, so Repair installs locally', () => {
