@@ -1,61 +1,23 @@
-# JARVIS — Free Private Desktop Assistant for Windows
+# JARVIS JR — Private Desktop Assistant for Kids (Windows)
 
-A JARVIS-style assistant that runs on **your own PC**. No subscription, no
-account, no telemetry. Say **"Hey Jarvis"** — the wake word and speech
-recognition run 100% locally. An animated amber holographic interface with a
-floating orb when minimized.
+The parental-controls edition of
+[JARVIS](https://github.com/Adamdesgns/jarvis-local-assistant): a JARVIS-style
+voice assistant that runs on **your own PC** — no subscription, no account, no
+telemetry — locked down for kids (ages ~5–12) behind a parent PIN. It's its own
+build with its own installer and its own `%APPDATA%\jarvis-jr` data folder: it
+never shares data with the grown-up JARVIS and can run side by side with it.
 
-**[⬇ Download the latest JARVIS-FREE-SETUP.exe](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest)**
+**[⬇ Download the latest JARVIS-JR-Setup.exe](https://github.com/Adamdesgns/jarvis-jr/releases/latest)**
 
+> ⚠️ **Get the file named `JARVIS-JR-Setup`** — the grown-up build is
+> `JARVIS-Setup` and looks almost identical. Only `JARVIS-JR-Setup` has the
+> parent PIN and content lock.
+>
 > Windows SmartScreen will warn about an unknown publisher — this is a free,
-> unsigned app. Click **More info → Run anyway**. Verify your download against
-> the SHA-256 checksum posted with each release.
+> unsigned app. Click **More info → Run anyway**.
 
-## What it does
+## The parental-controls model, in five lines
 
-**Voice**
-- "Hey Jarvis" wake word + push-to-talk — both fully on-device
-- Free local speech recognition (faster-whisper); spoken replies in Windows voices
-- Voice Diagnostics panel: green/red checks, live mic test, one-click repair
-
-**Daily assistant**
-- Tasks with priorities, due dates, and repeats — "remind me to drain the compressor every morning"
-- Morning briefing: tasks, overdue items, latest note, PC status
-- Searchable memory with edit/forget; saved routines like "Start work"
-- Desktop notifications for reminders and watched folders
-
-**Files & documents**
-- Voice file search across folders **you approve** — nowhere else
-- Reads and summarizes PDF, Word, Excel, CSV, and text files
-- **Ask your documents questions** — answers only from your files, cited down to the PDF page
-- Built-in explorer: pinned folders, recent files, folder watching, safe organizing
-
-**Brains — your choice**
-- **Free local mode (default):** conversation via [Ollama](https://ollama.com), entirely on your PC
-- **Optional cloud:** Claude (Anthropic) or OpenAI with your own prepaid API key,
-  encrypted with Windows secure storage, removable anytime
-- **"Look at my screen"** — describes your screen via the cloud brain, always
-  behind a red on-screen indicator
-
-**Safety by design**
-- Deletes go to the Recycle Bin and always ask first; so do moves, renames, and shutdown
-- Cannot send messages or buy anything, and the AI holds no shell — commands you type in
-  THE TERMINAL run through a guard that asks first, and the model can never reach it
-- Cloud AI calls (which cost API credits) run only with your own key; unattended night
-  jobs stop at a per-night budget you set, metered against deliberately pessimistic
-  token prices so the cap trips early, not late
-- All data in one folder (`%APPDATA%\jarvis-local-assistant`) you can back up,
-  export, or delete. See [PRIVACY.md](PRIVACY.md) and [SUPPORT.md](SUPPORT.md)
-
-## JARVIS JR — a separate build for kids
-
-JARVIS JR is the parental-controls variant of JARVIS: its own build, its
-own installer, its own `%APPDATA%\jarvis-jr` folder — never shares data
-with the grown-up JARVIS, and can run side by side with it. Run it from
-source with `npm run start:jr`; package its installer with `npm run
-dist:jr`.
-
-**The parental-controls model, in five lines:**
 - A parent sets it up first — PIN, birthdate, and a checklist of what's
   allowed — before a kid ever sees a desk; nothing about that gate can be
   skipped or redone without the PIN.
@@ -89,27 +51,53 @@ checklist as everything else — turn Games off in the parent panel and
 "play tic tac toe" is just an ordinary sentence again, no overlay, no
 special refusal.
 
+## What it can do (all behind the parent checklist)
+
+Everything the grown-up JARVIS does, JARVIS JR can do too — but each capability
+is off unless a parent turns it on:
+
+- **Voice** — "Hey Jarvis" wake word + push-to-talk, fully on-device; free local
+  speech recognition, spoken replies in JARVIS's own local voice.
+- **Homework & tasks** — age-appropriate homework hints, tasks, timers, quips.
+- **Files & documents** *(off by default)* — read and summarize PDF/Word/Excel/CSV
+  from a folder the parent approves.
+- **Cameras, browser, terminal, screen reading, apps** *(each off by default)* —
+  handed down one checkbox at a time, never all-or-nothing.
+- **Rock-paper-scissors camera** *(off by default)* — the webcam reads the kid's
+  hand during the game, on this PC only.
+
 ## Install
 
-1. Download **JARVIS-FREE-SETUP.exe** from [Releases](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest) and run it.
-2. In Settings, click **INSTALL / REPAIR LOCAL VOICE** and watch the progress line (needs [Python 3.12](https://www.python.org/downloads/) — the installer fetches it via winget if missing).
-3. Optional: install [Ollama for Windows](https://ollama.com/download/windows) and click **CONNECT / REPAIR OLLAMA** for local conversation.
-4. Optional: add a Claude or OpenAI API key for the cloud brain and screen vision.
+1. Download **`JARVIS-JR-Setup-0.18.0.exe`** from
+   [Releases](https://github.com/Adamdesgns/jarvis-jr/releases/latest) and run it.
+   It installs as **"JARVIS JR"** alongside the grown-up JARVIS — it does not
+   replace it.
+2. On first launch, set the **parent PIN and birthdate** and pick the checklist
+   of what's allowed. This gate can't be skipped.
+3. In Settings, click **INSTALL / REPAIR LOCAL VOICE** for the on-device voice
+   (needs [Python 3.12](https://www.python.org/downloads/) — fetched via winget
+   if missing).
+4. Optional: install [Ollama for Windows](https://ollama.com/download/windows)
+   and click **CONNECT / REPAIR OLLAMA** for a fully-local conversation brain.
 
-JARVIS checks this repo's releases on launch and tells you when a newer
+JARVIS JR checks this repo's releases on launch and tells you when a newer
 version exists. Nothing ever installs automatically.
 
 ## Build from source
 
 ```bash
 npm install
-npm test        # 32 tests
-npm start       # run from source
+npm test           # test suite
+npm run start:jr   # run the JR build from source
 ```
 
-Package the installer: `npx electron-builder --win dir`, then compile
-`scripts\jarvis-installer.nsi` with NSIS `makensis`. Output:
-`dist\JARVIS-FREE-SETUP.exe`.
+Package the JR installer:
+
+```bash
+npm run dist:jr
+```
+
+Output: `dist\JARVIS-JR-Setup-0.18.0.exe`.
 
 ## License
 
