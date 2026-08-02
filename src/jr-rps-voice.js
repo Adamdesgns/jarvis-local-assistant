@@ -14,11 +14,15 @@
   var STABLE_NEED = 2;     // consecutive agreeing frames
   var HOLD_MS = 1500;      // how long the orb stays the shape after the call
   var IDLE_MS = 5 * 60 * 1000; // mirror of the router's RPS_IDLE_MS
-  // Adam's rule: the webcam does not idle on. Twenty seconds with no round
-  // activity and the tracks stop (OS camera light off, pill off) even though
-  // the GAME session stays live — the next chant re-arms the lens itself and
-  // simply holds the capture window open a little longer while it wakes.
-  var CAMERA_NAP_MS = 20 * 1000;
+  // Adam's rule: the webcam does not idle on — but it must not blink between
+  // rounds either. At twenty seconds the lens slept inside an ordinary pause
+  // in play, so the camera visibly came and went mid-game and every other
+  // round paid the wake-up cost. One minute of no round activity covers a
+  // normal game end to end; past that the kid has stopped playing, so the
+  // tracks stop (OS camera light off, pill off) while the GAME session stays
+  // live — the next chant re-arms the lens itself and simply holds the
+  // capture window open a little longer while it wakes.
+  var CAMERA_NAP_MS = 60 * 1000;
 
   var cameraUp = false;
   var idleTimer = null;

@@ -222,12 +222,27 @@ test('the camera exception tracks the parent checklist so the cannot-see line ne
   // Off (default): the original absolute line, byte-identical.
   const off = buildJrPromptRules({ age: 11 });
   assert.match(off, /cannot see, hear, or reach anything outside this chat, and you must never pretend otherwise/);
-  assert.doesNotMatch(off, /through the camera/);
+  assert.doesNotMatch(off, /through the WEBCAM/);
   // On: the narrow exception, and only for the game.
   const on = buildJrPromptRules({ age: 11, gameCamera: true });
   assert.match(on, /rock paper scissors/);
-  assert.match(on, /through the camera/);
+  assert.match(on, /through the WEBCAM/);
   assert.match(on, /never pretend you can see or hear anything/);
+});
+
+// The model named "the front door camera" to a kid because the rule only ever
+// said "the camera". The game has always been webcam-only in code
+// (src/jr-hand-camera.js calls getUserMedia with facingMode 'user' and cannot
+// reach a security camera) — the prompt was the thing that let JARVIS invent
+// one. Naming the webcam is not enough on its own: the house cameras have to
+// be refused explicitly, or a kid who asks gets talked into standing at a
+// doorbell.
+test('the camera exception names the WEBCAM and refuses every other camera', () => {
+  const on = buildJrPromptRules({ age: 11, gameCamera: true });
+  assert.match(on, /only camera involved in any game/);
+  assert.match(on, /doorbell/);
+  assert.match(on, /front door/);
+  assert.match(on, /never mention, name, suggest, or ask the child to use any other camera/i);
 });
 
 test('the capability answer is JARVIS, not a children\'s television host', () => {
