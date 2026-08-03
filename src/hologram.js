@@ -15,6 +15,10 @@
       this.resizeObserver.observe(canvas.parentElement);
       this.resize();
       this.createGeometry();
+      // Mark the loop as live before the first frame is scheduled: OrbHost calls
+      // setPaused(false) synchronously after construction, and its !_running guard
+      // would otherwise start a second permanent rAF chain.
+      this._running = true;
       requestAnimationFrame((time) => this.draw(time));
     }
 
