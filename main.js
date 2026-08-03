@@ -43,6 +43,10 @@ const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defa
 const { isWithinWindow } = require('./core/autonomy-rules');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
+const { CallAuth } = require('./core/call/call-auth');
+const { CallSession } = require('./core/call/call-session');
+const { CallClient } = require('./core/call/call-client');
+const { CallSignalServer } = require('./core/call/call-signal-server');
 const { ScheduleStore } = require('./core/schedule-store');
 const { ScheduleService } = require('./core/schedule-service');
 const { NightShiftService } = require('./core/night-shift');
@@ -106,6 +110,10 @@ let defense;
 let autonomy;
 let mobileAuth;
 let mobileServer;
+let callAuth;
+let callSession;
+let callClient;
+let callServer;
 let scheduleStore;
 let scheduleService;
 let nightShift;
@@ -507,6 +515,11 @@ function loadMobileDevices() {
 }
 function saveMobileDevices() { config.setSecret('mobileDevices', JSON.stringify(mobileAuth.toJSON())); }
 
+function loadCallPeer() {
+  try { return JSON.parse(config.getSecret('callPeer') || 'null'); } catch { return null; }
+}
+function saveCallPeer() { config.setSecret('callPeer', JSON.stringify(callAuth.toJSON())); }
+
 // The edition — resolved once at startup from the build-time stamp, never
 // from settings. The stamp is a plain file electron-builder drops next to the
 // app code (see extraResources in package.json); reading it from resourcesPath
@@ -547,6 +560,14 @@ async function syncMobileServer() {
     status.reason = 'The phone companion is a JARVIS Pro feature — unlock it in Settings → PRO.';
   }
   sendEverywhere('mobile:status', status);
+}
+
+// Family calls are free on every edition — no license gate, just Tailscale.
+async function syncCallServer() {
+  const settings = config.getSettings();
+  callServer.stop();
+  if (settings.callEnabled) await callServer.start();
+  sendEverywhere('call:event', { type: 'server-status', ...callServer.status() });
 }
 
 // Fan the camera alert out to every paired phone over SSE. Deliberately
@@ -720,6 +741,43 @@ function setupIpc() {
     const qr = await QRCode.toDataURL(qrUrl, { margin: 1, width: 240 });
     return { ok: true, code, url, qr, expiresAt };
   });
+  ipcMain.handle('call:status', () => ({
+    server: callServer.status(),
+    session: callSession.status(),
+    paired: !!callAuth.peer,
+    peerName: callAuth.peer?.name || null
+  }));
+  ipcMain.handle('call:pair-start', () => {
+    const status = callServer.status();
+    if (!status.running) return { ok: false, reason: status.reason || 'Turn calls on first.' };
+    const { code, expiresAt } = callAuth.startPairing();
+    return { ok: true, code, expiresAt, address: status.address, port: status.port };
+  });
+  ipcMain.handle('call:pair-claim', async (_event, { host, code }) => {
+    const result = await callClient.claim(host, code, 'JARVIS');
+    if (!result.ok) return result;
+    callAuth.adoptPeer({ name: result.name, host, secret: result.secret });
+    saveCallPeer();
+    return { ok: true, peerName: result.name };
+  });
+  ipcMain.handle('call:unpair', () => { callAuth.unpair(); saveCallPeer(); return { ok: true }; });
+  ipcMain.handle('call:ping', () => callClient.ping());
+  ipcMain.handle('call:dial', async (_event, { sdp }) => {
+    const dialed = callSession.dial();
+    if (!dialed.ok) return dialed;
+    const sent = await callClient.offer({ callId: dialed.callId, kind: 'call', sdp });
+    if (!sent.ok) { callSession.end('unreachable'); return sent; }
+    return { ok: true, callId: dialed.callId };
+  });
+  ipcMain.handle('call:answer', async (_event, { callId, sdp }) => {
+    callSession.localAnswered(callId);
+    return callClient.answer({ callId, sdp });
+  });
+  ipcMain.handle('call:ice', (_event, { callId, candidate }) => callClient.ice({ callId, candidate }));
+  ipcMain.handle('call:hangup', async (_event, { callId, reason }) => {
+    callSession.end(reason || 'hangup');
+    return callClient.hangup({ callId, reason: reason || 'hangup' });
+  });
   ipcMain.handle('schedule:list', () => scheduleStore.list());
   ipcMain.handle('schedule:add', (_event, input) => {
     try {
@@ -847,6 +905,7 @@ function setupIpc() {
       folderWatch.start();
     }
     if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
+    if (previous.callEnabled !== updated.callEnabled || previous.callPort !== updated.callPort) syncCallServer();
     if (previous.schedulesEnabled !== updated.schedulesEnabled) {
       scheduleService.start().catch((error) => {
         log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
@@ -1436,6 +1495,36 @@ app.whenReady().then(async () => {
     getCameras: () => cameras
   });
   if (config.getSettings().mobileEnabled) syncMobileServer();
+  callAuth = new CallAuth({ peer: loadCallPeer() });
+  // autoAnswer stays false on this branch: JARVIS never answers by itself.
+  // The JR branch constructs this with its parent-controlled setting.
+  callSession = new CallSession({
+    autoAnswer: false,
+    onEvent: (type, data) => {
+      // A locally-timed ending the peer can't know about yet (gave up
+      // ringing, drop-grace expired) must also be told to the other side.
+      if (type === 'ring-timeout' || (type === 'ended' && data.reason === 'dropped')) {
+        callClient.hangup({ callId: data.callId, reason: type === 'ring-timeout' ? 'no-answer' : 'dropped' }).catch(() => {});
+      }
+      sendEverywhere('call:event', { type, ...data });
+    }
+  });
+  callClient = new CallClient({
+    getPeer: () => {
+      const peer = callAuth.peer;
+      return peer ? { host: peer.host, secret: peer.secret } : null;
+    },
+    port: Number(config.getSettings().callPort) || 27184
+  });
+  callServer = new CallSignalServer({
+    config, auth: callAuth, session: callSession,
+    ourName: () => 'JARVIS',
+    onSignal: (type, data) => {
+      if (type === 'paired') saveCallPeer();
+      sendEverywhere('call:event', { type, ...data });
+    }
+  });
+  if (config.getSettings().callEnabled) syncCallServer();
   try {
     const gpu = await app.getGPUInfo('basic');
     const device = gpu?.gpuDevice?.find((item) => item.active) || gpu?.gpuDevice?.[0];
