@@ -924,7 +924,7 @@ function setupIpc() {
     return { ok: true, code, expiresAt, address: status.address, port: status.port };
   });
   ipcMain.handle('call:pair-claim', async (_event, { host, code }) => {
-    const result = await callClient.claim(host, code, 'JARVIS');
+    const result = await callClient.claim(host, code, JR ? 'JARVIS JR' : 'JARVIS');
     if (!result.ok) return result;
     callAuth.adoptPeer({ name: result.name, host, secret: result.secret });
     saveCallPeer();
@@ -1119,6 +1119,9 @@ function setupIpc() {
     }
     if (previous.mobileEnabled !== updated.mobileEnabled || previous.mobilePort !== updated.mobilePort) syncMobileServer();
     if (previous.callEnabled !== updated.callEnabled || previous.callPort !== updated.callPort) syncCallServer();
+    // Hot-apply like the rest of JR's parent settings — no relaunch. Standard
+    // build stays pinned false regardless of what lands in settings.json.
+    if (previous.callAutoAnswer !== updated.callAutoAnswer) callSession.autoAnswer = JR && updated.callAutoAnswer !== false;
     if (scheduleService && previous.schedulesEnabled !== updated.schedulesEnabled) {
       scheduleService.start().catch((error) => {
         log.write({ type: 'schedule-error', command: 'settings-save-start', response: error && error.message ? error.message : String(error), source: 'schedule' });
@@ -1806,10 +1809,13 @@ app.whenReady().then(async () => {
   });
   if (config.getSettings().mobileEnabled) syncMobileServer();
   callAuth = new CallAuth({ peer: loadCallPeer() });
-  // autoAnswer stays false on this branch: JARVIS never answers by itself.
-  // The JR branch constructs this with its parent-controlled setting.
+  // Auto-answer is a JR-only trait: Dad calling an empty room should connect
+  // after 20 quiet seconds (the whole point of the feature), so the JR build
+  // arms it by default and a parent can turn it off (callAutoAnswer, parent
+  // settings only — filterJrSettingsPatch drops any kid-side write). The
+  // standard build NEVER passes it, so Dad's PC has no self-answering path.
   callSession = new CallSession({
-    autoAnswer: false,
+    autoAnswer: JR && config.getSettings().callAutoAnswer !== false,
     onEvent: (type, data) => {
       // A locally-timed ending the peer can't know about yet (gave up
       // ringing, drop-grace expired) must also be told to the other side.
@@ -1828,7 +1834,7 @@ app.whenReady().then(async () => {
   });
   callServer = new CallSignalServer({
     config, auth: callAuth, session: callSession,
-    ourName: () => 'JARVIS',
+    ourName: () => (JR ? 'JARVIS JR' : 'JARVIS'),
     onSignal: (type, data) => {
       if (type === 'paired') saveCallPeer();
       sendEverywhere('call:event', { type, ...data });

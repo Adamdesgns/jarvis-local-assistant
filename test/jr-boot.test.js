@@ -216,6 +216,14 @@ test('filterJrSettingsPatch: keeps allowed keys, silently drops everything else'
   assert.deepEqual(filtered, { orbSkin: 'nebula', wakeSensitivity: 'high' });
 });
 
+test('filterJrSettingsPatch: a kid cannot touch the call line or its auto-answer', () => {
+  // callAutoAnswer decides whether Dad's call turns the camera on with nobody
+  // at the desk; callEnabled/callPort are the line itself. All parent-only —
+  // a kid-session settings:save silently drops every one of them.
+  const filtered = filterJrSettingsPatch({ callAutoAnswer: false, callEnabled: false, callPort: 1, orbSkin: 'nebula' });
+  assert.deepEqual(filtered, { orbSkin: 'nebula' });
+});
+
 test('filterJrSettingsPatch: empty/undefined patch yields an empty object, not a throw', () => {
   assert.deepEqual(filterJrSettingsPatch({}), {});
   assert.deepEqual(filterJrSettingsPatch(undefined), {});

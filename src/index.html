@@ -532,6 +532,7 @@
           <section data-tab="calls">
             <h3>FAMILY CALLS</h3>
             <label class="toggle-row"><span><b>ANSWER CALLS ON THIS PC</b><small>Video calls with your paired JARVIS over Tailscale. Off: no line, no server.</small></span><input id="call-enabled" type="checkbox"><i></i></label>
+            <label class="toggle-row" id="call-auto-answer-row" hidden><span><b>AUTO-ANSWER DAD'S CALLS</b><small>If nobody clicks Answer within 20 seconds, the call connects by itself — camera and mic on. Only the paired parent PC can ever trigger it, and the screen always says so.</small></span><input id="call-auto-answer" type="checkbox"><i></i></label>
             <small id="call-settings-status"></small>
             <button type="button" id="call-pair-start" class="primary-action">PAIR — SHOW A CODE</button>
             <small id="call-pair-code"></small>

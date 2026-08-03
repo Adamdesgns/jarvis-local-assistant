@@ -1998,6 +1998,14 @@ function openSettings(tab = 'general') {
   $('setting-mobile-port').value = state.settings.mobilePort || 27183;
   $('setting-mobile-public-url').value = state.settings.mobilePublicUrl || '';
   $('call-enabled').checked = Boolean(state.settings.callEnabled);
+  // Auto-answer is a JR-build trait; the row stays hidden (and unsaved) on
+  // the standard build so the grown-up dialog never shows a dead switch.
+  const autoAnswerRow = $('call-auto-answer-row');
+  if (autoAnswerRow) {
+    const jrBuild = state.profile?.variant === 'jr';
+    autoAnswerRow.hidden = !jrBuild;
+    $('call-auto-answer').checked = jrBuild && state.settings.callAutoAnswer !== false;
+  }
   $('setting-claude-bridge').checked = Boolean(state.settings.claudeBridgeEnabled);
   $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
   $('setting-screen-drive').checked = Boolean(state.settings.screenDriveEnabled);
@@ -2083,6 +2091,7 @@ async function saveSettings(event) {
     mobilePort: Number($('setting-mobile-port').value) || 27183,
     mobilePublicUrl: $('setting-mobile-public-url').value.trim(),
     callEnabled: $('call-enabled').checked,
+    callAutoAnswer: $('call-auto-answer-row')?.hidden ? undefined : $('call-auto-answer').checked,
     claudeBridgeEnabled: $('setting-claude-bridge').checked,
     screenControlEnabled: $('setting-screen-control').checked,
     screenDriveEnabled: $('setting-screen-drive').checked,
