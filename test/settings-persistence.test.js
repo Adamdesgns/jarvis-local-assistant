@@ -49,6 +49,7 @@ const SAMPLES = {
   mobileEnabled: true,
   mobilePort: 27999,
   mobilePublicUrl: 'https://example.test',
+  callEnabled: true,
   claudeBridgeEnabled: true,
   screenControlEnabled: true,
   screenDriveEnabled: true,

@@ -105,6 +105,7 @@ class ConfigStore {
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
       'autonomyEnabled', 'schedulesEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
       'skin', 'voiceName', 'orbBounds', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl',
+      'callEnabled', 'callPort',
       // Kokoro voice: engine choice, which voice, and the device escape hatch.
       // Same silent-reset trap as the keys below — without these the Settings
       // voice picker would appear to work and quietly revert on save.
