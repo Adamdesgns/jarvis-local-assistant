@@ -134,6 +134,13 @@
     this._frameBound = this._frame.bind(this);
     if (this.reduced) { this.snap(); this.renderStatic(); }
     else this.startLoop();
+
+    /* stop burning CPU while hidden; startLoop re-checks paused/reduced */
+    var vis = this;
+    this._unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(function () {
+      if (vis.destroyed) return;
+      if (document.hidden) vis.stopLoop(); else vis.startLoop();
+    }) : null;
   }
 
   /* ---------- skin contract ---------- */
@@ -180,6 +187,7 @@
   ZenOrb.prototype.destroy = function () {
     this.destroyed = true;
     this.stopLoop();
+    if (this._unbindVis) { this._unbindVis(); this._unbindVis = null; }
     if (this._ro) { this._ro.disconnect(); this._ro = null; }
     if (this._mq && this._onMQ) {
       try { this._mq.removeEventListener('change', this._onMQ); } catch (_) {}

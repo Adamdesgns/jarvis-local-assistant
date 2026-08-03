@@ -140,6 +140,12 @@
     } else {
       this.start();
     }
+
+    // Stop burning CPU while hidden; start() re-checks paused/reduced.
+    this.unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(function () {
+      if (self.destroyed) return;
+      if (document.hidden) self.stop(); else self.start();
+    }) : null;
   }
 
   // ---------- seeded randomness ----------
@@ -633,6 +639,7 @@
   NeuralOrb.prototype.destroy = function () {
     this.destroyed = true;
     this.stop();
+    if (this.unbindVis) { this.unbindVis(); this.unbindVis = null; }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;

@@ -499,6 +499,13 @@
       start();
     }
 
+    // Stop burning CPU while the window is hidden; start() re-checks
+    // paused/destroyed/REDUCED so this can't resurrect a stopped skin.
+    var unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(function () {
+      if (destroyed) return;
+      if (document.hidden) stop(); else start();
+    }) : null;
+
     // ---------------------------------------------------------- instance
     return {
       setState: function (appState) {
@@ -528,6 +535,7 @@
       destroy: function () {
         destroyed = true;
         stop();
+        if (unbindVis) { unbindVis(); unbindVis = null; }
         if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
         scene = blurA = blurB = null;
         sctx = actx = bctx = null;

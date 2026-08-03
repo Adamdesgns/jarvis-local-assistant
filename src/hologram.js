@@ -20,6 +20,15 @@
       // would otherwise start a second permanent rAF chain.
       this._running = true;
       requestAnimationFrame((time) => this.draw(time));
+      // Stop burning CPU while the window is hidden.
+      this._hidden = false;
+      this._unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(() => {
+        this._hidden = document.hidden;
+        if (!this._hidden && !this._paused && !this._running) {
+          this._running = true;
+          requestAnimationFrame((time) => this.draw(time));
+        }
+      }) : null;
     }
 
     random() {
@@ -220,7 +229,7 @@
 
     setPaused(paused) {
       this._paused = Boolean(paused);
-      if (!this._paused && !this._running) { this._running = true; requestAnimationFrame((time) => this.draw(time)); }
+      if (!this._paused && !this._hidden && !this._running) { this._running = true; requestAnimationFrame((time) => this.draw(time)); }
     }
 
     // Orb-skin contract: the original is amber by design; palette is accepted
@@ -229,11 +238,12 @@
 
     destroy() {
       this._paused = true;
+      if (this._unbindVis) { this._unbindVis(); this._unbindVis = null; }
       this.resizeObserver.disconnect();
     }
 
     draw(time) {
-      if (this._paused) { this._running = false; return; }
+      if (this._paused || this._hidden) { this._running = false; return; }
       this._running = true;
       this.audioLevel += (this.targetAudio - this.audioLevel) * .16;
       this.explosion += (this.explosionTarget - this.explosion) * .11;

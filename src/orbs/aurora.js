@@ -330,6 +330,7 @@
     }
 
     // ---- instance interface ------------------------------------------------
+    var unbindVis = null;
     var instance = {
       setState: function (appState) {
         var m = window.OrbEngine.mapStateToMood(appState);
@@ -361,6 +362,7 @@
       destroy: function () {
         destroyed = true;
         stopLoop();
+        if (unbindVis) { unbindVis(); unbindVis = null; }
         if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
         if (reduceQuery) {
           if (typeof reduceQuery.removeEventListener === 'function') reduceQuery.removeEventListener('change', onMotionPrefChange);
@@ -377,6 +379,12 @@
     resize();
     if (reduceMotion) renderStatic();
     else startLoop();
+
+    // Stop burning CPU while hidden; startLoop re-checks paused/reduced.
+    unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(function () {
+      if (destroyed) return;
+      if (document.hidden) stopLoop(); else startLoop();
+    }) : null;
 
     return instance;
   }
