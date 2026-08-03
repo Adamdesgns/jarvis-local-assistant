@@ -171,6 +171,11 @@
         <article class="module hidden-module" data-module="cameras">
           <header class="module-header drag-handle"><div><span>Surveillance</span><h2>Cameras</h2></div><div class="module-actions"><button id="camera-add-toggle" title="Connect a camera in Settings"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>ADD</button><button data-maximize title="Maximize">⛶</button><button data-collapse>−</button><button data-hide>×</button></div></header>
           <div class="module-content cameras-content">
+            <div id="jr-panel" hidden>
+              <span id="jr-presence" class="jr-presence-dot"></span>
+              <span id="jr-presence-label">Checking…</span>
+              <button id="jr-call-button" type="button">📞 CALL</button>
+            </div>
             <div id="camera-systems" class="camera-systems"></div>
             <div id="camera-grid" class="camera-grid"><p class="camera-empty">No cameras yet. Select ＋ ADD to connect one.</p></div>
           </div>
@@ -524,6 +529,18 @@
             </div>
             <div id="mobile-devices" class="search-root-list"></div>
           </section>
+          <section data-tab="calls">
+            <h3>FAMILY CALLS</h3>
+            <label class="toggle-row"><span><b>ANSWER CALLS ON THIS PC</b><small>Video calls with your paired JARVIS over Tailscale. Off: no line, no server.</small></span><input id="call-enabled" type="checkbox"><i></i></label>
+            <small id="call-settings-status"></small>
+            <button type="button" id="call-pair-start" class="primary-action">PAIR — SHOW A CODE</button>
+            <small id="call-pair-code"></small>
+            <label>OTHER PC'S TAILSCALE ADDRESS<input id="call-claim-host" type="text" placeholder="100.x.x.x or machine name"></label>
+            <label>6-DIGIT CODE FROM THAT PC<input id="call-claim-code" type="text" maxlength="6" placeholder="123456"></label>
+            <button type="button" id="call-claim-go" class="outline-action">PAIR WITH THAT PC</button>
+            <button type="button" id="call-unpair" class="outline-action">FORGET THE OTHER PC</button>
+            <small>Pair once: show a code on one PC, type it on the other within 2 minutes. Calls never leave your Tailscale line.</small>
+          </section>
           <section data-tab="system">
             <h3>PROJECT WORKSPACES</h3>
             <div class="folder-setting"><span><b>ANVIL</b><small id="folder-anvil">Not assigned</small></span><button type="button" data-folder="anvil">CHOOSE</button></div>
@@ -750,7 +767,28 @@
     <script src="../core/variant.js"></script>
     <script src="renderer.js"></script>
     <script src="command-center.js"></script>
+    <div id="call-overlay" hidden>
+      <div id="call-ring" hidden>
+        <p id="call-ring-label">Incoming call</p>
+        <div id="call-ring-actions">
+          <button id="call-answer" type="button">ANSWER</button>
+          <button id="call-decline" type="button">DECLINE</button>
+        </div>
+      </div>
+      <div id="call-stage" hidden>
+        <video id="call-remote" autoplay playsinline></video>
+        <video id="call-local" autoplay playsinline muted></video>
+        <div id="call-controls">
+          <span id="call-timer">0:00</span>
+          <button id="call-mute" type="button">MUTE</button>
+          <button id="call-end" type="button">END</button>
+        </div>
+      </div>
+      <p id="call-status-line"></p>
+    </div>
     <script src="cameras-ui.js"></script>
+    <script src="call-settings.js"></script>
+    <script src="call-ui.js"></script>
     <script src="defense-ui.js"></script>
     <script src="browser-tabs.js"></script>
     <script src="browser-ui.js"></script>

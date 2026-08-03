@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { TABS, KID_TABS, normalizeTab, sectionHidden, tabsFor } = require('../src/settings-tabs');
 
-test('TABS: ten tabs, unique ids, GENERAL first, LOOKS and JARVIS JR present', () => {
-  assert.equal(TABS.length, 10);
+test('TABS: eleven tabs, unique ids, GENERAL first, LOOKS, CALLS and JARVIS JR present', () => {
+  assert.equal(TABS.length, 11);
+  // Family calls pair + toggle in Settings; the call itself lives with the cameras.
+  assert.ok(TABS.some((tab) => tab.id === 'calls'), 'the CALLS tab must exist');
   assert.equal(TABS[0].id, 'general');
   for (const id of ['looks', 'cameras', 'pro', 'jr']) {
     assert.ok(TABS.some((tab) => tab.id === id), `the ${id} tab must exist`);

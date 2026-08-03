@@ -111,6 +111,18 @@ contextBridge.exposeInMainWorld('jarvis', {
     revoke: (id) => ipcRenderer.invoke('mobile:revoke', id),
     onStatus: (callback) => on('mobile:status', callback)
   },
+  call: {
+    status: () => ipcRenderer.invoke('call:status'),
+    pairStart: () => ipcRenderer.invoke('call:pair-start'),
+    pairClaim: (host, code) => ipcRenderer.invoke('call:pair-claim', { host, code }),
+    unpair: () => ipcRenderer.invoke('call:unpair'),
+    ping: () => ipcRenderer.invoke('call:ping'),
+    dial: (sdp) => ipcRenderer.invoke('call:dial', { sdp }),
+    answer: (callId, sdp) => ipcRenderer.invoke('call:answer', { callId, sdp }),
+    ice: (callId, candidate) => ipcRenderer.invoke('call:ice', { callId, candidate }),
+    hangup: (callId, reason) => ipcRenderer.invoke('call:hangup', { callId, reason }),
+    onEvent: (callback) => on('call:event', callback)
+  },
   schedule: {
     list: () => ipcRenderer.invoke('schedule:list'),
     add: (input) => ipcRenderer.invoke('schedule:add', input),

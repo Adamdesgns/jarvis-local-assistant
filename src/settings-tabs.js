@@ -10,6 +10,7 @@
     { id: 'automation', label: 'AUTOMATION' },
     { id: 'abilities', label: 'ABILITIES' },
     { id: 'phone', label: 'PHONE' },
+    { id: 'calls', label: 'CALLS' },
     { id: 'pro', label: 'FEATURES' },
     { id: 'system', label: 'SYSTEM' },
     { id: 'jr', label: 'JARVIS JR' }

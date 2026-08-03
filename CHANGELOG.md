@@ -59,6 +59,71 @@
   a blank rules block — under a content lock JARVIS JR falls back to the
   rules it was built with, rather than trusting every caller to remember.
 
+### Added — FAMILY CALLS: video-call JARVIS JR over Tailscale
+- Pair once in Settings → CALLS (show a 6-digit code on one PC, type it on the
+  other), then call from the strip above the camera grid. Two-way video +
+  audio via WebRTC, PC-to-PC over the tailnet — no cloud, no accounts, no cost.
+- The line is a second Tailscale-only server (port 27184, mobile-server mold):
+  refuses to start without Tailscale, one paired peer, shared-secret auth on
+  every request, one call at a time. This build never auto-answers; the
+  JR build's 20-second auto-answer arrives with the kid-side release.
+
+### Fixed — PRIVACY.md now describes what the app actually does
+- Rewritten from the code rather than from intent. The old version was last
+  edited 2026-07-24, before the Kokoro voice shipped and before the Pro gate was
+  removed, and it was **wrong in seven places** — including its central promise.
+- **"Local mode sends nothing off the PC" was false.** The default TTS engine is
+  Kokoro, whose model (~326 MB) is downloaded from huggingface.co. Setting up
+  local voice also downloads the openWakeWord `hey_jarvis` model and a
+  faster-whisper model. A fresh install talks to the internet before you enable
+  anything. There is now a dedicated "What gets downloaded the first time"
+  section saying so.
+- **"API keys are never written in plain text" was conditionally false.** Only
+  the OpenAI key refuses to save when Windows secure storage is unavailable;
+  every other secret silently falls back to plain text in `settings.json`. The
+  page now names that hole instead of glossing it.
+- **Whole features were missing from "what leaves your computer":** cloud
+  cameras (Ring, Blink at `rest-prod.immedia-semi.com`, Nest via Google), the
+  Browser module (every page you visit, plus DuckDuckGo for typed searches), and
+  the mobile companion's Tailscale-bound server.
+- **The Pro/Lemon Squeezy section described a product that no longer exists.**
+  Replaced with the honest position: the buttons are gone, but the code that
+  could reach `api.lemonsqueezy.com` is still present and still wired to
+  internal channels, and never runs on its own.
+- **The conversation record was undocumented.** JARVIS keeps a rolling
+  plain-text transcript of both sides for ~2 days; that now has its own section
+  explaining what it is and how to delete it.
+- The data-folder listing was incomplete — `schedules.json`, `crash.log`, the
+  dated transcript files, and `cameras\` were all missing.
+
+### Removed — 223 MB of ffmpeg that never did anything
+- The installer no longer carries `ffmpeg-for-homebridge`'s binary. It arrived
+  as a transitive dependency (`ring-client-api` → `@homebridge/camera-utils` →
+  `ffmpeg-for-homebridge`) and was packed twice, once as `ffmpeg.exe` and once
+  as its own download cache — **223 MB for something no line of JARVIS ever
+  called.** The installer drops from 282 MB to 209 MB.
+- **Cameras are unaffected**, because none of them used it: local and Nest
+  cameras hand a plain `rtsp://` URL to `go2rtc.exe`, and Ring's live view
+  sends the renderer's WebRTC offer straight to Ring's cloud with no local
+  helper at all. `ring-client-api`'s ffmpeg features (`streamVideo`,
+  `recordToFile`) are the ones that need it, and JARVIS calls neither — it
+  never even calls `setFfmpegPath`.
+- **The binary goes, the JS module stays.** `@homebridge/camera-utils` does a
+  static top-level `import` of `ffmpeg-for-homebridge`, so deleting the whole
+  package would break that import and take Ring down with it. The package's own
+  `index.js` checks whether the binary exists and exports `undefined` when it
+  doesn't, and camera-utils then falls back to `'ffmpeg'` on PATH — a missing
+  binary is an anticipated state, not a crash. Verified by renaming the binary
+  away and re-running everything: 798/798 tests, 25/25 camera tests, and a load
+  probe across camera-utils, ring-client-api, and JARVIS's own Ring driver.
+- **Why it matters beyond size:** the binary is built `--enable-gpl
+  --enable-nonfree` and declares no licence. FFmpeg's own documentation says
+  nonfree builds are unredistributable, so shipping it in a public download was
+  never legal regardless of GPL compliance. Harmless on your own machine;
+  a blocker for any published release.
+- Not yet confirmed against real hardware: a live Ring stream. The code path is
+  proven, the account test is Adam's.
+
 ### Added — THE BROWSER (stage 1): surf inside JARVIS
 - A new **Browser** module (Modules → Browser): tabs (up to five), address bar,
   back/forward/reload, dressed in your skin with the active-tab underline in
