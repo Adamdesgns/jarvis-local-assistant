@@ -14,7 +14,11 @@
   if (!pairStart || !window.jarvis?.call) return;
 
   async function refresh() {
-    const s = await window.jarvis.call.status();
+    // On JR, call:status is kid-reachable only while the calls control is on;
+    // a locked-down profile makes the invoke throw. The settings dialog that
+    // hosts this section is parent-gated anyway — just stay quiet.
+    let s;
+    try { s = await window.jarvis.call.status(); } catch { return; }
     if (!s.server.running) status.textContent = s.server.reason || 'Calls are off.';
     else if (s.paired) status.textContent = `Paired with ${s.peerName}. Line is up on ${s.server.address}.`;
     else status.textContent = `Line is up on ${s.server.address}, waiting to be paired.`;

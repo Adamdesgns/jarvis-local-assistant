@@ -2,7 +2,14 @@
 // WebRTC does the heavy lifting; this file's job is honest state on screen
 // and cleaning up EVERY track on the way out — the camera light going off
 // when the call ends is a feature people actually check.
-(() => {
+(async () => {
+  // On the JR build this file stands down entirely — the kid's call surface
+  // is src/jr-call-ui.js (Call Dad on the stage, big ring, auto-answer). Two
+  // listeners on the same call events would double-answer a single ring.
+  try {
+    const jr = await window.jarvis?.jrStatus?.();
+    if (jr?.jr) return;
+  } catch {}
   const panel = document.getElementById('jr-panel');
   const presenceDot = document.getElementById('jr-presence');
   const presenceLabel = document.getElementById('jr-presence-label');

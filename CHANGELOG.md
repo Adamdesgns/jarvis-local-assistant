@@ -59,6 +59,19 @@
   a blank rules block — under a content lock JARVIS JR falls back to the
   rules it was built with, rather than trusting every caller to remember.
 
+### Added — FAMILY CALLS, the JR side: 📞 CALL DAD
+- A big CALL DAD button on the kid's main screen, green dot when Dad's PC is
+  awake. When Dad calls: a full-screen ring with a giant ANSWER button and an
+  honest countdown — "Answering by itself in 15…" — because if nobody clicks,
+  the call connects on its own after 20 seconds (camera and mic on, with a
+  banner saying exactly that). A parent can turn auto-answer off in Settings →
+  CALLS; the kid can't (the checklist gate drops the write).
+- Calls and the rock-paper-scissors game share the webcam politely: starting
+  a call folds the game and its lens first, hanging up releases every track,
+  and the next "rock paper scissors" wakes the game camera like always.
+- The kid can call and answer Dad — and nothing else. Choosing WHO this PC is
+  paired to stays behind the parent PIN, always.
+
 ### Added — FAMILY CALLS: video-call JARVIS JR over Tailscale
 - Pair once in Settings → CALLS (show a 6-digit code on one PC, type it on the
   other), then call from the strip above the camera grid. Two-way video +

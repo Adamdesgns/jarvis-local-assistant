@@ -1127,3 +1127,35 @@ body.jr-locked #cc-root {
 #call-controls { display: flex; gap: 12px; align-items: center; }
 #call-timer { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-muted, #9aa); min-width: 44px; }
 #call-status-line { margin: 0; font-size: 13px; color: var(--text-muted, #9aa); }
+
+/* ---- FAMILY CALLS, JR-sized -------------------------------------------- */
+/* The kid's stage button and the bigger everything the .jr-call overlay
+   gets. The presence dot rides inside the button so there is exactly one
+   thing to look at: green means Dad's PC is awake. */
+#jr-call-dad {
+  margin-top: var(--s3, 12px); align-self: center;
+  display: inline-flex; align-items: center; gap: 10px;
+  font: 700 16px var(--font-display, inherit); letter-spacing: .06em;
+  padding: 12px 22px; border-radius: 999px; cursor: pointer;
+}
+#jr-call-dad[hidden] { display: none; }
+#jr-call-dad:disabled { opacity: .55; cursor: default; }
+.jr-call-dad-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--text-muted, #666); }
+#jr-call-dad.online .jr-call-dad-dot { background: #3ad06a; box-shadow: 0 0 8px rgba(58, 208, 106, .8); }
+
+#call-overlay.jr-call #call-ring-label { font-size: 34px; font-weight: 700; }
+#call-overlay.jr-call #call-answer,
+#call-overlay.jr-call #call-decline {
+  font-size: 22px; font-weight: 700; padding: 18px 40px; border-radius: 16px; cursor: pointer;
+}
+#call-overlay.jr-call #call-answer { background: #1f8a44; color: #fff; border: none; }
+#call-overlay.jr-call #call-decline { background: #8a2430; color: #fff; border: none; }
+#call-overlay.jr-call #call-end { background: #a01f2e; color: #fff; border: none; font-size: 18px; font-weight: 700; padding: 14px 34px; border-radius: 14px; cursor: pointer; }
+#call-countdown { margin: 0; font-size: 16px; color: #ffd166; }
+#call-countdown[hidden] { display: none; }
+#call-auto-banner {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 960;
+  margin: 0; padding: 8px 18px; border-radius: 999px; background: rgba(31, 138, 68, .92);
+  color: #fff; font-weight: 700; font-size: 14px; letter-spacing: .05em;
+}
+#call-auto-banner[hidden] { display: none; }

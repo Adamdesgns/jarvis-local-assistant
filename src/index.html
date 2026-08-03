@@ -53,6 +53,7 @@
           <div class="audio-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </div>
         <p id="orb-reply" class="orb-reply" role="status" hidden></p>
+        <button id="jr-call-dad" type="button" hidden><span class="jr-call-dad-dot"></span>📞 CALL DAD</button>
         <div id="search-flight" class="search-flight" aria-hidden="true">
           <span class="flight-line line-one"></span><span class="flight-line line-two"></span>
           <span class="flight-line line-three"></span><span class="flight-line line-four"></span>
@@ -771,11 +772,13 @@
     <div id="call-overlay" hidden>
       <div id="call-ring" hidden>
         <p id="call-ring-label">Incoming call</p>
+        <p id="call-countdown" hidden></p>
         <div id="call-ring-actions">
           <button id="call-answer" type="button">ANSWER</button>
           <button id="call-decline" type="button">DECLINE</button>
         </div>
       </div>
+      <p id="call-auto-banner" hidden>📞 AUTO-ANSWERED — DAD'S CALLING</p>
       <div id="call-stage" hidden>
         <video id="call-remote" autoplay playsinline></video>
         <video id="call-local" autoplay playsinline muted></video>
@@ -790,6 +793,7 @@
     <script src="cameras-ui.js"></script>
     <script src="call-settings.js"></script>
     <script src="call-ui.js"></script>
+    <script src="jr-call-ui.js"></script>
     <script src="defense-ui.js"></script>
     <script src="browser-tabs.js"></script>
     <script src="browser-ui.js"></script>
