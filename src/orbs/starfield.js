@@ -52,6 +52,7 @@
 
   function createStarfield(canvas) {
     var ctx = canvas.getContext('2d');
+    var fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
 
     var REDUCED = false;
     try { REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
@@ -257,6 +258,8 @@
       }
 
       ctx.globalCompositeOperation = 'source-over';
+
+      if (fx) fx.apply(ctx, { t: T, palette: mode, intensity: master * cur.dim, reduced: REDUCED });
     }
 
     // ---------------------------------------------------------- loop control
@@ -347,6 +350,7 @@
         stop();
         if (unbindVis) { unbindVis(); unbindVis = null; }
         if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+        if (fx) { fx.destroy(); fx = null; }
         ctx = null;
         canvas = null;
       }

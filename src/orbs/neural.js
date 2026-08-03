@@ -141,6 +141,8 @@
       this.start();
     }
 
+    this.fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
+
     // Stop burning CPU while hidden; start() re-checks paused/reduced.
     this.unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(function () {
       if (self.destroyed) return;
@@ -589,6 +591,15 @@
     if (typeof ctx.filter === 'string') ctx.filter = 'none';
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+
+    if (this.fx) {
+      this.fx.apply(ctx, {
+        t: this.tI,
+        palette: this.P.mix >= 0.5 ? 'gold' : 'obsidian',
+        intensity: this.dim,
+        reduced: this.reduced
+      });
+    }
   };
 
   // ---------- loop control ----------
@@ -640,6 +651,7 @@
     this.destroyed = true;
     this.stop();
     if (this.unbindVis) { this.unbindVis(); this.unbindVis = null; }
+    if (this.fx) { this.fx.destroy(); this.fx = null; }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;

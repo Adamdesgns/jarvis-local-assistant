@@ -20,6 +20,9 @@
       // would otherwise start a second permanent rAF chain.
       this._running = true;
       requestAnimationFrame((time) => this.draw(time));
+      this._fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
+      this._reduced = false;
+      try { this._reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
       // Stop burning CPU while the window is hidden.
       this._hidden = false;
       this._unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(() => {
@@ -239,6 +242,7 @@
     destroy() {
       this._paused = true;
       if (this._unbindVis) { this._unbindVis(); this._unbindVis = null; }
+      if (this._fx) { this._fx.destroy(); this._fx = null; }
       this.resizeObserver.disconnect();
     }
 
@@ -283,6 +287,8 @@
       ctx.moveTo(this.cx - this.radius, scanY);
       ctx.lineTo(this.cx + this.radius, scanY);
       ctx.stroke();
+
+      if (this._fx) this._fx.apply(ctx, { t: time / 1000, palette: 'gold', intensity: 1, reduced: this._reduced });
 
       requestAnimationFrame((nextTime) => this.draw(nextTime));
     }

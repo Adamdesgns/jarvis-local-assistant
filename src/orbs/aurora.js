@@ -273,6 +273,15 @@
       ctx.filter = 'blur(' + BLUR_PX + 'px)';
       ctx.drawImage(off, 0, 0, W, H);
       ctx.filter = 'none';
+
+      if (fx) {
+        fx.apply(ctx, {
+          t: ht,
+          palette: modeCur >= 0.5 ? 'gold' : 'obsidian',
+          intensity: 1 - 0.45 * dimCur,
+          reduced: reduceMotion
+        });
+      }
     }
 
     // ---- animation loop ----------------------------------------------------
@@ -330,6 +339,7 @@
     }
 
     // ---- instance interface ------------------------------------------------
+    var fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
     var unbindVis = null;
     var instance = {
       setState: function (appState) {
@@ -363,6 +373,7 @@
         destroyed = true;
         stopLoop();
         if (unbindVis) { unbindVis(); unbindVis = null; }
+        if (fx) { fx.destroy(); fx = null; }
         if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
         if (reduceQuery) {
           if (typeof reduceQuery.removeEventListener === 'function') reduceQuery.removeEventListener('change', onMotionPrefChange);

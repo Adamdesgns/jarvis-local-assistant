@@ -76,6 +76,7 @@
       this.ctx = canvas.getContext('2d');
       this.scratch = document.createElement('canvas'); // offscreen only, never appended
       this.sctx = this.scratch.getContext('2d');
+      this.fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
       this.hasConic = typeof this.sctx.createConicGradient === 'function';
 
       // state machine (smoothed params, prototype-faithful)
@@ -235,6 +236,7 @@
       if (this.rmq && this.rmq.removeEventListener) this.rmq.removeEventListener('change', this._onRmq);
       this.rmq = null;
       this.flares = [];
+      if (this.fx) { this.fx.destroy(); this.fx = null; }
       this.canvas = null;
       this.ctx = null;
       this.scratch = null;
@@ -498,6 +500,15 @@
 
       // bright crescent at the key light
       this.ringLayer(this.cresArr, 0.85 * dimF, R * 0.995, R * 0.035, R * 0.022, this.cresCol, 0, 0);
+
+      if (this.fx) {
+        this.fx.apply(ctx, {
+          t: t,
+          palette: this.mMix >= 0.5 ? 'gold' : 'obsidian',
+          intensity: dimF,
+          reduced: this.reduced
+        });
+      }
     }
 
     // ---------- loop control ----------

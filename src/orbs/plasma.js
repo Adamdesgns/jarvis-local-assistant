@@ -413,6 +413,7 @@
     function make2D() {
       var ctx = canvas.getContext('2d');
       if (!ctx) return null;
+      var fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
 
       // precomputed noise-displaced filament chords — deterministic LCG seed
       var seed = 4107;
@@ -542,8 +543,17 @@
         c.arc(-R * 0.32, -R * 0.38, R * 0.30, 0, TAU);
         c.fill();
         c.globalCompositeOperation = 'source-over';
+
+        if (fx) {
+          fx.apply(c, {
+            t: t,
+            palette: m >= 0.5 ? 'gold' : 'obsidian',
+            intensity: fade,
+            reduced: reduced
+          });
+        }
       };
-      st.dispose = function () { };
+      st.dispose = function () { if (fx) { fx.destroy(); fx = null; } };
       return st;
     }
 

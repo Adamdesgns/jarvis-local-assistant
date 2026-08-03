@@ -57,6 +57,7 @@
     var actx = blurA.getContext('2d');
     var blurB = document.createElement('canvas');
     var bctx = blurB.getContext('2d');
+    var fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
 
     var REDUCED = false;
     try { REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
@@ -441,6 +442,8 @@
       if (HAS_FILTER) ctx.filter = 'none';
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
+
+      if (fx) fx.apply(ctx, { t: T, palette: mode, intensity: master * cur.dim, reduced: REDUCED });
     }
 
     function render() {
@@ -537,6 +540,7 @@
         stop();
         if (unbindVis) { unbindVis(); unbindVis = null; }
         if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+        if (fx) { fx.destroy(); fx = null; }
         scene = blurA = blurB = null;
         sctx = actx = bctx = null;
         ctx = null;

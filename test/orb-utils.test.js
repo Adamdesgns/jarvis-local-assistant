@@ -113,3 +113,7 @@ test('bindVisibility is a safe no-op outside the browser', () => {
   assert.equal(typeof unbind, 'function');
   unbind();
 });
+
+test('orb-fx is a no-op require outside the browser', () => {
+  assert.doesNotThrow(() => require('../src/orbs/orb-fx'));
+});

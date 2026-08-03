@@ -131,6 +131,8 @@
     }
     this.resize();
 
+    this.fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
+
     this._frameBound = this._frame.bind(this);
     if (this.reduced) { this.snap(); this.renderStatic(); }
     else this.startLoop();
@@ -188,6 +190,7 @@
     this.destroyed = true;
     this.stopLoop();
     if (this._unbindVis) { this._unbindVis(); this._unbindVis = null; }
+    if (this.fx) { this.fx.destroy(); this.fx = null; }
     if (this._ro) { this._ro.disconnect(); this._ro = null; }
     if (this._mq && this._onMQ) {
       try { this._mq.removeEventListener('change', this._onMQ); } catch (_) {}
@@ -425,6 +428,8 @@
     out.drawImage(this.buf, 0, 0, this.buf.width, this.buf.height,
       0, 0, this.canvas.width, this.canvas.height);
     out.globalAlpha = 1;
+
+    if (this.fx) this.fx.apply(out, { t: t, palette: this.palette, intensity: this.dimCur, reduced: this.reduced });
   };
 
   window.OrbEngine.register('zen', {
