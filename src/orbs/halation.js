@@ -446,7 +446,9 @@
       ctx.clearRect(0, 0, this.W, this.H);
 
       var dimF = 1 - 0.45 * this.dimMix; // error/offline settles near 55% intensity
-      var gainN = clamp(p.gain, 0.5, 1.6);
+      // Rare gentle surge — kept small since thinking already spawns flares.
+      var sg = this.reduced ? 0 : window.OrbUtils.surgeEnvelope(t);
+      var gainN = clamp(p.gain, 0.5, 1.6) * (1 + 0.3 * sg);
 
       // ambient wash — corona light bleeding onto whatever sits behind the orb
       var wash = ctx.createRadialGradient(CX, CY, 0, CX, CY, R * 3.1);

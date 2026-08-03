@@ -43,12 +43,8 @@
 
   var PERSP_K = 6.0; // perspective distance in units of R
 
-  function mix3(a, b, t) {
-    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-  }
-  function css(c, a) {
-    return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a.toFixed(4) + ')';
-  }
+  var mix3 = window.OrbUtils.mix3;
+  var css = window.OrbUtils.css;
 
   function createStarfield(canvas) {
     var ctx = canvas.getContext('2d');
@@ -59,13 +55,9 @@
 
     var W = 0, H = 0, DPR = 1, CX = 0, CY = 0, R = 100;
 
-    // Deterministic seeded randomness (hologram.js LCG pattern) — every boot
-    // produces the identical constellation.
-    var seed = 4107;
-    function srand() {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 4294967296;
-    }
+    // Deterministic seeded randomness — every boot produces the identical
+    // constellation.
+    var srand = window.OrbUtils.lcg(4107);
 
     // ---------------------------------------------------------- geometry
     // Fibonacci-sphere shell (hologram.js particle math ancestry) stored in
@@ -170,8 +162,11 @@
 
       var persp = PERSP_K * R;
       var gain = master * cur.dim;
+      // Rare dramatic surge — livelier while thinking (spin rises 1 -> 3.4);
+      // zero under reduced motion so the frozen clock can't bake one in.
+      var sg = REDUCED ? 0 : window.OrbUtils.surgeEnvelope(T, { strength: 1 + 0.2 * cur.spin / 3.4 });
       // Subtle audio-reactive brightness (speaking/listening).
-      var glow = cur.glow * (1 + audio * 0.28);
+      var glow = cur.glow * (1 + audio * 0.28) * (1 + 0.6 * sg);
       // Barely-there breathing keeps the sphere alive even when nothing changes.
       var breath = 1 + 0.008 * Math.sin(T * 0.5);
       var rEff = R * cur.tighten * breath;
@@ -255,6 +250,20 @@
         ctx.beginPath();
         ctx.arc(px, py, rad, 0, 6.2832);
         ctx.fill();
+      }
+
+      // Sweeping scan ring: a squashed ellipse riding the sphere's latitude,
+      // fading toward the poles (ULTRON scan-ring math via OrbUtils).
+      if (!REDUCED) {
+        var sw = window.OrbUtils.scanSweep(T, 0.4);
+        var swR = sw.scale * rEff;
+        if (swR > 2) {
+          ctx.strokeStyle = css(mix3(OBS.white, JAR.white, cur.mix), 0.10 * sw.alpha * glow * gain);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(CX, CY + sw.y * rEff * 0.42, swR, swR * 0.24, 0, 0, 6.2832);
+          ctx.stroke();
+        }
       }
 
       ctx.globalCompositeOperation = 'source-over';

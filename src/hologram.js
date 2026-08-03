@@ -275,7 +275,9 @@
       this.drawSphereGrid(ctx, time, intensity);
       this.drawNodes(ctx, time, intensity);
       this.drawParticles(ctx, time, intensity);
-      this.drawCore(ctx, time, intensity);
+      // Rare dramatic core surge (suppressed under reduced motion).
+      const sg = (this._reduced || !window.OrbUtils) ? 0 : window.OrbUtils.surgeEnvelope(time / 1000);
+      this.drawCore(ctx, time, intensity * (1 + 0.6 * sg));
 
       const scanY = this.cy + Math.sin(time * .00062) * this.radius * .9;
       const scan = ctx.createLinearGradient(this.cx - this.radius, scanY, this.cx + this.radius, scanY);

@@ -77,10 +77,9 @@
       var nctx = tile.getContext('2d');
       if (nctx) {
         var id = nctx.createImageData(128, 128);
-        var seed = 4107;
+        var rand = window.OrbUtils.lcg(4107);
         for (var i = 0; i < id.data.length; i += 4) {
-          seed = (seed * 1664525 + 1013904223) >>> 0;
-          var v = (seed / 4294967296 * 255) | 0;
+          var v = (rand() * 255) | 0;
           id.data[i] = id.data[i + 1] = id.data[i + 2] = v;
           id.data[i + 3] = 4;
         }
@@ -272,6 +271,9 @@
     var beatPhase = (t % T) / T;
     var pulse = Math.exp(-4.5 * beatPhase);
 
+    /* rare gentle surge — zen stays zen, so the strength is kept low */
+    var sg = this.reduced ? 0 : window.OrbUtils.surgeEnvelope(t, { strength: 1 + 0.2 * wT });
+
     /* breathing — audio adds a whisper of extra swell while listening/speaking */
     var amp = mix(0.013, 0.020 + 0.006 * aud, wL);
     var breath = 1 + amp * Math.sin(TAU * t / 6.5);
@@ -279,7 +281,7 @@
     /* ---- ambient background glow ---- */
     var glowC = mixc(PAL.bgGlow.ob, PAL.bgGlow.jv, m);
     ctx.fillStyle = aura(ctx, cx, cy, R * 2.6, glowC,
-      mix(0.11, 0.13, m) * (1 + (0.10 * pulse + 0.14 * aud) * wL));
+      mix(0.11, 0.13, m) * (1 + (0.10 * pulse + 0.14 * aud) * wL) * (1 + 0.3 * sg));
     ctx.fillRect(0, 0, W, H);
 
     ctx.save();
@@ -347,7 +349,7 @@
     /* soft core glow — lit from within */
     var coreC = mixc(PAL.core.ob, PAL.core.jv, m);
     ctx.fillStyle = aura(ctx, cx, cy - R * 0.10, R * 0.85, coreC,
-      mix(0.16, 0.20, m) * (1 + (0.15 * pulse + 0.18 * aud) * wL));
+      mix(0.16, 0.20, m) * (1 + (0.15 * pulse + 0.18 * aud) * wL) * (1 + 0.5 * sg));
     ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
     ctx.globalCompositeOperation = 'source-over';
 

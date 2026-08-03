@@ -13,33 +13,12 @@
   var BLUR_PX = 7;    // prototype's CSS blur, applied at composite time
 
   // ---- seeded randomness (stable look every load, prototype seed) ----------
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      var t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
+  var mulberry32 = window.OrbUtils.mulberry32;
 
-  // ---- color helpers -------------------------------------------------------
-  function hsl2rgb(h, s, l) {
-    h = ((h % 360) + 360) % 360;
-    var c = (1 - Math.abs(2 * l - 1)) * s;
-    var x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-    var m = l - c / 2, r = 0, g = 0, b = 0;
-    if (h < 60)       { r = c; g = x; }
-    else if (h < 120) { r = x; g = c; }
-    else if (h < 180) { g = c; b = x; }
-    else if (h < 240) { g = x; b = c; }
-    else if (h < 300) { r = x; b = c; }
-    else              { r = c; b = x; }
-    return [r + m, g + m, b + m];
-  }
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function mixRGB(a, b, t) {
-    return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
-  }
+  // ---- color helpers (shared implementations moved to orb-utils.js) --------
+  var hsl2rgb = window.OrbUtils.hsl2rgb;
+  var lerp = window.OrbUtils.lerp;
+  var mixRGB = window.OrbUtils.mix3;
 
   // ---- mood targets (prototype state machine, verbatim) --------------------
   var STATE_TARGETS = {
@@ -201,7 +180,9 @@
       var u = Math.min(W, H) * 0.24;            // cloud unit -> plasma ~45-55% of the stage
       var spread = cur.spread, turb = cur.turb;
       // dim (error/offline) pulls intensity to ~55%; voice level adds a subtle lift
-      var bright = cur.bright * (1 - 0.45 * dimCur) * (1 + audioCur * 0.25);
+      // plus a rare dramatic surge (stronger while thinking as turb rises).
+      var sg = reduceMotion ? 0 : window.OrbUtils.surgeEnvelope(ht, { strength: 1 + 0.4 * cur.turb / 2.2 });
+      var bright = cur.bright * (1 - 0.45 * dimCur) * (1 + audioCur * 0.25) * (1 + 0.5 * sg);
       var turbAmp = 0.45 + 0.55 * turb;
 
       var sumX = 0, sumY = 0;
