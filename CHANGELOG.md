@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added — FAMILY CALLS: video-call JARVIS JR over Tailscale
+- Pair once in Settings → CALLS (show a 6-digit code on one PC, type it on the
+  other), then call from the strip above the camera grid. Two-way video +
+  audio via WebRTC, PC-to-PC over the tailnet — no cloud, no accounts, no cost.
+- The line is a second Tailscale-only server (port 27184, mobile-server mold):
+  refuses to start without Tailscale, one paired peer, shared-secret auth on
+  every request, one call at a time. This build never auto-answers; the
+  JR build's 20-second auto-answer arrives with the kid-side release.
+
 ### Fixed — PRIVACY.md now describes what the app actually does
 - Rewritten from the code rather than from intent. The old version was last
   edited 2026-07-24, before the Kokoro voice shipped and before the Pro gate was
