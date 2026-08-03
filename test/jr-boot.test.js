@@ -66,6 +66,26 @@ test('ipc allowlist: feature channels absent when the control is off, present wh
   assert.ok(filesOn.has('dialog:folder'));
 });
 
+// Family calls: on by default (the parent opt-in happened at pairing time —
+// pair/unpair channels are never on the kid surface at ANY setting), and the
+// whole set vanishes when a parent switches calls off.
+test('ipc allowlist: call channels follow the calls flag; pairing is never kid-reachable', () => {
+  const on = jrIpcAllowlist(profileFor('jr', DEFAULT_CONTROLS));
+  assert.ok(on.has('call:status'));
+  assert.ok(on.has('call:ping'));
+  assert.ok(on.has('call:dial'));
+  assert.ok(on.has('call:answer'));
+  assert.ok(on.has('call:ice'));
+  assert.ok(on.has('call:hangup'));
+  assert.ok(!on.has('call:pair-start'));
+  assert.ok(!on.has('call:pair-claim'));
+  assert.ok(!on.has('call:unpair'));
+  const off = jrIpcAllowlist(profileFor('jr', { ...DEFAULT_CONTROLS, calls: false }));
+  assert.ok(!off.has('call:dial'));
+  assert.ok(!off.has('call:answer'));
+  assert.ok(!off.has('call:status'));
+});
+
 test('ipc allowlist: tasks is on by default (matches DEFAULT_CONTROLS.tasks)', () => {
   const off = jrIpcAllowlist(profileFor('jr', DEFAULT_CONTROLS));
   assert.ok(off.has('tasks:list'));

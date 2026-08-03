@@ -56,7 +56,11 @@ test('the added keys are kid-reach checklist keys, defaulting OFF', () => {
   for (const key of ['nightShift', 'schedules', 'autonomy', 'phone']) {
     assert.ok(!CONTROL_KEYS.includes(key), `${key} is a parent SETTING, not a checklist key`);
   }
-  assert.equal(CONTROL_KEYS.length, 18);
+  // calls is the exception among reach-out keys: default ON, because the
+  // parent opt-in happens at pairing time (pair channels are admin-only).
+  assert.ok(CONTROL_KEYS.includes('calls'));
+  assert.equal(DEFAULT_CONTROLS.calls, true);
+  assert.equal(CONTROL_KEYS.length, 19);
 });
 
 test('gameCamera is its own key, never a rider on cameras — the two mean different things', () => {

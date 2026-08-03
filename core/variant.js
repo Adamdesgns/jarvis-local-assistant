@@ -42,6 +42,13 @@ const CONTROL_KEYS = Object.freeze([
   // kid may view the household cameras", and conflating the two would let
   // one checkbox silently mean both.
   'cameras', 'gameCamera', 'documents', 'files', 'apps', 'browser', 'terminal', 'screenRead', 'power',
+  // Family calls: dialing and answering the ONE paired PC (Dad's). On by
+  // default because the parent opt-in already happened at pairing time — the
+  // pair/unpair channels themselves are admin-only, so an unpaired JR has no
+  // line no matter what this says. Its own key for the same reason gameCamera
+  // is: "may use the webcam to call Dad" must never ride on "may view the
+  // household cameras".
+  'calls',
   // Grown-up-power features a parent may hand down. All default off.
   'claudeBridge', 'screenDrive', 'defense'
 ]);
@@ -65,6 +72,7 @@ const CONTROL_LABELS = Object.freeze({
   terminal: 'The terminal',
   screenRead: 'Screen reading',
   power: 'Power (restart/shutdown)',
+  calls: 'Family calls (call Dad & answer Dad — the paired PC only)',
   claudeBridge: 'Ask Claude (cloud AI — costs money)',
   screenDrive: 'Let JARVIS click and type on the PC',
   defense: 'Defense mode'
@@ -73,7 +81,7 @@ const CONTROL_LABELS = Object.freeze({
 const DEFAULT_CONTROLS = Object.freeze({
   games: true, battle: true, quips: true, homework: true, tasks: true, timers: true,
   cameras: false, gameCamera: false, documents: false, files: false, apps: false,
-  browser: false, terminal: false, screenRead: false, power: false,
+  browser: false, terminal: false, screenRead: false, power: false, calls: true,
   claudeBridge: false, screenDrive: false, defense: false
 });
 
@@ -107,7 +115,7 @@ const STANDARD_PROFILE = Object.freeze({
   contentLock: false,
   games: true, battle: true, quips: true, homework: true, tasks: true, timers: true,
   cameras: true, gameCamera: true, documents: true, files: true, apps: true,
-  browser: true, terminal: true, screenRead: true, power: true,
+  browser: true, terminal: true, screenRead: true, power: true, calls: true,
   screenDrive: true, claudeBridge: true, defense: true,
   nightShift: true, schedules: true, autonomy: true, phone: true
 });
@@ -249,7 +257,12 @@ const FEATURE_IPC = Object.freeze({
   // The grown-up-power checklist keys. defense:zones stays OUT — county
   // configuration is settings work, admin surface only.
   defense: ['defense:status', 'defense:enter', 'defense:exit', 'defense:wave-off'],
-  screenDrive: ['screen:drive-stop']
+  screenDrive: ['screen:drive-stop'],
+  // Family calls: the kid may check the line, dial Dad, answer, and hang up.
+  // call:pair-start / call:pair-claim / call:unpair are deliberately absent —
+  // choosing WHO this PC is bound to is parental territory (see the "never
+  // admitted" list below), so they stay admin-only behind the PIN session.
+  calls: ['call:status', 'call:ping', 'call:dial', 'call:answer', 'call:ice', 'call:hangup']
   // documents/apps/browser/power/claudeBridge gate no dedicated IPC channel
   // today — they run through command:submit, gated inside CommandRouter.
   // timers has no IPC surface yet in main.js. Nothing to list here until one
@@ -278,6 +291,7 @@ const JR_IPC = Object.freeze([
 //   defense:zones                                        — county configuration
 //   cameras:add-blink/blink-pin/add-ring/add-nest/       — camera CONFIG:
 //     add-rtsp/remove-account/set-armed                     credentials + arming
+//   call:pair-start, call:pair-claim, call:unpair        — who this PC is bound to
 //   jr:parent:controls, jr:parent:pin                    — the checklist and PIN
 
 // The KID surface for a given profile. What this Set does NOT contain is not
