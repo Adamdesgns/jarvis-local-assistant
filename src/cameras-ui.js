@@ -394,10 +394,21 @@
     }
   }
 
+  // Renders overlap: startup fires one and the driver's cameras:changed fires
+  // another moments later. Every await below is a window where the older render
+  // can interleave with the newer one and BOTH append their tiles — Adam saw
+  // that as 8 tiles for 4 cameras. So each render takes a ticket, all slow
+  // work happens before anything touches the DOM, and a render that has been
+  // overtaken discards itself. The newest render is the only one that draws.
+  let renderTicket = 0;
   async function render() {
-    for (const key of [...livePlayers.keys()]) stopLive(key);
+    const ticket = ++renderTicket;
     renderSystems();
     const cameras = await window.jarvis.cameras.list();
+    const poppedOutKeys = await window.jarvis.cameras.poppedOut?.() || [];
+    const hiddenIds = await window.jarvis.cameras.hiddenList?.() || [];
+    if (ticket !== renderTicket) return;
+    for (const key of [...livePlayers.keys()]) stopLive(key);
     grid.innerHTML = '';
     if (!cameras.length) {
       grid.innerHTML = `
@@ -415,10 +426,10 @@
       count[cam.accountId] = (count[cam.accountId] || 0) + 1;
       return count;
     }, {});
-    // Windows outlive a grid rebuild, so ask which cameras are still popped out
-    // rather than assuming a fresh tile owns its stream.
-    const poppedOut = new Set(await window.jarvis.cameras.poppedOut?.() || []);
-    const hidden = new Set(await window.jarvis.cameras.hiddenList?.() || []);
+    // Windows outlive a grid rebuild, so the popped-out set was asked for above
+    // rather than assumed; from here down everything is synchronous on purpose.
+    const poppedOut = new Set(poppedOutKeys);
+    const hidden = new Set(hiddenIds);
     let hiddenCount = 0;
     for (const camera of cameras) {
       if (hidden.has(`${camera.brand}:${camera.id}`)) { hiddenCount += 1; continue; }
