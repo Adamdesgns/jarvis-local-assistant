@@ -41,6 +41,14 @@ test('THE TERMINAL stage 2 channels are wired end to end', () => {
   }
 });
 
+test('JR call channels are wired end to end', () => {
+  for (const channel of ['call:status', 'call:pair-start', 'call:pair-claim', 'call:unpair',
+    'call:dial', 'call:answer', 'call:ice', 'call:hangup', 'call:ping']) {
+    assert.ok(preload.includes(`'${channel}'`), `preload.js is missing ${channel}`);
+    assert.ok(handled.has(channel), `main.js is missing a handler for ${channel}`);
+  }
+});
+
 test('HARD RAIL: no IPC channel hands raw shell to anything but the console', () => {
   // The terminal:run handler is the ONLY route to command-runner. If another
   // channel starts calling it, that is a product decision needing Adam, not a

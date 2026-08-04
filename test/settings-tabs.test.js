@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { TABS, normalizeTab, sectionHidden } = require('../src/settings-tabs');
 
-test('TABS: eight tabs, unique ids, GENERAL first, CAMERAS and FEATURES present, every tab labelled', () => {
-  assert.equal(TABS.length, 8);
+test('TABS: nine tabs, unique ids, GENERAL first, CAMERAS, CALLS and FEATURES present, every tab labelled', () => {
+  assert.equal(TABS.length, 9);
+  // Family calls pair + toggle in Settings; the call itself lives with the cameras.
+  assert.ok(TABS.some((tab) => tab.id === 'calls'), 'the CALLS tab must exist');
   assert.equal(TABS[0].id, 'general');
   // Camera sign-in lives in Settings, never in the cameras module.
   assert.ok(TABS.some((tab) => tab.id === 'cameras'), 'the CAMERAS tab must exist');

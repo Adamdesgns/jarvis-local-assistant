@@ -876,3 +876,31 @@ body.defense #autonomy-cards { display: none; }
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   margin: 0; padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px;
 }
+
+/* ---- FAMILY CALLS ------------------------------------------------------- */
+/* The JR strip above the camera grid, and the fullscreen call layer. The
+   overlay sits above the defense wall (z 60) and the toasts (z 70) — a live
+   call with the kid outranks everything else on this screen. */
+#jr-panel { display: flex; align-items: center; gap: 8px; padding: 0 0 10px; }
+#jr-panel[hidden] { display: none; }
+.jr-presence-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted, #666); flex: none; }
+.jr-presence-dot.online { background: #3ad06a; box-shadow: 0 0 6px rgba(58, 208, 106, .7); }
+#jr-presence-label { font-size: 12px; color: var(--text-muted, #9aa); flex: 1; }
+#jr-call-button { white-space: nowrap; }
+
+#call-overlay {
+  position: fixed; inset: 0; z-index: 950; background: rgba(2, 6, 12, .92);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+#call-overlay[hidden] { display: none; }
+#call-ring { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+#call-ring[hidden] { display: none; }
+#call-ring-label { font-size: 22px; letter-spacing: .04em; margin: 0; }
+#call-ring-actions { display: flex; gap: 16px; }
+#call-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 94vw; }
+#call-stage[hidden] { display: none; }
+#call-remote { max-width: 92vw; max-height: 76vh; border-radius: 10px; background: #000; }
+#call-local { position: absolute; right: 26px; bottom: 104px; width: 180px; border-radius: 8px; background: #000; }
+#call-controls { display: flex; gap: 12px; align-items: center; }
+#call-timer { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-muted, #9aa); min-width: 44px; }
+#call-status-line { margin: 0; font-size: 13px; color: var(--text-muted, #9aa); }

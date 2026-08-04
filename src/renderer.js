@@ -1922,6 +1922,7 @@ function openSettings(tab = 'general') {
   $('setting-mobile').checked = Boolean(state.settings.mobileEnabled);
   $('setting-mobile-port').value = state.settings.mobilePort || 27183;
   $('setting-mobile-public-url').value = state.settings.mobilePublicUrl || '';
+  $('call-enabled').checked = Boolean(state.settings.callEnabled);
   $('setting-claude-bridge').checked = Boolean(state.settings.claudeBridgeEnabled);
   $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
   $('setting-screen-drive').checked = Boolean(state.settings.screenDriveEnabled);
@@ -1976,6 +1977,7 @@ async function saveSettings(event) {
     mobileEnabled: $('setting-mobile').checked,
     mobilePort: Number($('setting-mobile-port').value) || 27183,
     mobilePublicUrl: $('setting-mobile-public-url').value.trim(),
+    callEnabled: $('call-enabled').checked,
     claudeBridgeEnabled: $('setting-claude-bridge').checked,
     screenControlEnabled: $('setting-screen-control').checked,
     screenDriveEnabled: $('setting-screen-drive').checked,
