@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:;" />
+  <title>JARVIS · HUD</title>
+  <link rel="stylesheet" href="hud.css" />
+</head>
+<body>
+  <div class="hud">
+    <header class="hud-bar">
+      <div class="hud-title">J.A.R.V.I.S <span class="dim">·</span> OS <span class="hud-sub">VOICE-ACTUATED UNIFIED LOGIC TERMINAL</span></div>
+      <div class="hud-chips">
+        <span class="chip" id="chip-core">CORE · —</span>
+        <span class="chip" id="chip-stt">EARS · —</span>
+        <span class="chip" id="chip-tts">MOUTH · —</span>
+      </div>
+      <div class="hud-clock">
+        <span id="clock">--:--</span><span class="hud-seconds" id="clock-seconds">:--</span>
+        <div class="hud-date" id="clock-date">—</div>
+      </div>
+      <button class="hud-close" id="hud-close" title="Close HUD">✕</button>
+    </header>
+
+    <main class="hud-grid">
+      <section class="panel" id="panel-vitals">
+        <h2>SYSTEM VITALS</h2>
+        <div class="rows" id="vitals-rows"></div>
+        <h2 class="gap">VAULT</h2>
+        <div class="rows" id="vault-rows"></div>
+        <div class="vault-feed" id="vault-feed"></div>
+      </section>
+
+      <section class="panel panel-center">
+        <h2>COMMAND DECK <span class="dim" id="deck-state">IDLE</span></h2>
+        <div class="deck" id="deck"></div>
+        <h2 class="gap">CONSOLE</h2>
+        <div class="console" id="console"><div class="console-line dim">Speak, click a command, or type below. The vault remembers everything.</div></div>
+        <form class="console-input" id="console-form">
+          <span class="prompt">&gt;</span>
+          <input id="console-text" type="text" autocomplete="off" spellcheck="false" placeholder="plan today" />
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>SCHEDULE <span class="dim">/ TODAY</span></h2>
+        <div class="schedule" id="schedule"></div>
+        <h2 class="gap">AUDIO I/O</h2>
+        <div class="rows" id="audio-rows"></div>
+        <h2 class="gap">ACTIVITY</h2>
+        <div class="activity" id="activity"></div>
+      </section>
+    </main>
+
+    <footer class="hud-foot">
+      <span>MINDSET: SPEAK. ROUTE. REMEMBER. REPEAT.</span>
+      <span class="dim" id="foot-version">—</span>
+    </footer>
+  </div>
+  <script src="hud.js"></script>
+</body>
+</html>

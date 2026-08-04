@@ -113,6 +113,22 @@ contextBridge.exposeInMainWorld('jarvis', {
     hangup: (callId, reason) => ipcRenderer.invoke('call:hangup', { callId, reason }),
     onEvent: (callback) => on('call:event', callback)
   },
+  // The JARVIS OS additions: the HUD (the face), the vault (the memory), and
+  // the skills folder (the brain cells). Deck commands still go through
+  // submitCommand above, so the HUD never gets its own command pipeline.
+  hud: {
+    open: () => ipcRenderer.invoke('hud:open'),
+    data: () => ipcRenderer.invoke('hud:data')
+  },
+  vault: {
+    stats: () => ipcRenderer.invoke('vault:stats'),
+    recent: (limit) => ipcRenderer.invoke('vault:recent', limit),
+    search: (query) => ipcRenderer.invoke('vault:search', query),
+    reveal: () => ipcRenderer.invoke('vault:reveal')
+  },
+  skills: {
+    list: () => ipcRenderer.invoke('skills:list')
+  },
   schedule: {
     list: () => ipcRenderer.invoke('schedule:list'),
     add: (input) => ipcRenderer.invoke('schedule:add', input),

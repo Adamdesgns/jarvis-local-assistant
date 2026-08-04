@@ -49,6 +49,8 @@ const { CallClient } = require('./core/call/call-client');
 const { CallSignalServer } = require('./core/call/call-signal-server');
 const { ScheduleStore } = require('./core/schedule-store');
 const { ScheduleService } = require('./core/schedule-service');
+const { VaultService } = require('./core/vault-service');
+const { SkillService } = require('./core/skill-service');
 const { NightShiftService } = require('./core/night-shift');
 const { HeartbeatService, buildDefaultChecks } = require('./core/heartbeat');
 const QRCode = require('qrcode');
@@ -118,6 +120,9 @@ let scheduleStore;
 let scheduleService;
 let nightShift;
 let heartbeat;
+let vault;
+let skills;
+let hudWindow;
 let licenseService;
 let camerasInitialized = false;
 let currentSkin = 'classic';
@@ -258,6 +263,40 @@ function createMainWindow() {
       app.quit();
     });
   }
+}
+
+// The face: one dark terminal screen — vitals, command deck, schedule, audio
+// I/O, live vault data. No tabs. It reuses the main preload, so everything it
+// shows and runs goes through the same IPC seams as the main window.
+function openHudWindow() {
+  if (hudWindow && !hudWindow.isDestroyed()) {
+    hudWindow.show();
+    hudWindow.focus();
+    return;
+  }
+  hudWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 980,
+    minHeight: 620,
+    show: false,
+    frame: false,
+    backgroundColor: '#04070a',
+    title: 'JARVIS · HUD',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false
+    }
+  });
+  hudWindow.loadFile(path.join(__dirname, 'src', 'hud.html'));
+  hudWindow.once('ready-to-show', () => hudWindow.show());
+  hudWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  hudWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+  hudWindow.on('closed', () => { hudWindow = null; });
 }
 
 function orbWorkArea(bounds) {
@@ -636,6 +675,8 @@ function setupIpc() {
       onStep: (step) => sendEverywhere('agent:step', { index: step.index, tool: step.tool, summary: summarizeAgentStep(step) })
     });
     transcript.append('jarvis', result?.response);
+    // "Open the HUD" — the router flags it, the main process owns the window.
+    if (result?.openHud) openHudWindow();
     return result;
   });
   // The record, as text, ready to paste. Reading it is deliberately a pull:
@@ -853,6 +894,44 @@ function setupIpc() {
   ipcMain.handle('tasks:add', (_event, input) => tasks.add(input));
   ipcMain.handle('tasks:update', (_event, { id, patch }) => tasks.update(id, patch));
   ipcMain.handle('tasks:remove', (_event, id) => tasks.remove(id));
+  ipcMain.handle('hud:open', () => { openHudWindow(); return { ok: true }; });
+  // One snapshot with everything the HUD's panels draw. Pull-only: the HUD
+  // re-invokes this on store-change events instead of anything streaming at it.
+  ipcMain.handle('hud:data', () => {
+    const os = require('node:os');
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    return {
+      vitals: {
+        version: app.getVersion(),
+        tasks: tasks.summary(),
+        doneToday: tasks.list({ status: 'done' }).filter((task) => task.completedAt && new Date(task.completedAt) >= startOfDay).length,
+        memories: memory.list(1000).length,
+        vault: vault.stats(),
+        uptimeHours: Math.floor(os.uptime() / 3600),
+        memUsedGb: ((os.totalmem() - os.freemem()) / 1024 ** 3).toFixed(1)
+      },
+      schedule: scheduleStore ? scheduleStore.list().filter((item) => item.enabled) : [],
+      skills: skills.list(),
+      voice: localVoice.getStatus(),
+      tts: voiceService.status(),
+      vaultRecent: vault.recent(8),
+      activity: log.recent(8)
+    };
+  });
+  ipcMain.handle('vault:stats', () => vault.stats());
+  ipcMain.handle('vault:recent', (_event, limit) => vault.recent(Math.min(50, Number(limit) || 8)));
+  ipcMain.handle('vault:search', (_event, query) => vault.search(String(query || ''), 10));
+  ipcMain.handle('vault:reveal', async () => {
+    try {
+      fs.mkdirSync(vault.root, { recursive: true });
+      await shell.openPath(vault.root);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error && error.message ? error.message : String(error) };
+    }
+  });
+  ipcMain.handle('skills:list', () => skills.list());
   ipcMain.handle('memory:list', () => memory.list(100));
   ipcMain.handle('memory:add', (_event, { text, project }) => memory.add(text, project));
   ipcMain.handle('memory:update', (_event, { id, text }) => memory.update(id, text));
@@ -1326,6 +1405,9 @@ app.whenReady().then(async () => {
   currentSkin = config.getSettings().skin || 'classic';
   memory = new MemoryStore(app.getPath('userData'));
   tasks = new TaskStore(app.getPath('userData'));
+  // The vault: plain-markdown long-form memory (raw / wiki / outputs), living
+  // beside the JSON stores in the same backed-up userData folder.
+  vault = new VaultService(app.getPath('userData'));
   tools = new ToolService({ config, shell, app, emit: sendEverywhere });
   documents = new DocumentService({ config, shell, emit: sendEverywhere });
   // getCameras/getAi are lazy getters: `cameras` isn't constructed until
@@ -1437,7 +1519,15 @@ app.whenReady().then(async () => {
   // never activated a key, effective licence or not.
   defense = new DefenseService({ config: gatedConfig, ai, cameras, emit: sendEverywhere, log });
   defense.start();
-  router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands, defense });
+  // The brain cells: skills/ ships with the app, one SKILL.md per skill.
+  // scheduleStore is constructed just below, so the skills take a lazy getter.
+  skills = new SkillService({
+    skillsDir: path.join(__dirname, 'skills'),
+    vault, tasks, memory,
+    getSchedules: () => scheduleStore,
+    log
+  });
+  router = new CommandRouter({ config: gatedConfig, tools, documents, ai, memory, tasks, log, cameras, claude: claudeBridge, screen: screenReader, hands, defense, skills });
   scheduleStore = new ScheduleStore(app.getPath('userData'));
   nightShift = new NightShiftService({ userDataPath: app.getPath('userData'), config: gatedConfig, ai, documents });
   scheduleService = new ScheduleService({ store: scheduleStore, config: gatedConfig, router, nightShift, emit: sendEverywhere, log });

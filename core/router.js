@@ -64,7 +64,7 @@ function smallTalkReply(text) {
 }
 
 class CommandRouter {
-  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense }) {
+  constructor({ config, tools, documents, ai, memory, tasks, log, cameras, claude, screen, hands, defense, skills }) {
     this.config = config;
     this.tools = tools;
     this.documents = documents;
@@ -77,6 +77,7 @@ class CommandRouter {
     this.screen = screen || null;
     this.hands = hands || null;
     this.defense = defense || null;
+    this.skills = skills || null;
     this.pending = new Map();
   }
 
@@ -548,6 +549,10 @@ class CommandRouter {
       }
     } else if (/^(?:open|show)\s+(?:jarvis\s+)?settings$/i.test(text)) {
       result = this.#result('Opening local settings.', 'local-core', { openSettings: true });
+    } else if (/^(?:open|show|bring up)\s+(?:the\s+)?hud$/i.test(text)) {
+      // The face: checked before the generic "open <app>" branch below would
+      // swallow it. main.js sees the flag and raises the HUD window.
+      result = this.#result('Bringing up the HUD.', 'local-core', { openHud: true });
     } else if (/^(?:open|launch|start)\s+(.+)/i.test(text)) {
       if (stream.unattended) {
         result = this.#result(`Opening applications needs you at the desk, sir — I've left it for you.`, 'windows', { success: false });
@@ -610,6 +615,14 @@ class CommandRouter {
       const { topic } = isBattleRequest(text);
       const bars = await this.ai.reply(buildBattlePrompt(topic), { onChunk: stream.onChunk, onReset: stream.onReset, unattended: stream.unattended === true });
       result = this.#result(bars.text, 'battle', { success: bars.ok !== false });
+    } else if (this.skills && this.skills.match(text)) {
+      // The brain cells: a folder of small single-purpose skills, matched by
+      // their spoken triggers. Checked after every built-in (built-ins keep
+      // priority) but before the AI fallback, so "plan today" runs the plan
+      // skill instead of becoming a chat completion. Skills only touch local
+      // stores and the vault, so they are safe attended or unattended.
+      const outcome = await this.skills.run(this.skills.match(text));
+      result = this.#result(outcome.text, 'skills', { success: outcome.success !== false, ...(outcome.extra || {}) });
     } else {
       const memories = this.memory.search(text, 4);
       const aiResult = await this.ai.reply(text, { memories, project, onChunk: stream.onChunk, onReset: stream.onReset, onStep: stream.onStep, tasks: this.tasks.list({ status: 'open' }).slice(0, 10), unattended: stream.unattended === true });
