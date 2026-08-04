@@ -92,10 +92,11 @@
 
   // Chromatic-aberration scale factor for a canvas whose smaller device-pixel
   // dimension is minDimPx: aims for a fringe of ~fringePx device pixels at the
-  // edge, capped so large canvases stay subtle, and disabled entirely on tiny
-  // canvases (widget at min size, defense sentinel) where it would just blur.
+  // edge, capped so large canvases stay subtle. The cutoff keeps the 64px
+  // defense sentinel (128 device px at DPR 2) grade-only while the floating
+  // widget keeps the full effect down to its 90px minimum (180 device px).
   function caScale(minDimPx, fringePx) {
-    if (!(minDimPx >= 200)) return 0;
+    if (!(minDimPx >= 140)) return 0;
     var f = fringePx !== undefined ? fringePx : 3;
     return Math.min(0.02, (2 * f) / minDimPx);
   }

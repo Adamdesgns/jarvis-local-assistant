@@ -100,9 +100,11 @@ test('flicker stays within ±2%', () => {
 
 test('caScale disables on tiny canvases, clamps, and shrinks with size', () => {
   assert.equal(U.caScale(64), 0);
-  assert.equal(U.caScale(199), 0);
+  assert.equal(U.caScale(128), 0);  // defense sentinel at DPR 2: grade only
+  assert.equal(U.caScale(139), 0);
   assert.equal(U.caScale(NaN), 0);
-  assert.equal(U.caScale(200), 0.02); // 6/200 = 0.03 clamped to 0.02
+  assert.equal(U.caScale(140), 0.02);
+  assert.equal(U.caScale(180), 0.02); // widget at 90px minimum, DPR 2: CA on
   assert.ok(Math.abs(U.caScale(1000) - 0.006) < 1e-12);
   assert.ok(U.caScale(400) >= U.caScale(800));
   assert.ok(Math.abs(U.caScale(1000, 5) - 0.01) < 1e-12);
