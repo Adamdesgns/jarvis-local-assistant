@@ -91,7 +91,12 @@ button { cursor: pointer; }
 .reforming #hologram { animation: reform .8s var(--ease); }
 
 /* ---------- floating modules ---------- */
-.module-layer { position: absolute; inset: 0 0 132px; z-index: 10; pointer-events: none; }
+/* Modules use the whole workspace, right to the bottom edge (Adam,
+   2026-08-04: "all the windows lock at that level they need to move full
+   screen. everything"). The 132px that used to be reserved here was for the
+   command bar, but that dock sits at z-index 40 -- above this layer -- and can
+   be closed outright, so reserving drag space for it only cost usable screen. */
+.module-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
 .module { position: absolute; min-width: 260px; min-height: 190px; display: flex; flex-direction: column; pointer-events: auto; background: var(--surface-glass); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-soft), var(--inset-highlight); backdrop-filter: blur(20px); overflow: hidden; transition: opacity .25s, transform var(--dur-med) var(--ease), border-color var(--dur-fast), box-shadow var(--dur-med) var(--ease); }
 .module.hidden-module { display: none; }
 .module.collapsed { min-height: 56px !important; height: 56px !important; }
@@ -349,7 +354,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 @media(max-width:1100px) { .brand { min-width: 220px } .hud-button { padding: 0 8px } .stage-label { display: none } .response-dock { width: calc(100vw - 36px) } .settings-grid { grid-template-columns: 1fr } .wide-setting { grid-column: auto } }
 /* On a short screen the bands give up what little they hold — the sphere's own
    inscribed margin is doing the clearance work, and every pixel here is orb. */
-@media(max-height:720px) { .topbar { height: 52px } .workspace { height: calc(100vh - 52px) } .module-drawer { top: 52px } .jarvis-stage, .module-layer { bottom: 110px } .jarvis-stage { --stage-top-band: 16px; --stage-bottom-band: 20px } .central-copy { top: 4px } .response-dock { height: 96px } .response-line { height: 34px } .command-form { height: 40px } .voice-line { height: 18px } }
+@media(max-height:720px) { .topbar { height: 52px } .workspace { height: calc(100vh - 52px) } .module-drawer { top: 52px } .jarvis-stage { bottom: 110px } .jarvis-stage { --stage-top-band: 16px; --stage-bottom-band: 20px } .central-copy { top: 4px } .response-dock { height: 96px } .response-line { height: 34px } .command-form { height: 40px } .voice-line { height: 18px } }
 
 #connect-ollama { margin-right: 5px }
 #connect-ollama:disabled { opacity: .65; cursor: wait }
