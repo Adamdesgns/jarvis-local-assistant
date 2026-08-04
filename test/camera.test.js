@@ -801,7 +801,8 @@ test('blink driver: connects, merges camera kinds, lists systems, snapshots', as
 
   const cameras = await driver.listCameras();
   assert.deepEqual(cameras.map((c) => `${c.kind}:${c.name}`), ['camera:Garage', 'owl:Mini', 'doorbell:Front Door']);
-  assert.ok(cameras.every((c) => c.brand === 'blink' && c.canStream === false && c.canArm === false));
+  // canStream is true now that live view is implemented (blink-immi.js).
+  assert.ok(cameras.every((c) => c.brand === 'blink' && c.canStream === true && c.canArm === false));
 
   const systems = await driver.listSystems();
   assert.deepEqual(systems, [{ id: 55, name: 'Home', armed: false, canArm: true }]);
@@ -898,4 +899,87 @@ test('blink driver: an old account stored as uniqueId still reconnects', async (
   await driver.connect();
   assert.equal(seenHardwareId, 'ABC-DEF', 'reuses the old id, uppercased the way Blink wants');
   assert.equal(driver.status().state, 'connected');
+});
+
+// Blink live view rides Amazon's own MPEG-TS protocol, so it cannot go through
+// go2rtc or WebRTC like the other brands. The driver's job is to ask Blink for a
+// session, hand the camera's serial to the socket, and pump chunks out.
+test('blink driver: opens a live stream with the camera serial and its own network', async () => {
+  const asked = [];
+  const built = [];
+  const instances = [];
+  class FakeStream {
+    constructor(options) { built.push(options); instances.push(this); this.stopped = false; }
+    async start() { return this; }
+    stop() { this.stopped = true; }
+  }
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
+    clientFactory: () => fakeBlinkClient({
+      homescreen: async () => ({
+        networks: [{ id: 55, name: 'Home', armed: false }],
+        cameras: [{ id: 9, name: 'Garage', network_id: 55, serial: 'G8T1-0009', thumbnail: '/m/9' }],
+        owls: [{ id: 10, name: 'Mini', network_id: 55, serial: 'G8T1-0010', thumbnail: '/m/10' }]
+      }),
+      liveView: async (_session, networkId, cameraId, kind) => {
+        asked.push({ networkId, cameraId, kind });
+        return { server: 'immis://h.example:443/CONN__x?client_id=7', commandId: 42, pollingInterval: 3 };
+      }
+    }),
+    LiveStream: FakeStream,
+    connectLiveStream: async () => ({ on() {}, write() {}, destroy() {} })
+  });
+  await driver.connect();
+
+  const chunks = [];
+  await driver.startLiveStream('9', { onVideo: (c) => chunks.push(c) });
+  assert.deepEqual(asked, [{ networkId: 55, cameraId: 9, kind: 'camera' }]);
+  assert.equal(built[0].serial, 'G8T1-0009', 'Blink authenticates the socket with the serial');
+  assert.equal(built[0].commandId, 42);
+  assert.equal(built[0].pollingInterval, 3);
+
+  // A Mini is a different endpoint shape, so the kind has to travel through.
+  await driver.startLiveStream('10', {});
+  assert.equal(asked[1].kind, 'owl');
+
+  driver.stopLiveStream('9');
+  assert.equal(instances[0].stopped, true, 'the Garage stream was torn down');
+  assert.equal(instances[1].stopped, false, 'the Mini stream is untouched');
+});
+
+test('blink driver: live view on an unknown camera fails loudly', async () => {
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
+    clientFactory: () => fakeBlinkClient()
+  });
+  await driver.connect();
+  await assert.rejects(() => driver.startLiveStream('nope', {}), /was not found/);
+});
+
+test('blink driver: disconnecting stops every open live stream', async () => {
+  const streams = [];
+  class FakeStream {
+    constructor() { this.stopped = false; streams.push(this); }
+    async start() { return this; }
+    stop() { this.stopped = true; }
+  }
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
+    clientFactory: () => fakeBlinkClient({
+      homescreen: async () => ({
+        networks: [], doorbells: [{ id: 11, name: 'Front', network_id: 55, serial: 'S11', thumbnail: '/m/11' }]
+      }),
+      liveView: async () => ({ server: 'immis://h:443/C__x?client_id=1', commandId: 1, pollingInterval: 1 })
+    }),
+    LiveStream: FakeStream,
+    connectLiveStream: async () => ({ on() {}, write() {}, destroy() {} })
+  });
+  await driver.connect();
+  await driver.startLiveStream('11', {});
+  await driver.disconnect();
+  assert.equal(streams.length, 1);
+  assert.equal(streams[0].stopped, true, 'no camera left awake after teardown');
 });

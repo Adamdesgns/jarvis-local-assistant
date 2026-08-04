@@ -187,6 +187,42 @@ class BlinkClient {
     return Buffer.from(await response.arrayBuffer());
   }
 
+  // Ask Blink to wake the camera and open a live view. The reply carries an
+  // `immis://` server URL (Amazon's own protocol — see blink-immi.js), the
+  // command id that session is tracked by, and how often to poll it.
+  async liveView(session, networkId, cameraId, kind = 'camera') {
+    const base = this.host(session.tier);
+    const url = kind === 'owl'
+      ? `${base}/api/v2/accounts/${session.accountId}/networks/${networkId}/owls/${cameraId}/liveview`
+      : kind === 'doorbell'
+        ? `${base}/api/v2/accounts/${session.accountId}/networks/${networkId}/doorbells/${cameraId}/liveview`
+        : `${base}/api/v6/accounts/${session.accountId}/networks/${networkId}/cameras/${cameraId}/liveview`;
+    const response = await this.#request(url, {
+      method: 'POST',
+      token: session.token,
+      body: { intent: 'liveview', motion_event_start_time: null }
+    });
+    const payload = await this.#json(response);
+    if (!payload.server) throw new Error('Blink did not return a live view server.');
+    return {
+      server: payload.server,
+      commandId: payload.command_id,
+      pollingInterval: payload.polling_interval
+    };
+  }
+
+  // Blink tracks a live view as a long-running "command"; these say whether it
+  // is still alive and release it when done.
+  async commandStatus(session, networkId, commandId) {
+    const url = `${this.host(session.tier)}/network/${networkId}/command/${commandId}`;
+    return this.#json(await this.#request(url, { token: session.token }));
+  }
+
+  async commandDone(session, networkId, commandId) {
+    const url = `${this.host(session.tier)}/network/${networkId}/command/${commandId}/done/`;
+    await this.#request(url, { method: 'POST', token: session.token });
+  }
+
   async setArmed(session, networkId, armed) {
     const url = `${this.host(session.tier)}/api/v1/accounts/${session.accountId}/networks/${networkId}/state/${armed ? 'arm' : 'disarm'}`;
     await this.#request(url, { method: 'POST', token: session.token });

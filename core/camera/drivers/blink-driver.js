@@ -1,5 +1,6 @@
 const { CameraDriver } = require('../driver-interface');
 const { BlinkClient, REFRESH_MARGIN_MS } = require('../blink-client');
+const { BlinkLiveStream, tlsConnect } = require('../blink-livestream');
 
 const HOMESCREEN_CACHE_MS = 30000;
 
@@ -14,6 +15,10 @@ class BlinkDriver extends CameraDriver {
     this.freshWaitMs = 3000; // wait for the camera to take the new picture
     this.homescreenCache = null;
     this.homescreenAt = 0;
+    // Injectable so live view is testable without a real TLS socket.
+    this.LiveStream = options.LiveStream || BlinkLiveStream;
+    this.connectLiveStream = options.connectLiveStream || tlsConnect;
+    this.liveStreams = new Map();
   }
 
   get brand() { return 'blink'; }
@@ -89,7 +94,7 @@ class BlinkDriver extends CameraDriver {
       id: String(camera.id),
       name: camera.name,
       brand: 'blink',
-      canStream: false,
+      canStream: true,
       canArm: false,
       networkId: camera.network_id,
       kind: camera.kind
@@ -120,6 +125,48 @@ class BlinkDriver extends CameraDriver {
     }
     if (!thumbnail) throw new Error('Blink has no picture for this camera yet.');
     return this.client.getImage(await this.#session(), thumbnail);
+  }
+
+  // Blink live view is MPEG-TS over Amazon's own protocol, not RTSP, so it
+  // cannot go through go2rtc or WebRTC like the other brands. The camera service
+  // hands these chunks to the renderer, which plays them via MediaSource.
+  async startLiveStream(cameraId, { onVideo, onEnd } = {}) {
+    const home = await this.#homescreen();
+    const camera = this.#allCameras(home).find((item) => String(item.id) === String(cameraId));
+    if (!camera) throw new Error('That Blink camera was not found on the account.');
+    const session = await this.#session();
+    const view = await this.client.liveView(session, camera.network_id, camera.id, camera.kind);
+
+    const stream = new this.LiveStream({
+      connect: this.connectLiveStream,
+      // Blink authenticates the stream socket with the camera's own serial.
+      serial: camera.serial,
+      server: view.server,
+      commandId: view.commandId,
+      pollingInterval: view.pollingInterval,
+      commands: {
+        status: (id) => this.client.commandStatus(session, camera.network_id, id),
+        done: (id) => this.client.commandDone(session, camera.network_id, id)
+      },
+      onVideo,
+      onEnd
+    });
+    await stream.start();
+    this.liveStreams.set(String(cameraId), stream);
+    return stream;
+  }
+
+  stopLiveStream(cameraId) {
+    const stream = this.liveStreams.get(String(cameraId));
+    if (!stream) return;
+    this.liveStreams.delete(String(cameraId));
+    stream.stop();
+  }
+
+  async disconnect() {
+    for (const [, stream] of this.liveStreams) { try { stream.stop(); } catch { /* already gone */ } }
+    this.liveStreams.clear();
+    if (typeof super.disconnect === 'function') await super.disconnect();
   }
 
   async setArmed(networkId, armed) {
