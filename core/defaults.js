@@ -109,6 +109,10 @@ const DEFAULT_SETTINGS = {
   // multi-monitor arrangement survives a restart. `open` lists the cameras that
   // were popped out, so they reopen on launch.
   cameraWindows: { bounds: {}, open: [] },
+  // Cameras hidden from the grid by hand, as "brand:cameraId". Display-only:
+  // a hidden camera still exists, still alerts, and can still be popped out
+  // again after SHOW ALL — nothing about the account is touched.
+  hiddenCameras: [],
   moduleLayout: {
     tasks: { x: 74, y: 8, w: 24, h: 58 },
     performance: { x: 2, y: 8, w: 22, h: 44 },

@@ -913,3 +913,11 @@ body.defense #autonomy-cards { display: none; }
   letter-spacing: 0.08em;
 }
 .camera-tile[data-popped-out='yes'] .camera-live { opacity: 0.3; cursor: default; }
+
+/* Hide is the calm option above the red one, and the SHOW ALL line brings
+   hidden cameras back without a trip into settings. */
+.camera-hide { display: block; width: 100%; text-align: left; border: 0; border-radius: 6px; background: transparent; color: var(--text-dim, #cbb68a); font: 500 var(--text-xs)/1.4 var(--ui); padding: 8px 10px; cursor: pointer }
+.camera-hide:hover { background: rgba(255, 176, 32, 0.12) }
+.camera-hidden-note { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; color: var(--text-dim, #cbb68a); font: 500 var(--text-xs)/1.4 var(--ui); padding: 4px 2px }
+.camera-hidden-note .camera-show-all { border: 1px solid rgba(255, 176, 32, 0.3); border-radius: 6px; background: transparent; color: var(--amber, #f5c86a); font: inherit; padding: 3px 10px; cursor: pointer }
+.camera-hidden-note .camera-show-all:hover { background: rgba(255, 176, 32, 0.12) }

@@ -104,7 +104,7 @@ class ConfigStore {
       'focusApps', 'personality', 'pinnedFolders', 'recentFiles', 'watchedFolders', 'routines',
       'cameraAccounts', 'cameraAiDescriptions', 'cameraCloudVision', 'cameraVisionModel',
       'autonomyEnabled', 'schedulesEnabled', 'autonomyRules', 'autonomyNightStart', 'autonomyNightEnd',
-      'skin', 'voiceName', 'orbBounds', 'cameraWindows', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl',
+      'skin', 'voiceName', 'orbBounds', 'cameraWindows', 'hiddenCameras', 'mobileEnabled', 'mobilePort', 'mobilePublicUrl',
       'callEnabled', 'callPort',
       // Kokoro voice: engine choice, which voice, and the device escape hatch.
       // Same silent-reset trap as the keys below — without these the Settings

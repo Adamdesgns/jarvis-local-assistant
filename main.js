@@ -1234,6 +1234,21 @@ function setupIpc() {
     return { ok: true };
   });
   ipcMain.handle('cameras:popped-out', () => [...cameraWindows.keys()]);
+  // Hiding is display-only and keyed on the camera itself (brand:cameraId), not
+  // the account, so it survives an account being re-linked.
+  ipcMain.handle('cameras:hidden-list', () => config.getSettings().hiddenCameras || []);
+  ipcMain.handle('cameras:hide', (_event, identity) => {
+    const clean = String(identity || '');
+    if (!clean) return { ok: false };
+    const hidden = new Set(config.getSettings().hiddenCameras || []);
+    hidden.add(clean);
+    config.updateSettings({ hiddenCameras: [...hidden] });
+    return { ok: true };
+  });
+  ipcMain.handle('cameras:unhide-all', () => {
+    config.updateSettings({ hiddenCameras: [] });
+    return { ok: true };
+  });
   ipcMain.handle('cameras:systems', () => cameras.listSystems());
   ipcMain.handle('cameras:add-ring', (_event, payload) => cameraRefusal() || cameras.addRingAccount(payload || {}));
   ipcMain.handle('cameras:live-answer', (_event, payload) => cameras.answerLiveView(String(payload?.key || ''), String(payload?.offerSdp || '')));

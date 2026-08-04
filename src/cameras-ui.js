@@ -106,7 +106,7 @@
           <span class="camera-live-wait"></span>
         </button>
         <div class="camera-caption"><span class="camera-name"></span><span class="camera-time"></span></div>
-        <div class="camera-menu" hidden><button class="camera-remove" type="button"></button></div>
+        <div class="camera-menu" hidden><button class="camera-hide" type="button">Hide this camera</button><button class="camera-remove" type="button"></button></div>
       </div>
       <div class="camera-read" hidden>${svg(ICON.spark, 14)}<p class="camera-stamp"></p></div>`;
     article.querySelector('.camera-name').textContent = camera.name;
@@ -155,6 +155,15 @@
       markPoppedOut(article, true);
     });
 
+
+    // Hiding is the gentle sibling of removal: display-only, per camera, and
+    // reversible from the SHOW ALL line under the grid. It exists so a stray or
+    // duplicated tile can be dismissed without touching the account.
+    article.querySelector('.camera-hide').addEventListener('click', async () => {
+      stopLive(camera.key, article);
+      await window.jarvis.cameras.hide(`${camera.brand}:${camera.id}`);
+      render();
+    });
 
     // The destructive action hides behind the ⋯ menu and asks twice.
     const menu = article.querySelector('.camera-menu');
@@ -409,11 +418,25 @@
     // Windows outlive a grid rebuild, so ask which cameras are still popped out
     // rather than assuming a fresh tile owns its stream.
     const poppedOut = new Set(await window.jarvis.cameras.poppedOut?.() || []);
+    const hidden = new Set(await window.jarvis.cameras.hiddenList?.() || []);
+    let hiddenCount = 0;
     for (const camera of cameras) {
+      if (hidden.has(`${camera.brand}:${camera.id}`)) { hiddenCount += 1; continue; }
       const article = tile(camera, perAccount[camera.accountId]);
       grid.appendChild(article);
       if (poppedOut.has(camera.key)) { markPoppedOut(article, true); continue; }
       if (!camera.liveOnly) refresh(article, camera, false);
+    }
+    // Hidden cameras stay reachable: one quiet line, never a buried setting.
+    if (hiddenCount > 0) {
+      const note = document.createElement('div');
+      note.className = 'camera-hidden-note';
+      note.innerHTML = `<span>${hiddenCount} camera${hiddenCount === 1 ? '' : 's'} hidden</span> <button type="button" class="camera-show-all">SHOW ALL</button>`;
+      note.querySelector('.camera-show-all').addEventListener('click', async () => {
+        await window.jarvis.cameras.unhideAll();
+        render();
+      });
+      grid.appendChild(note);
     }
   }
 
