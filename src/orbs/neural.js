@@ -140,6 +140,14 @@
     } else {
       this.start();
     }
+
+    this.fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
+
+    // Stop burning CPU while hidden; start() re-checks paused/reduced.
+    this.unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(function () {
+      if (self.destroyed) return;
+      if (document.hidden) self.stop(); else self.start();
+    }) : null;
   }
 
   // ---------- seeded randomness ----------
@@ -376,8 +384,10 @@
     if (!ctx || this.destroyed) return;
     var P = this.P;
     // dim (error/offline ~55%) and audio (subtle energy while talking) fold
-    // straight into the global brightness factor.
-    var brFac = P.bright * (1 + 0.05 * Math.sin(this.breathT + 1.2)) * this.dim * (1 + this.audio * 0.35);
+    // straight into the global brightness factor, plus a rare dramatic surge
+    // (stronger while thinking as swirl rises toward 0.95).
+    var sg = this.reduced ? 0 : window.OrbUtils.surgeEnvelope(this.tI, { strength: 1 + 0.5 * P.swirl });
+    var brFac = P.bright * (1 + 0.05 * Math.sin(this.breathT + 1.2)) * this.dim * (1 + this.audio * 0.35) * (1 + 0.3 * sg);
     var R = this.orbR * (1 + 0.013 * Math.sin(this.breathT) + 0.010 * this.audio);
     var sc = this.orbR / 170;                              // stroke-width scale
     this.cosR = Math.cos(this.rotA);
@@ -422,9 +432,10 @@
 
     // 3) energy core glow
     var cc = this.pal(this.tI * 0.045 + 0.55);
+    var coreG = P.core * (1 + 0.8 * sg);
     g = this.rg(0, R * 0.05, 0, R * 0.85, [
-      [0, css(cc, (0.05 + 0.13 * P.core) * brFac)],
-      [0.5, css(cc, 0.045 * P.core * brFac)],
+      [0, css(cc, (0.05 + 0.13 * coreG) * brFac)],
+      [0.5, css(cc, 0.045 * coreG * brFac)],
       [1, css(cc, 0)]
     ]);
     this.fillCircle(R, g);
@@ -583,6 +594,15 @@
     if (typeof ctx.filter === 'string') ctx.filter = 'none';
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+
+    if (this.fx) {
+      this.fx.apply(ctx, {
+        t: this.tI,
+        palette: this.P.mix >= 0.5 ? 'gold' : 'obsidian',
+        intensity: this.dim,
+        reduced: this.reduced
+      });
+    }
   };
 
   // ---------- loop control ----------
@@ -633,6 +653,8 @@
   NeuralOrb.prototype.destroy = function () {
     this.destroyed = true;
     this.stop();
+    if (this.unbindVis) { this.unbindVis(); this.unbindVis = null; }
+    if (this.fx) { this.fx.destroy(); this.fx = null; }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
