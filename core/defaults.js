@@ -105,6 +105,9 @@ const DEFAULT_SETTINGS = {
   // The Windows SAPI voice, used by the fallback path.
   voiceName: '',
   orbBounds: null,
+  // JARVIS owns the whole screen — no taskbar — until minimized to the orb.
+  // The titlebar's □ button toggles out to a normal window and remembers.
+  fullScreen: true,
   // Pop-out camera windows: where each one sits, per camera key, so a
   // multi-monitor arrangement survives a restart. `open` lists the cameras that
   // were popped out, so they reopen on launch.

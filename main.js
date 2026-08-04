@@ -226,6 +226,12 @@ function createMainWindow() {
       }
     });
   });
+  // Full screen by default (Adam, 2026-08-04: "I want JARVIS to have full
+  // screen so you don't see the task bar unless you minimize it"). True
+  // fullscreen rather than maximized, because a maximized window still leaves
+  // the taskbar's reserved strip — the same strip his camera module could not
+  // be dragged into. Minimize-to-orb brings the taskbar back; □ toggles out.
+  if (config.getSettings().fullScreen !== false) mainWindow.setFullScreen(true);
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   attachEditingShortcuts(mainWindow);
   mainWindow.once('ready-to-show', () => {
@@ -1401,7 +1407,13 @@ function setupIpc() {
   ipcMain.on('window:control', (_event, action) => {
     if (!mainWindow) return;
     if (action === 'minimize') showOrb();
-    if (action === 'maximize') mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+    if (action === 'maximize') {
+      // □ is the fullscreen toggle now, and the choice sticks across launches.
+      const wantFullScreen = !mainWindow.isFullScreen();
+      if (!wantFullScreen && mainWindow.isMaximized()) mainWindow.unmaximize();
+      mainWindow.setFullScreen(wantFullScreen);
+      try { config.updateSettings({ fullScreen: wantFullScreen }); } catch { /* cosmetic */ }
+    }
     if (action === 'close') { isQuitting = true; app.quit(); }
   });
 }
