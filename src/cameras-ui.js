@@ -231,7 +231,13 @@
         if (!response.ok) throw new Error(`helper answered ${response.status}`);
         answerSdp = await response.text();
       }
-      await peer.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+      // Ring answers with the media sections in its own order, which WebRTC
+      // rejects outright (it pairs m-lines by position). Realign the answer to
+      // the offer; an answer that already matches passes through untouched.
+      const aligned = window.SdpAlign
+        ? window.SdpAlign.alignAnswerToOffer(peer.localDescription.sdp, answerSdp)
+        : answerSdp;
+      await peer.setRemoteDescription({ type: 'answer', sdp: aligned });
       video.hidden = false; img.hidden = true;
       article.querySelector('.camera-view-empty').hidden = true;
       article.dataset.live = 'on';
