@@ -190,6 +190,11 @@ function createMainWindow() {
     minHeight: 640,
     show: false,
     frame: false,
+    // Set at construction, not with setFullScreen() afterwards: on Windows that
+    // call is ignored while the window is still hidden (show: false), which
+    // silently left it merely maximized — stopping above the taskbar, the exact
+    // strip Adam could not drag a module into.
+    fullscreen: config.getSettings().fullScreen !== false,
     backgroundColor: '#02070b',
     title: 'JARVIS',
     icon: path.join(__dirname, 'assets', 'icon.png'),
@@ -226,12 +231,6 @@ function createMainWindow() {
       }
     });
   });
-  // Full screen by default (Adam, 2026-08-04: "I want JARVIS to have full
-  // screen so you don't see the task bar unless you minimize it"). True
-  // fullscreen rather than maximized, because a maximized window still leaves
-  // the taskbar's reserved strip — the same strip his camera module could not
-  // be dragged into. Minimize-to-orb brings the taskbar back; □ toggles out.
-  if (config.getSettings().fullScreen !== false) mainWindow.setFullScreen(true);
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   attachEditingShortcuts(mainWindow);
   mainWindow.once('ready-to-show', () => {
