@@ -142,7 +142,7 @@
       for (const particle of this.particles) {
         particle.theta += particle.drift;
         const burst = 1 + this.explosion * (2.4 + particle.shell * 1.6);
-        const radius = this.radius * particle.shell * (1 + this.audioLevel * .045) * burst;
+        const radius = this.radius * particle.shell * (1 + this.audioLevel * .12) * burst;
         let x = radius * Math.sin(particle.phi) * Math.cos(particle.theta);
         let y = radius * Math.cos(particle.phi);
         let z = radius * Math.sin(particle.phi) * Math.sin(particle.theta);
@@ -199,7 +199,7 @@
 
     drawCore(ctx, time, intensity) {
       const active = this.state === 'listening' ? 1.34 : this.state === 'processing' ? 1.17 : this.state === 'speaking' ? 1.23 : 1;
-      const pulse = 1 + Math.sin(time * .003) * .035 + this.audioLevel * .1;
+      const pulse = 1 + Math.sin(time * .003) * .035 + this.audioLevel * .28;
       const core = this.radius * .18 * pulse * active;
       const glow = ctx.createRadialGradient(this.cx, this.cy, 0, this.cx, this.cy, core * 2.8);
       glow.addColorStop(0, `rgba(255, 243, 199, ${.82 * intensity})`);

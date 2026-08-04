@@ -181,7 +181,9 @@
         master = 1 - Math.pow(1 - master, 3); // easeOutCubic
       }
 
-      var dtA = REDUCED ? 0 : dt;
+      // Voice accelerates the whole scene — rings, pulse, particles — so
+      // talking reads as motion, not just brightness.
+      var dtA = REDUCED ? 0 : dt * (1 + audio * 1.2);
       T += dtA;
       shellA += dtA * 0.14 * cur.partSpd;
       for (var i = 0; i < RINGS.length; i++) {

@@ -285,7 +285,7 @@
       tt += dt * cur.speed * cur.turb * 0.8;
       sa += dt * cur.swirl * 0.55;
       st += dt * cur.shimmer * (1 + audioCur * 0.5);
-      ht += dt;
+      ht += dt * (1 + audioCur * 0.8);   // voice quickens the cloud
 
       drawFrame();
     }

@@ -540,6 +540,7 @@ function endSpeechVisuals(fullText) {
   speechVisualFrame = 0;
   window.jarvisHologram?.setAudioLevel(0);
   window.JarvisDefense?.setOrbAudioLevel?.(0);
+  window.jarvis?.setUIAudio?.(0);
   const reply = $('orb-reply');
   if (!reply || reply.hidden) return;
   if (fullText) reply.textContent = fullText;
@@ -574,6 +575,7 @@ async function startSpeechVisuals(audio, message) {
       const level = window.OrbVoice.levelFromSamples(samples);
       window.jarvisHologram?.setAudioLevel(level);
       window.JarvisDefense?.setOrbAudioLevel?.(level);
+      window.jarvis?.setUIAudio?.(level);
       if (audio.duration > 0) orbCaption(window.OrbVoice.captionSlice(message, audio.currentTime / audio.duration));
       speechVisualFrame = requestAnimationFrame(tick);
     };
@@ -1336,6 +1338,7 @@ async function startRecording(trigger = 'manual') {
       state.recording = null;
       window.jarvisHologram?.setAudioLevel(0);
       window.JarvisDefense?.setOrbAudioLevel?.(0);
+      window.jarvis?.setUIAudio?.(0);
       if (blob.size < 800) { setCoreState('ready'); return; }
       setCoreState('processing', 'LOCAL SPEECH RECOGNITION');
       try {
@@ -1357,6 +1360,7 @@ async function startRecording(trigger = 'manual') {
       const rms = Math.sqrt(total / samples.length);
       window.jarvisHologram?.setAudioLevel(Math.min(1, rms * 9));
       window.JarvisDefense?.setOrbAudioLevel?.(Math.min(1, rms * 9));
+      window.jarvis?.setUIAudio?.(Math.min(1, rms * 9));
       if (rms > .027) { heardSpeech = true; lastSpeech = performance.now(); }
       const elapsed = performance.now() - started;
       if ((heardSpeech && elapsed > 900 && performance.now() - lastSpeech > 1350) || elapsed > 15000) return stopRecording();

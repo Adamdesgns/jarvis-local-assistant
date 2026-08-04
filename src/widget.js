@@ -71,6 +71,10 @@ class WidgetOrbHost {
     this.state = state || 'ready';
     if (this.instance) this.instance.setState(this.state);
   }
+
+  setAudioLevel(level) {
+    if (this.instance && this.instance.setAudioLevel) this.instance.setAudioLevel(level);
+  }
 }
 
 const orbHost = new WidgetOrbHost(document.getElementById('orb-canvas'));
@@ -177,5 +181,7 @@ window.jarvis.orbPrefs?.().then((prefs) => orbHost.applyPrefs(prefs || {}));
 window.jarvis.onOrbPrefs?.((prefs) => orbHost.applyPrefs(prefs || {}));
 window.jarvis.onWakeDetected(() => setState({ state: 'listening' }));
 window.jarvis.onUIState(setState);
+// Voice level while JARVIS speaks/listens — the floating orb moves with it.
+window.jarvis.onUIAudio?.((level) => orbHost.setAudioLevel(level));
 window.jarvis.onFileStart(() => setState({ state: 'exploding' }));
 window.jarvis.onFileComplete(() => setTimeout(() => setState({ state: 'ready' }), 1200));

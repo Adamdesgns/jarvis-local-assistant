@@ -528,7 +528,7 @@
       var now = nowMs / 1000;
       var dt = clamp(now - this.lastNow, 0, 0.05);
       this.lastNow = now;
-      if (!this.reduced) this.t += dt;
+      if (!this.reduced) this.t += dt * (1 + this.audio * 0.8);   // voice quickens the corona
       this.computeFrame(dt);
       this.render();
       if (this.paused || document.hidden) { this.running = false; return; }

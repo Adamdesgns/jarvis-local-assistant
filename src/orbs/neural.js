@@ -276,7 +276,7 @@
     this.dim += (this.dimTarget - this.dim) * k;
     this.audio += (this.audioTarget - this.audio) * (1 - Math.exp(-dt * 10));
 
-    this.tI += dt * P.speed;
+    this.tI += dt * P.speed * (1 + this.audio * 0.9);   // voice quickens the filaments
     this.rotA += dt * P.rot;
     this.swirlT += dt * (0.5 + P.speed * 0.9);
     this.breathT += dt * P.breath;
