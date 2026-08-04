@@ -1055,3 +1055,95 @@ test('camera service: shutdown releases an open blink live view', async () => {
   await service.shutdown();
   assert.equal(stopped, 1, 'no camera left awake when JARVIS closes');
 });
+
+// Signing in to Blink twice used to create two accounts, so every camera showed
+// twice — and removing either took its whole account with it while Blink had
+// already revoked the older session, stranding the survivor. Adam hit this for
+// real: 8 tiles for 4 cameras, then "it kicks me out of the session".
+test('camera service: signing in to blink twice refreshes the account, never adds a second', async () => {
+  const config = fakeConfig();
+  class TestBlinkDriver extends BlinkDriver {
+    constructor(options) {
+      super({ ...options, clientFactory: () => fakeBlinkClient() });
+      this.freshWaitMs = 0;
+    }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { blink: TestBlinkDriver }
+  });
+  await service.init();
+
+  // Same Blink account (accountId 1, from FAKE_SESSION) signed in twice, each
+  // time with a fresh hardware id and fresh tokens, exactly as the real flow does.
+  const first = await service.addBlinkAccount({}, {
+    signInFlow: async () => ({ hardwareId: 'HW-1', session: { ...FAKE_SESSION, refreshToken: 'r-first' } })
+  });
+  assert.equal(first.ok, true);
+  assert.equal(first.replaced, false, 'the first sign-in is a genuinely new account');
+
+  const second = await service.addBlinkAccount({}, {
+    signInFlow: async () => ({ hardwareId: 'HW-2', session: { ...FAKE_SESSION, refreshToken: 'r-second' } })
+  });
+  assert.equal(second.ok, true);
+  assert.equal(second.replaced, true, 'recognised as the same Blink login');
+  assert.equal(second.accountId, first.accountId, 'reused the existing account');
+  assert.match(second.message, /already connected/);
+
+  assert.equal(config.getSettings().cameraAccounts.length, 1, 'still exactly one Blink account');
+  const cameras = await service.listCameras();
+  assert.equal(cameras.length, 3, 'four cameras listed once each, not twice');
+  assert.equal(new Set(cameras.map((c) => c.key)).size, cameras.length, 'no duplicate keys');
+
+  // The second sign-in's identity won, so the stored session is the one Blink
+  // has not revoked. Asserted on hardwareId rather than the refresh token,
+  // because the driver's own silent renewal legitimately rewrites the token
+  // straight afterwards — that is the staying-signed-in path working.
+  const secrets = JSON.parse(config._secrets[`cameraAccount:${first.accountId}`] || '{}');
+  assert.equal(secrets.hardwareId, 'HW-2');
+  assert.ok(secrets.refreshToken, 'a refresh token is kept so he stays signed in');
+});
+
+test('camera service: a different blink login is still added as its own account', async () => {
+  const config = fakeConfig();
+  class TestBlinkDriver extends BlinkDriver {
+    constructor(options) { super({ ...options, clientFactory: () => fakeBlinkClient() }); }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { blink: TestBlinkDriver }
+  });
+  await service.init();
+  await service.addBlinkAccount({}, {
+    signInFlow: async () => ({ hardwareId: 'HW-1', session: { ...FAKE_SESSION, accountId: 1 } })
+  });
+  const other = await service.addBlinkAccount({}, {
+    signInFlow: async () => ({ hardwareId: 'HW-2', session: { ...FAKE_SESSION, accountId: 999 } })
+  });
+  assert.equal(other.replaced, false, 'a second household is not a duplicate');
+  assert.equal(config.getSettings().cameraAccounts.length, 2);
+});
+
+// Two accounts already on disk from before the guard existed must not double up.
+test('camera service: duplicate accounts already saved still list each camera once', async () => {
+  const config = fakeConfig();
+  class TestBlinkDriver extends BlinkDriver {
+    constructor(options) { super({ ...options, clientFactory: () => fakeBlinkClient() }); }
+  }
+  config.updateSettings({
+    cameraAccounts: [
+      { id: 'aaa', brand: 'blink', name: 'Blink account' },
+      { id: 'bbb', brand: 'blink', name: 'Blink account' }
+    ]
+  });
+  for (const id of ['aaa', 'bbb']) {
+    config.setSecret(`cameraAccount:${id}`, JSON.stringify({ hardwareId: `hw-${id}`, ...FAKE_SESSION }));
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { blink: TestBlinkDriver }
+  });
+  await service.init();
+  const cameras = await service.listCameras();
+  assert.equal(cameras.length, 3, 'one entry per physical camera, not one per account');
+});

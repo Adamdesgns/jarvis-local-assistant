@@ -115,12 +115,25 @@ class CameraService {
     } catch (error) {
       return { ok: false, message: error.message || 'Blink sign-in did not finish.' };
     }
-    const account = { id: crypto.randomUUID().slice(0, 8), brand: 'blink', name: 'Blink account' };
+    // Signing in again must REPLACE the existing link, never add a second one.
+    // Two accounts for one Blink login listed every camera twice, and removing
+    // either took its whole account with it — while Blink had already revoked
+    // the older session at the second sign-in, so the survivor was dead too.
+    // Matched on Blink's own account id, which is stable across sign-ins.
+    const existing = this.#findBlinkAccount(result.session.accountId);
+    const account = existing || { id: crypto.randomUUID().slice(0, 8), brand: 'blink', name: 'Blink account' };
     this.config.setSecret(this.#secretKey(account.id), JSON.stringify({
       hardwareId: result.hardwareId, ...result.session
     }));
-    const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
-    this.config.updateSettings({ cameraAccounts: accounts });
+    if (existing) {
+      // Drop the old driver so it cannot keep using the revoked session.
+      const stale = this.drivers.get(account.id);
+      if (stale) { try { await stale.disconnect?.(); } catch { /* already gone */ } }
+      this.drivers.delete(account.id);
+    } else {
+      const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
+      this.config.updateSettings({ cameraAccounts: accounts });
+    }
     await this.#instantiate(account);
     const driver = this.drivers.get(account.id);
     const status = driver?.status() || { state: 'error', message: 'The Blink connection could not start.' };
@@ -130,7 +143,29 @@ class CameraService {
     }
     this.emit('cameras:changed', {});
     this.log.write({ type: 'camera', command: 'add blink account', response: 'Connected a Blink account.', source: 'cameras' });
-    return { ok: true, accountId: account.id, message: status.message || 'Blink is connected.' };
+    return {
+      ok: true,
+      accountId: account.id,
+      replaced: Boolean(existing),
+      message: existing
+        ? 'Blink was already connected — that sign-in was refreshed, not added again.'
+        : (status.message || 'Blink is connected.')
+    };
+  }
+
+  // The stored Blink account carrying this Blink account id, if any. Reads the
+  // secret rather than the settings, because the Blink id is a credential detail
+  // and never belongs in settings.json.
+  #findBlinkAccount(blinkAccountId) {
+    if (blinkAccountId === undefined || blinkAccountId === null) return null;
+    for (const account of this.config.getSettings().cameraAccounts || []) {
+      if (account.brand !== 'blink') continue;
+      try {
+        const secrets = JSON.parse(this.config.getSecret(this.#secretKey(account.id)) || '{}');
+        if (String(secrets.accountId) === String(blinkAccountId)) return account;
+      } catch { /* unreadable secret: treat as not a match */ }
+    }
+    return null;
   }
 
   // Ring 2FA happens before the account exists: sign-in either yields a
@@ -233,9 +268,17 @@ class CameraService {
 
   async listCameras() {
     const cameras = [];
+    // A second guard behind the one in addBlinkAccount: if two accounts for the
+    // same login ever reach disk again, the same physical camera must still
+    // appear once. Keyed by brand + the camera's own id, which is the camera
+    // itself rather than which account happened to list it.
+    const seen = new Set();
     for (const [accountId, driver] of this.drivers) {
       try {
         for (const camera of await driver.listCameras()) {
+          const identity = `${camera.brand}:${camera.id}`;
+          if (seen.has(identity)) continue;
+          seen.add(identity);
           cameras.push({ ...camera, accountId, key: `${accountId}:${camera.id}` });
         }
       } catch {}
