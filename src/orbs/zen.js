@@ -259,8 +259,8 @@
     this.audio += (this.audioTarget - this.audio) * 0.16;
     var m = this.m, wL = this.wL, wT = this.wT, aud = this.audio;
 
-    this.theta += dt * mix(0.02, 0.30, wT);   /* thinking: gradient slowly rotates */
-    this.rimSpin += dt * 0.12;
+    this.theta += dt * mix(0.02, 0.30, wT) * (1 + aud * 0.8);   /* thinking rotates; voice quickens */
+    this.rimSpin += dt * 0.12 * (1 + aud * 0.6);
     var theta = this.theta;
 
     ctx.setTransform(this.bufScale, 0, 0, this.bufScale, 0, 0);

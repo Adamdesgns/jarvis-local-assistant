@@ -1224,6 +1224,11 @@ function setupIpc() {
   ipcMain.on('ui:state', (_event, payload) => {
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:state', payload);
   });
+  // Voice level for the floating orb — without this the widget skins never
+  // hear JARVIS talk and sit almost still while he speaks.
+  ipcMain.on('ui:audio', (_event, level) => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:audio', level);
+  });
   ipcMain.on('ui:skin', (_event, skin) => {
     currentSkin = skin || 'classic';
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:skin', currentSkin);

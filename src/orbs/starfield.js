@@ -147,7 +147,8 @@
         master = 1 - Math.pow(1 - master, 3); // easeOutCubic
       }
 
-      var dtA = REDUCED ? 0 : dt;
+      // Voice accelerates the constellation so talking reads as motion.
+      var dtA = REDUCED ? 0 : dt * (1 + audio * 1.2);
       T += dtA;
       yaw += dtA * 0.10 * cur.spin;
       for (var i = 0; i < DOTS.length; i++) DOTS[i].th += dtA * DOTS[i].drift;

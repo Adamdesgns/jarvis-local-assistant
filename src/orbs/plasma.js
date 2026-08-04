@@ -599,9 +599,11 @@
       audioCur += (audioTgt - audioCur) * kA;
 
       if (!reduced) {
-        // two independently integrated phases; both wrap seamlessly at P
-        phase = (phase + dt * cur.speed) % P;
-        swirl = (swirl + dt * cur.swirlSpeed) % P;
+        // two independently integrated phases; both wrap seamlessly at P.
+        // Voice quickens both so talking reads as churn, not just brightness.
+        var vq = 1 + audioCur * 0.9;
+        phase = (phase + dt * cur.speed * vq) % P;
+        swirl = (swirl + dt * cur.swirlSpeed * vq) % P;
       }
 
       resizeCanvas();
