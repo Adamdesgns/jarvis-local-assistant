@@ -72,6 +72,19 @@
 - The kid can call and answer Dad — and nothing else. Choosing WHO this PC is
   paired to stays behind the parent PIN, always.
 
+### Added — the ULTRON orb, and voices that actually move the orbs
+- A ninth skin: **Ultron** — a rotating holographic wireframe sphere with four
+  bright cross meridians, a hot equator band, a counter-rotating shell of
+  partial arcs, a fast spiral core, a surging center, orbiting debris,
+  drifting code-text, and scan rings. Ported to plain canvas from the
+  MIT-licensed ULTRON orb by Sagar Tamang. Pick it in Settings → Orb.
+- **Talking now moves every orb, not just brightens it** — the voice level
+  accelerates each skin's animation clock, so speech reads as rings spinning
+  up, plasma churning, filaments racing, the constellation swirling.
+- **The floating orb finally hears the voice too**: levels are relayed to the
+  widget window, so the minimized orb moves while JARVIS speaks and listens
+  instead of sitting still.
+
 ### Added — cinematic finishing pass for every orb skin
 - All eight orb skins now get a shared post-FX layer (`src/orbs/orb-fx.js`)
   applied after their final composite: a faint chromatic-aberration fringe at
