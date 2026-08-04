@@ -40,6 +40,7 @@ const { ScreenReader } = require('./core/screen-reader');
 const { ScreenHands } = require('./core/screen-drive-session');
 const { ScreenDriver } = require('./core/screen-driver');
 const { ORB_DEFAULT, ZOOM_MAX, clampToWorkArea, resizeOutcome, zoomOutcome, defaultOrbBounds } = require('./core/orb-bounds');
+const cameraBounds = require('./core/camera-window-bounds');
 const { isWithinWindow } = require('./core/autonomy-rules');
 const { MobileServer } = require('./core/mobile-server');
 const { MobileAuth } = require('./core/mobile-auth');
@@ -321,6 +322,104 @@ function openDriveStopWindow(onStop, onLost) {
     driveStopWindow = null;
     onLost?.();
   });
+}
+
+// --- Pop-out camera windows ------------------------------------------------
+// One window per camera so cameras can live on other monitors while JARVIS holds
+// the main screen (spec: 2026-08-04-camera-windows-design). Each remembers its
+// own spot and reopens there; the rectangle maths is tested in
+// core/camera-window-bounds.js.
+const cameraWindows = new Map(); // camera key -> BrowserWindow
+
+function cameraWindowState() {
+  const saved = config.getSettings().cameraWindows || {};
+  return { bounds: saved.bounds || {}, open: Array.isArray(saved.open) ? saved.open : [] };
+}
+
+let cameraSaveTimer = null;
+function persistCameraWindows() {
+  clearTimeout(cameraSaveTimer);
+  cameraSaveTimer = setTimeout(() => {
+    const state = cameraWindowState();
+    const bounds = { ...state.bounds };
+    for (const [key, window] of cameraWindows) {
+      if (!window || window.isDestroyed()) continue;
+      const [x, y] = window.getPosition();
+      const [w, h] = window.getSize();
+      bounds[key] = { x, y, w, h };
+    }
+    try {
+      config.updateSettings({ cameraWindows: { bounds, open: [...cameraWindows.keys()] } });
+    } catch { /* a failed layout save must never break a live view */ }
+  }, 400);
+}
+
+function openCameraWindow({ key, name, brand }) {
+  const existing = cameraWindows.get(key);
+  if (existing && !existing.isDestroyed()) { existing.show(); existing.focus(); return existing; }
+
+  const bounds = cameraBounds.restoreBounds(
+    cameraWindowState().bounds[key],
+    screen.getAllDisplays(),
+    cameraWindows.size
+  );
+  const window = new BrowserWindow({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.w,
+    height: bounds.h,
+    minWidth: cameraBounds.MIN_WIDTH,
+    minHeight: cameraBounds.MIN_HEIGHT,
+    title: `${name} · JARVIS`,
+    frame: false,
+    resizable: true,
+    backgroundColor: '#000000',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false
+    }
+  });
+  cameraWindows.set(key, window);
+
+  const query = new URLSearchParams({ key, name: name || 'Camera', brand: brand || '' });
+  window.loadFile(path.join(__dirname, 'src', 'camera-window.html'), { search: `?${query}` });
+  window.once('ready-to-show', () => { if (!window.isDestroyed()) window.show(); });
+  window.on('moved', persistCameraWindows);
+  window.on('resized', persistCameraWindows);
+  attachEditingShortcuts(window);
+  window.on('closed', () => {
+    cameraWindows.delete(key);
+    persistCameraWindows();
+    // Hand the camera back to the grid so its tile stops saying the stream is
+    // playing elsewhere.
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cameras:window-closed', key);
+  });
+  persistCameraWindows();
+  return window;
+}
+
+function closeCameraWindow(key) {
+  const window = cameraWindows.get(key);
+  if (window && !window.isDestroyed()) window.close();
+}
+
+// Unplugging a monitor leaves any window that lived there at coordinates no
+// screen covers — invisible, with no way to drag it back.
+function rescueOffscreenCameraWindows() {
+  const displays = screen.getAllDisplays();
+  for (const [, window] of cameraWindows) {
+    if (!window || window.isDestroyed()) continue;
+    const [x, y] = window.getPosition();
+    const [w, h] = window.getSize();
+    if (!cameraBounds.isOffscreen({ x, y, w, h }, displays)) continue;
+    const rescued = cameraBounds.restoreBounds({ x, y, w, h }, displays);
+    window.setBounds({ x: rescued.x, y: rescued.y, width: rescued.w, height: rescued.h });
+  }
+  persistCameraWindows();
 }
 
 // Blink's sign-in page, in a real Chromium window. Blink's password POST cannot
@@ -1124,6 +1223,17 @@ function setupIpc() {
     : { ok: false, message: 'Cameras are a JARVIS Pro feature. Open Settings → PRO to unlock them.' });
   ipcMain.handle('cameras:add-blink', (_event, payload) => cameraRefusal()
     || cameras.addBlinkAccount(payload || {}, { openWindow: openBlinkSignInWindow }));
+  ipcMain.handle('cameras:popout', (_event, payload) => {
+    const key = String(payload?.key || '');
+    if (!key) return { ok: false, message: 'No camera to pop out.' };
+    openCameraWindow({ key, name: String(payload?.name || 'Camera'), brand: String(payload?.brand || '') });
+    return { ok: true };
+  });
+  ipcMain.handle('cameras:popin', (_event, payload) => {
+    closeCameraWindow(String(payload?.key || ''));
+    return { ok: true };
+  });
+  ipcMain.handle('cameras:popped-out', () => [...cameraWindows.keys()]);
   ipcMain.handle('cameras:systems', () => cameras.listSystems());
   ipcMain.handle('cameras:add-ring', (_event, payload) => cameraRefusal() || cameras.addRingAccount(payload || {}));
   ipcMain.handle('cameras:live-answer', (_event, payload) => cameras.answerLiveView(String(payload?.key || ''), String(payload?.offerSdp || '')));
@@ -1579,6 +1689,24 @@ app.whenReady().then(async () => {
   setupIpc();
   createMainWindow();
   createTray();
+  // A camera wall should survive a restart: reopen whatever was popped out, on
+  // the monitor it was left on. Deferred so the main window paints first, and so
+  // a camera account that fails to reconnect cannot delay startup.
+  setTimeout(() => {
+    const state = cameraWindowState();
+    if (!state.open.length) return;
+    cameras.listCameras().then((list) => {
+      for (const key of state.open) {
+        const camera = list.find((item) => item.key === key);
+        // A camera whose account was removed while JARVIS was closed simply
+        // does not come back; its saved position is left alone in case it does.
+        if (camera) openCameraWindow({ key, name: camera.name, brand: camera.brand });
+      }
+    }).catch(() => {});
+  }, 2500);
+  // Monitors change while the app runs; rescue any window left stranded.
+  screen.on('display-removed', rescueOffscreenCameraWindows);
+  screen.on('display-metrics-changed', rescueOffscreenCameraWindows);
   applyLoginSetting(config.getSettings().startWithWindows);
   localVoice.start();
   // Loading ~326 MB of model takes a moment, so start it now rather than on the

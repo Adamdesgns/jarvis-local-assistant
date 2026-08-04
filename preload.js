@@ -67,6 +67,11 @@ contextBridge.exposeInMainWorld('jarvis', {
     liveStop: (key) => ipcRenderer.invoke('cameras:live-stop', key),
     discover: () => ipcRenderer.invoke('cameras:discover'),
     addBlink: (payload) => ipcRenderer.invoke('cameras:add-blink', payload),
+    // Pop-out camera windows, so cameras can sit on other monitors.
+    popOut: (camera) => ipcRenderer.invoke('cameras:popout', camera),
+    popIn: (key) => ipcRenderer.invoke('cameras:popin', { key }),
+    poppedOut: () => ipcRenderer.invoke('cameras:popped-out'),
+    onWindowClosed: (fn) => ipcRenderer.on('cameras:window-closed', (_event, key) => fn(key)),
     systems: () => ipcRenderer.invoke('cameras:systems'),
     setArmed: (key, armed) => ipcRenderer.invoke('cameras:set-armed', { key, armed }),
     addRing: (payload) => ipcRenderer.invoke('cameras:add-ring', payload),

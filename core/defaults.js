@@ -105,6 +105,10 @@ const DEFAULT_SETTINGS = {
   // The Windows SAPI voice, used by the fallback path.
   voiceName: '',
   orbBounds: null,
+  // Pop-out camera windows: where each one sits, per camera key, so a
+  // multi-monitor arrangement survives a restart. `open` lists the cameras that
+  // were popped out, so they reopen on launch.
+  cameraWindows: { bounds: {}, open: [] },
   moduleLayout: {
     tasks: { x: 74, y: 8, w: 24, h: 58 },
     performance: { x: 2, y: 8, w: 22, h: 44 },

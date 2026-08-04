@@ -904,3 +904,12 @@ body.defense #autonomy-cards { display: none; }
 #call-controls { display: flex; gap: 12px; align-items: center; }
 #call-timer { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-muted, #9aa); min-width: 44px; }
 #call-status-line { margin: 0; font-size: 13px; color: var(--text-muted, #9aa); }
+
+/* A camera playing in its own window: the tile is a signpost, not a player, so
+   it recedes rather than looking like a dead picture. */
+.camera-tile[data-popped-out='yes'] .camera-view { opacity: 0.55; }
+.camera-tile[data-popped-out='yes'] .camera-view-empty {
+  color: var(--amber, #f5c86a);
+  letter-spacing: 0.08em;
+}
+.camera-tile[data-popped-out='yes'] .camera-live { opacity: 0.3; cursor: default; }

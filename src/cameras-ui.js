@@ -8,8 +8,7 @@
   const nameInput = document.getElementById('camera-add-name');
   const urlInput = document.getElementById('camera-add-url');
   const addStatus = document.getElementById('camera-add-status');
-  const livePeers = new Map(); // camera key -> RTCPeerConnection
-  const livePlayers = new Map(); // camera key -> mpegts.js player (Blink only)
+  const livePlayers = new Map(); // camera key -> LivePlayer handle
 
   // Linking a camera lives in Settings → CAMERAS, never in this module: the
   // module is only for watching. The ＋ ADD button opens that tab (wired in
@@ -68,7 +67,8 @@
     more: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
     play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
     stop: '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>',
-    spark: '<path d="M12 3l1.9 5.2 5.2 1.9-5.2 1.9L12 17.2l-1.9-5.2L4.9 10l5.2-1.9z"/>'
+    spark: '<path d="M12 3l1.9 5.2 5.2 1.9-5.2 1.9L12 17.2l-1.9-5.2L4.9 10l5.2-1.9z"/>',
+    popout: '<path d="M14 4h6v6"/><path d="M20 4l-8 8"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
   };
   const svg = (paths, size = 15) =>
     `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${paths}</svg>`;
@@ -96,6 +96,7 @@
           <span class="camera-acts">
             <button class="camera-icon camera-refresh" title="Take a fresh picture" aria-label="Take a fresh picture">${svg(ICON.refresh)}</button>
             <button class="camera-icon camera-describe" title="Ask JARVIS what he sees" aria-label="Ask JARVIS what he sees">${svg(ICON.look)}</button>
+            <button class="camera-icon camera-popout" title="Open in its own window" aria-label="Open this camera in its own window">${svg(ICON.popout)}</button>
             <button class="camera-icon camera-more" title="More" aria-label="More options" aria-expanded="false">${svg(ICON.more)}</button>
           </span>
         </div>
@@ -142,6 +143,18 @@
       else say(article, described.message || 'Could not describe the picture.', 'error');
     });
     article.querySelector('.camera-live').addEventListener('click', () => toggleLive(article, camera));
+
+    // Popping out moves the stream, it does not duplicate it: a camera supports
+    // exactly one live viewer (blink-stream-server answers 409 to a second
+    // reader; Ring holds one session per camera), so the tile stops its own
+    // player and says where the picture went.
+    article.querySelector('.camera-popout').addEventListener('click', async () => {
+      stopLive(camera.key, article);
+      const result = await window.jarvis.cameras.popOut({ key: camera.key, name: camera.name, brand: camera.brand });
+      if (!result?.ok) { say(article, result?.message || 'Could not open that window.', 'error'); return; }
+      markPoppedOut(article, true);
+    });
+
 
     // The destructive action hides behind the ⋯ menu and asks twice.
     const menu = article.querySelector('.camera-menu');
@@ -195,7 +208,7 @@
     const video = article.querySelector('video');
     const img = article.querySelector('img');
     const button = article.querySelector('.camera-live');
-    if (livePeers.has(camera.key) || livePlayers.has(camera.key)) { stopLive(camera.key, article); return; }
+    if (livePlayers.has(camera.key)) { stopLive(camera.key, article); return; }
     // State drives the icon now, so the label never has to be rewritten.
     article.dataset.live = 'connecting';
     button.setAttribute('aria-label', 'Connecting to the live view');
@@ -206,65 +219,18 @@
       say(article, live.message || 'Live view is not available.', 'error');
       return;
     }
-    // Blink speaks its own MPEG-TS protocol rather than WebRTC, so it arrives as
-    // a byte stream on a localhost URL and plays through MediaSource instead.
-    if (live.mode === 'mpegts') {
-      try {
-        await playMpegts(article, camera, video, img, button, live.streamUrl);
-      } catch (error) {
-        stopLive(camera.key, article);
-        say(article, `Live view failed: ${error.message}`, 'error');
-      }
-      return;
-    }
     try {
-      const peer = new RTCPeerConnection();
-      livePeers.set(camera.key, peer);
-      // Nest's WebRTC endpoint requires a data channel in the offer. It is NOT
-      // harmless elsewhere, which an older comment here claimed: Ring never
-      // answers a datachannel section, and an offered m-line the answer does
-      // not account for makes Chromium reject the entire answer. So it is
-      // offered only where it is actually needed.
-      if (camera.brand === 'nest') peer.createDataChannel('jarvis');
-      peer.addTransceiver('video', { direction: 'recvonly' });
-      peer.addTransceiver('audio', { direction: 'recvonly' });
-      peer.ontrack = (event) => { video.srcObject = event.streams[0]; };
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await new Promise((resolve) => {
-        if (peer.iceGatheringState === 'complete') return resolve();
-        peer.addEventListener('icegatheringstatechange', () => { if (peer.iceGatheringState === 'complete') resolve(); });
-        setTimeout(resolve, 2000);
+      const handle = await window.LivePlayer.play({
+        video,
+        camera,
+        live,
+        // mpegts.js reports a mid-stream failure long after play() resolved.
+        onError: (detail) => {
+          stopLive(camera.key, article);
+          say(article, `Live view stopped: ${detail}`, 'error');
+        }
       });
-      let answerSdp;
-      if (live.mode === 'sdp-bridge') {
-        const bridged = await window.jarvis.cameras.liveAnswer(camera.key, peer.localDescription.sdp);
-        if (!bridged.ok) throw new Error(bridged.message || 'live view refused');
-        answerSdp = bridged.answerSdp;
-      } else {
-        const response = await fetch(live.whepUrl, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: peer.localDescription.sdp });
-        if (!response.ok) throw new Error(`helper answered ${response.status}`);
-        answerSdp = await response.text();
-      }
-      // Ring answers with the media sections in its own order, which WebRTC
-      // rejects outright (it pairs m-lines by position). Realign the answer to
-      // the offer; an answer that already matches passes through untouched.
-      const aligned = window.SdpAlign
-        ? window.SdpAlign.alignAnswerToOffer(peer.localDescription.sdp, answerSdp)
-        : answerSdp;
-      try {
-        await peer.setRemoteDescription({ type: 'answer', sdp: aligned });
-      } catch (error) {
-        // Say what actually failed to line up. Chromium reports a shuffled
-        // answer and a short one with the same sentence, and the difference
-        // decides the fix, so the card carries the shapes rather than needing
-        // devtools open to find out.
-        const shape = window.SdpAlign
-          ? `offer=[${window.SdpAlign.mediaKinds(peer.localDescription.sdp)}] `
-            + `answer=[${window.SdpAlign.mediaKinds(aligned)}]`
-          : 'sdp-align.js did not load';
-        throw new Error(`${error.message} (${shape})`);
-      }
+      livePlayers.set(camera.key, handle);
       video.hidden = false; img.hidden = true;
       article.querySelector('.camera-view-empty').hidden = true;
       article.dataset.live = 'on';
@@ -276,41 +242,37 @@
     }
   }
 
-  // Blink's live view: MPEG-TS on a localhost URL, demuxed into MediaSource.
-  // Chromium cannot play a transport stream natively, which is what mpegts.js is
-  // for; no transcoding and no ffmpeg is involved either way.
-  async function playMpegts(article, camera, video, img, button, streamUrl) {
-    if (!window.mpegts?.isSupported()) throw new Error('this build cannot play Blink video');
-    const player = window.mpegts.createPlayer(
-      { type: 'mpegts', isLive: true, url: streamUrl },
-      // The worker cannot be used from a file:// page, and chasing latency keeps
-      // a live view from drifting minutes behind after a stall.
-      { enableWorker: false, liveBufferLatencyChasing: true }
-    );
-    livePlayers.set(camera.key, player);
-    player.on(window.mpegts.Events.ERROR, (type, detail) => {
-      stopLive(camera.key, article);
-      say(article, `Live view stopped: ${detail || type}`, 'error');
-    });
-    player.attachMediaElement(video);
-    player.load();
-    await player.play();
-    video.hidden = false; img.hidden = true;
-    article.querySelector('.camera-view-empty').hidden = true;
-    article.dataset.live = 'on';
-    button.setAttribute('aria-label', 'Stop the live view');
-    article.querySelector('.camera-time').textContent = 'LIVE';
+  // While a camera is in its own window the tile is a signpost, not a player.
+  function markPoppedOut(article, out) {
+    if (!article) return;
+    article.dataset.poppedOut = out ? 'yes' : '';
+    const live = article.querySelector('.camera-live');
+    live.disabled = Boolean(out);
+    live.setAttribute('aria-label', out ? 'Playing in its own window' : 'Watch live');
+    article.querySelector('.camera-popout').hidden = Boolean(out);
+    const empty = article.querySelector('.camera-view-empty');
+    if (out) {
+      empty.hidden = false;
+      empty.textContent = 'PLAYING IN ITS OWN WINDOW';
+    } else if (empty.textContent === 'PLAYING IN ITS OWN WINDOW') {
+      empty.textContent = 'NO PICTURE YET';
+      empty.hidden = Boolean(article.querySelector('img').src);
+    }
   }
 
+  const tileFor = (key) => grid.querySelector(`.camera-tile[data-key="${key}"]`);
+
+  // The window can close by itself (Alt+F4, taskbar), so the tile learns about
+  // it from the main process rather than only from its own CLOSE button.
+  window.jarvis.cameras.onWindowClosed?.((key) => markPoppedOut(tileFor(key), false));
+
   function stopLive(key, article) {
-    const peer = livePeers.get(key);
-    if (peer) { try { peer.close(); } catch {} livePeers.delete(key); }
-    const player = livePlayers.get(key);
-    if (player) {
+    const handle = livePlayers.get(key);
+    if (handle) {
       livePlayers.delete(key);
-      // detach before destroy, or mpegts.js leaves the element wired to a dead
-      // MediaSource and the next play() on this camera silently does nothing.
-      try { player.destroy(); } catch {}
+      // The handle owns whichever transport was used and tears it down the way
+      // that transport needs (closing the peer, or destroying the demuxer).
+      try { handle.stop(); } catch { /* already gone */ }
     }
     window.jarvis.cameras.liveStop(key);
     if (article) {
@@ -424,7 +386,7 @@
   }
 
   async function render() {
-    for (const key of [...livePeers.keys()]) stopLive(key);
+    for (const key of [...livePlayers.keys()]) stopLive(key);
     renderSystems();
     const cameras = await window.jarvis.cameras.list();
     grid.innerHTML = '';
@@ -444,9 +406,13 @@
       count[cam.accountId] = (count[cam.accountId] || 0) + 1;
       return count;
     }, {});
+    // Windows outlive a grid rebuild, so ask which cameras are still popped out
+    // rather than assuming a fresh tile owns its stream.
+    const poppedOut = new Set(await window.jarvis.cameras.poppedOut?.() || []);
     for (const camera of cameras) {
       const article = tile(camera, perAccount[camera.accountId]);
       grid.appendChild(article);
+      if (poppedOut.has(camera.key)) { markPoppedOut(article, true); continue; }
       if (!camera.liveOnly) refresh(article, camera, false);
     }
   }
