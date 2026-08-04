@@ -23,6 +23,8 @@ class CameraService {
     this.lastAutoSnapshot = new Map(); // camera key -> timestamp
     this.liveViews = new Set(); // go2rtc stream names
     this.sdpViews = new Map(); // camera key -> {driver, cameraId, session}
+    this.blinkViews = new Map(); // camera key -> {handle, driver, cameraId}
+    this.blinkStreamServer = null; // started lazily, only if a Blink view opens
     this.lastAlert = new Map(); // camera key -> timestamp
     this.describeFrame = null; // Phase 4 assigns: async (jpegBase64, context) => text|null
   }
@@ -289,6 +291,10 @@ class CameraService {
         this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
         return { ok: true, mode: 'sdp-bridge', key };
       }
+      // Blink speaks its own MPEG-TS protocol rather than RTSP or WebRTC, so it
+      // is neither bridgeable nor something go2rtc can ingest; the bytes go to
+      // the renderer over a localhost-only carrier instead.
+      if (typeof driver.startLiveStream === 'function') return this.#openBlinkLiveView(key, driver, cameraId);
       const source = await driver.getStreamSource(cameraId);
       if (!source) return { ok: false, message: 'This camera does not support live view — snapshots only.' };
       const started = await this.go2rtc.start();
@@ -301,6 +307,37 @@ class CameraService {
     } catch (error) {
       return { ok: false, message: `Could not start live view: ${error.message}` };
     }
+  }
+
+  // Blink live view: open the stream, hand its chunks to a localhost token URL,
+  // and make sure either side going away tears down the other so a battery
+  // camera is never left awake.
+  async #openBlinkLiveView(key, driver, cameraId) {
+    const server = await this.#blinkServer();
+    let stream = null;
+    const handle = server.register({
+      onStop: () => { try { stream?.stop(); } catch { /* already gone */ } }
+    });
+    try {
+      stream = await driver.startLiveStream(cameraId, {
+        onVideo: (chunk) => handle.push(chunk),
+        onEnd: () => handle.close()
+      });
+    } catch (error) {
+      handle.close();
+      throw error;
+    }
+    this.blinkViews.set(key, { handle, driver, cameraId });
+    this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
+    return { ok: true, mode: 'mpegts', key, streamUrl: handle.url };
+  }
+
+  async #blinkServer() {
+    if (!this.blinkStreamServer) {
+      const { BlinkStreamServer } = require('./blink-stream-server');
+      this.blinkStreamServer = new BlinkStreamServer({});
+    }
+    return this.blinkStreamServer.start();
   }
 
   async answerLiveView(key, offerSdp) {
@@ -317,6 +354,13 @@ class CameraService {
   }
 
   async closeLiveView(key) {
+    const blink = this.blinkViews.get(key);
+    if (blink) {
+      this.blinkViews.delete(key);
+      try { blink.driver.stopLiveStream(blink.cameraId); } catch {}
+      try { blink.handle.close(); } catch {}
+      return { ok: true };
+    }
     const view = this.sdpViews.get(key);
     if (view) {
       this.sdpViews.delete(key);
@@ -335,6 +379,14 @@ class CameraService {
   }
 
   async shutdown() {
+    // Blink first: an unreleased live view leaves a battery camera awake.
+    for (const [, view] of this.blinkViews) {
+      try { view.driver.stopLiveStream(view.cameraId); } catch {}
+      try { view.handle.close(); } catch {}
+    }
+    this.blinkViews.clear();
+    try { await this.blinkStreamServer?.stop(); } catch {}
+    this.blinkStreamServer = null;
     for (const [, view] of this.sdpViews) { try { view.session?.close(); } catch {} }
     this.sdpViews.clear();
     for (const name of this.liveViews) { try { await this.go2rtc.removeStream(name); } catch {} }

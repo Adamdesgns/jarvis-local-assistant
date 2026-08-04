@@ -682,6 +682,10 @@
       </div>
       <p id="call-status-line"></p>
     </div>
+    <!-- Chromium cannot play a raw MPEG-TS stream, which is what Blink live view
+         delivers; mpegts.js demuxes it into MediaSource. Loaded from
+         node_modules like kokoro-js in voice-worker.js. -->
+    <script src="../node_modules/mpegts.js/dist/mpegts.js"></script>
     <script src="sdp-align.js"></script>
     <script src="cameras-ui.js"></script>
     <script src="call-settings.js"></script>

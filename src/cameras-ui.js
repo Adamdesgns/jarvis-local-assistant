@@ -9,6 +9,7 @@
   const urlInput = document.getElementById('camera-add-url');
   const addStatus = document.getElementById('camera-add-status');
   const livePeers = new Map(); // camera key -> RTCPeerConnection
+  const livePlayers = new Map(); // camera key -> mpegts.js player (Blink only)
 
   // Linking a camera lives in Settings → CAMERAS, never in this module: the
   // module is only for watching. The ＋ ADD button opens that tab (wired in
@@ -194,7 +195,7 @@
     const video = article.querySelector('video');
     const img = article.querySelector('img');
     const button = article.querySelector('.camera-live');
-    if (livePeers.has(camera.key)) { stopLive(camera.key, article); return; }
+    if (livePeers.has(camera.key) || livePlayers.has(camera.key)) { stopLive(camera.key, article); return; }
     // State drives the icon now, so the label never has to be rewritten.
     article.dataset.live = 'connecting';
     button.setAttribute('aria-label', 'Connecting to the live view');
@@ -203,6 +204,17 @@
       article.dataset.live = '';
       button.setAttribute('aria-label', 'Watch live');
       say(article, live.message || 'Live view is not available.', 'error');
+      return;
+    }
+    // Blink speaks its own MPEG-TS protocol rather than WebRTC, so it arrives as
+    // a byte stream on a localhost URL and plays through MediaSource instead.
+    if (live.mode === 'mpegts') {
+      try {
+        await playMpegts(article, camera, video, img, button, live.streamUrl);
+      } catch (error) {
+        stopLive(camera.key, article);
+        say(article, `Live view failed: ${error.message}`, 'error');
+      }
       return;
     }
     try {
@@ -264,13 +276,46 @@
     }
   }
 
+  // Blink's live view: MPEG-TS on a localhost URL, demuxed into MediaSource.
+  // Chromium cannot play a transport stream natively, which is what mpegts.js is
+  // for; no transcoding and no ffmpeg is involved either way.
+  async function playMpegts(article, camera, video, img, button, streamUrl) {
+    if (!window.mpegts?.isSupported()) throw new Error('this build cannot play Blink video');
+    const player = window.mpegts.createPlayer(
+      { type: 'mpegts', isLive: true, url: streamUrl },
+      // The worker cannot be used from a file:// page, and chasing latency keeps
+      // a live view from drifting minutes behind after a stall.
+      { enableWorker: false, liveBufferLatencyChasing: true }
+    );
+    livePlayers.set(camera.key, player);
+    player.on(window.mpegts.Events.ERROR, (type, detail) => {
+      stopLive(camera.key, article);
+      say(article, `Live view stopped: ${detail || type}`, 'error');
+    });
+    player.attachMediaElement(video);
+    player.load();
+    await player.play();
+    video.hidden = false; img.hidden = true;
+    article.querySelector('.camera-view-empty').hidden = true;
+    article.dataset.live = 'on';
+    button.setAttribute('aria-label', 'Stop the live view');
+    article.querySelector('.camera-time').textContent = 'LIVE';
+  }
+
   function stopLive(key, article) {
     const peer = livePeers.get(key);
     if (peer) { try { peer.close(); } catch {} livePeers.delete(key); }
+    const player = livePlayers.get(key);
+    if (player) {
+      livePlayers.delete(key);
+      // detach before destroy, or mpegts.js leaves the element wired to a dead
+      // MediaSource and the next play() on this camera silently does nothing.
+      try { player.destroy(); } catch {}
+    }
     window.jarvis.cameras.liveStop(key);
     if (article) {
       const video = article.querySelector('video');
-      video.srcObject = null; video.hidden = true;
+      video.srcObject = null; video.removeAttribute('src'); video.hidden = true;
       article.dataset.live = '';
       article.querySelector('.camera-live').setAttribute('aria-label', 'Watch live');
       const img = article.querySelector('img');

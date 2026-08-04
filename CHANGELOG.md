@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Added — Blink live view
+- Blink cameras used to say *"This camera does not support live view — snapshots
+  only."* They can now be watched live.
+- Blink live view is **not** RTSP and go2rtc cannot ingest it: asking Blink for a
+  view returns `immis://` — Amazon's own protocol. What travels over it is
+  **already MPEG-TS**, so this needs **no transcoding and no ffmpeg**; the 223 MB
+  removed in 0.18.0 stays removed. `mpegts.js` (Apache-2.0, no new
+  vulnerabilities) demuxes it in the renderer, since Chromium cannot play a
+  transport stream natively.
+- Three new modules: `blink-immi.js` (the wire format — a 122-byte auth header
+  and 9-byte framing, ported from blinkpy rather than guessed),
+  `blink-livestream.js` (the TLS socket, the keep-alive Blink requires, and
+  polling its command API), and `blink-stream-server.js` (the last hop to the
+  renderer).
+- **Battery is treated as a real cost.** A live view is always released — on
+  error, when the window closes, when the viewer disconnects, and on app
+  shutdown — because a leaked session leaves a battery camera awake until
+  Blink's own timeout catches it.
+- The stream carrier binds to **127.0.0.1 only** and mints an unguessable token
+  per view, so no other program on the PC can read a camera by guessing a URL. A
+  token dies with its view, one viewer at a time, nothing buffered to disk.
+
+### Fixed — Ring live view ("The order of m-lines in answer doesn't match")
+- Ring live view never worked on real hardware. Two faults, and Chromium reports
+  both with the **same sentence**, which is what made the first fix look useless:
+  JARVIS was offering Ring a **data channel Ring never answers** (an unanswered
+  media section makes Chromium reject the whole answer), and Ring also returns
+  its media sections in a different order than they were offered.
+- The data channel is now offered only to Nest, whose endpoint actually requires
+  it — a comment claiming it was "harmless" for the Ring and go2rtc paths was
+  wrong. New `sdp-align.js` reorders the **answer** to match the offer, leaving
+  the offer alone so the two working paths keep working.
+- A rejected answer now names the shapes it saw on the camera card itself, so
+  diagnosing the next one does not need devtools.
+
 ### Fixed — Blink cameras can sign in again ("An app update is required")
 - Blink sign-in had stopped working entirely: **"Blink sign-in failed: An app
   update is required."** Amazon retired the `/api/v5/account/login` endpoint the

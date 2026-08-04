@@ -983,3 +983,75 @@ test('blink driver: disconnecting stops every open live stream', async () => {
   assert.equal(streams.length, 1);
   assert.equal(streams[0].stopped, true, 'no camera left awake after teardown');
 });
+
+// Blink live view goes out over a localhost token URL rather than go2rtc or a
+// WebRTC bridge, because Blink speaks neither.
+test('camera service: blink live view streams over a localhost token URL', async () => {
+  const config = fakeConfig();
+  const pushed = [];
+  let stopped = 0;
+  class TestBlinkDriver extends BlinkDriver {
+    constructor(options) {
+      super({ ...options, clientFactory: () => fakeBlinkClient() });
+      this.freshWaitMs = 0;
+    }
+
+    async startLiveStream(cameraId, { onVideo }) {
+      this.sink = onVideo;
+      return { stop: () => { stopped += 1; } };
+    }
+
+    stopLiveStream() { stopped += 1; }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { blink: TestBlinkDriver }
+  });
+  await service.init();
+  const added = await service.addBlinkAccount({}, {
+    signInFlow: async ({ hardwareId }) => ({ hardwareId, session: { ...FAKE_SESSION } })
+  });
+  const cameras = await service.listCameras();
+
+  const view = await service.openLiveView(cameras[0].key);
+  assert.equal(view.ok, true);
+  assert.equal(view.mode, 'mpegts', 'not whep and not sdp-bridge');
+  assert.match(view.streamUrl, /^http:\/\/127\.0\.0\.1:\d+\/blink\/[0-9a-f]+\.ts$/);
+  assert.equal(service.go2rtc._streams.size, 0, 'go2rtc is never involved');
+
+  // Chunks from the driver reach the carrier.
+  const driver = service.drivers.get(added.accountId);
+  driver.sink(Buffer.from([0x47, 1, 2]));
+  assert.equal(pushed.length, 0, 'no viewer yet, so nothing is buffered');
+
+  const closed = await service.closeLiveView(cameras[0].key);
+  assert.equal(closed.ok, true);
+  assert.ok(stopped >= 1, 'the Blink stream was stopped');
+  await service.shutdown();
+  assert.equal(service.blinkStreamServer, null, 'the carrier is torn down too');
+});
+
+test('camera service: shutdown releases an open blink live view', async () => {
+  const config = fakeConfig();
+  let stopped = 0;
+  class TestBlinkDriver extends BlinkDriver {
+    constructor(options) {
+      super({ ...options, clientFactory: () => fakeBlinkClient() });
+    }
+
+    async startLiveStream() { return { stop: () => {} }; }
+    stopLiveStream() { stopped += 1; }
+  }
+  const service = new CameraService({
+    config, go2rtc: fakeGo2rtc(), emit: () => {}, log: { write: () => {} },
+    driverClasses: { blink: TestBlinkDriver }
+  });
+  await service.init();
+  await service.addBlinkAccount({}, {
+    signInFlow: async ({ hardwareId }) => ({ hardwareId, session: { ...FAKE_SESSION } })
+  });
+  const cameras = await service.listCameras();
+  await service.openLiveView(cameras[0].key);
+  await service.shutdown();
+  assert.equal(stopped, 1, 'no camera left awake when JARVIS closes');
+});
