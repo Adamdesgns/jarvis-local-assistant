@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added — cinematic finishing pass for every orb skin
+- All eight orb skins now get a shared post-FX layer (`src/orbs/orb-fx.js`)
+  applied after their final composite: a faint chromatic-aberration fringe at
+  the orb's edge, a warm (gold) / cool (obsidian) color grade, a subtle ±1%
+  flicker, and a soft vignette on large canvases. Adapted from the
+  MIT-licensed ULTRON orb by Sagar Tamang. The aberration disables itself on
+  tiny canvases (floating widget at minimum size, defense sentinel) and
+  everything scales down with the dim/error state; the flicker is suppressed
+  under reduced motion. Plasma's WebGL renderer does the equivalent pass
+  in-shader.
+- Every skin's brightness now rides a rare "surge" envelope — mostly calm
+  with occasional dramatic swells, noticeably livelier while thinking.
+  Starfield also gains a scan ring sweeping the sphere's latitudes.
+- New shared helper module `src/orbs/orb-utils.js` consolidates the math the
+  skins used to copy-paste (seeded RNGs, color mixing, easing) plus the new
+  envelope helpers, with unit tests (`test/orb-utils.test.js`).
+
+### Fixed — orb performance
+- The Original skin was silently rendering twice per frame forever: its
+  constructor started one animation loop and the host's synchronous unpause
+  started a second. It now renders once.
+- Six skins (classic, starfield, zen, neural, aurora, original) kept
+  animating at full rate while their window was hidden; they now stop on
+  `visibilitychange` and resume on return, like halation and plasma always
+  did.
+
 ### Added — FAMILY CALLS: video-call JARVIS JR over Tailscale
 - Pair once in Settings → CALLS (show a 6-digit code on one PC, type it on the
   other), then call from the strip above the camera grid. Two-way video +

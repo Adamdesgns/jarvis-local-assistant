@@ -41,12 +41,8 @@
 
   var PERSP_K = 6.0; // perspective distance in units of R
 
-  function mix3(a, b, t) {
-    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-  }
-  function css(c, a) {
-    return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a.toFixed(4) + ')';
-  }
+  var mix3 = window.OrbUtils.mix3;
+  var css = window.OrbUtils.css;
 
   function createClassic(canvas) {
     var ctx = canvas.getContext('2d');
@@ -57,6 +53,7 @@
     var actx = blurA.getContext('2d');
     var blurB = document.createElement('canvas');
     var bctx = blurB.getContext('2d');
+    var fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
 
     var REDUCED = false;
     try { REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
@@ -64,13 +61,9 @@
 
     var W = 0, H = 0, DPR = 1, CX = 0, CY = 0, R = 100;
 
-    // Deterministic seeded randomness (hologram.js LCG pattern) — replaces
-    // the prototype's Math.random() so every boot looks identical.
-    var seed = 4107;
-    function srand() {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 4294967296;
-    }
+    // Deterministic seeded randomness — replaces the prototype's
+    // Math.random() so every boot looks identical.
+    var srand = window.OrbUtils.lcg(4107);
 
     // ---------------------------------------------------------- geometry
     // Per-instance ring copies (p / headT mutate over time).
@@ -207,8 +200,12 @@
       sctx.globalAlpha = master * cur.dim;
 
       var persp = PERSP_K * R;
+      // Rare dramatic surge — more frequent/intense while thinking (precess
+      // rises 1 -> 3.8). Zero under reduced motion so the frozen clock can't
+      // bake a surge into the static frame.
+      var sg = REDUCED ? 0 : window.OrbUtils.surgeEnvelope(T, { strength: 0.9 + 0.25 * cur.precess });
       // Subtle audio-reactive energy (speaking/listening).
-      var ringGain = cur.ringGlow * (1 + audio * 0.15);
+      var ringGain = cur.ringGlow * (1 + audio * 0.15) * (1 + 0.25 * sg);
       var coreBoost = 1 + audio * 0.30;
       var partBoost = 1 + audio * 0.20;
 
@@ -267,7 +264,7 @@
       // --- luminous core ---
       var pulse = 1 + cur.pulseAmp * (0.62 * Math.sin(6.2832 * cur.pulseHz * T) +
                                       0.26 * Math.sin(6.2832 * cur.pulseHz * 1.71 * T + 1.3));
-      var cg = cur.coreGain * pulse * coreBoost;
+      var cg = cur.coreGain * pulse * coreBoost * (1 + 0.9 * sg);
       // wide inner halo
       sctx.fillStyle = rg(sctx, CX, CY, R * 1.28 * pulse, [
         [0, css(PAL.haze, 0.10 * cg)], [0.45, css(PAL.haze, 0.040 * cg)], [1, css(PAL.haze, 0)]
@@ -441,6 +438,8 @@
       if (HAS_FILTER) ctx.filter = 'none';
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
+
+      if (fx) fx.apply(ctx, { t: T, palette: mode, intensity: master * cur.dim, reduced: REDUCED });
     }
 
     function render() {
@@ -499,6 +498,13 @@
       start();
     }
 
+    // Stop burning CPU while the window is hidden; start() re-checks
+    // paused/destroyed/REDUCED so this can't resurrect a stopped skin.
+    var unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(function () {
+      if (destroyed) return;
+      if (document.hidden) stop(); else start();
+    }) : null;
+
     // ---------------------------------------------------------- instance
     return {
       setState: function (appState) {
@@ -528,7 +534,9 @@
       destroy: function () {
         destroyed = true;
         stop();
+        if (unbindVis) { unbindVis(); unbindVis = null; }
         if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+        if (fx) { fx.destroy(); fx = null; }
         scene = blurA = blurB = null;
         sctx = actx = bctx = null;
         ctx = null;

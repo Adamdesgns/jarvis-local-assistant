@@ -171,6 +171,19 @@
     '  // premultiplied-alpha output: the orb body is opaque glass (alpha 1 inside',
     '  // the AA silhouette); outside, alpha follows halo luminance so the glow',
     '  // screens over whatever the stage shows.',
+    '  // finishing pass: spectral limb fringe + palette grade + subtle flicker.',
+    '  // Fringe frequencies and masks reuse the existing silhouette; flicker',
+    '  // rates are integer multiples of W0 so the 120 s phase wrap is seamless.',
+    '  float caOff = 2.5 * px;',
+    '  float inR = 1.0 - smoothstep(-px, px, d - caOff);',   // red silhouette, slightly larger
+    '  float inB = 1.0 - smoothstep(-px, px, d + 0.5 * caOff);', // blue silhouette, slightly smaller
+    '  col += vec3(0.20, 0.02, 0.00) * max(inR - inMask, 0.0) * (0.3 + 0.5 * uEnergy);',
+    '  col += vec3(0.00, 0.02, 0.18) * max(inMask - inB, 0.0) * (0.3 + 0.5 * uEnergy);',
+    '  vec3 warm = col * vec3(1.15, 0.88, 0.62);',
+    '  vec3 cool = col * vec3(0.88, 0.97, 1.12);',
+    '  col = mix(col, mix(cool, warm, uMode), 0.22);',
+    '  col *= 1.0 + 0.02 * sin(uTime * 573.0 * W0) * sin(uTime * 139.0 * W0);',
+    '',
     '  col *= uFade;',
     '  float alpha = clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0);',
     '  alpha = mix(alpha, 1.0, inMask);',
@@ -312,12 +325,8 @@
     }
     return out;
   }
-  function mix3(a, b, m) {
-    return [a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m, a[2] + (b[2] - a[2]) * m];
-  }
-  function rgba(c, a) {
-    return 'rgba(' + ((c[0] * 255) | 0) + ',' + ((c[1] * 255) | 0) + ',' + ((c[2] * 255) | 0) + ',' + a.toFixed(3) + ')';
-  }
+  var mix3 = window.OrbUtils.mix3;
+  var rgba = window.OrbUtils.rgba01;
 
   // ------------------------------------------------------------------ skin
 
@@ -335,6 +344,14 @@
 
     var mqRM = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
     var reduced = !!(mqRM && mqRM.matches);
+
+    // Rare dramatic surge on the phase clock. Frequencies are multiples of
+    // TAU/P so the envelope is seamless across the 120 s phase wrap; zero
+    // under reduced motion (frozen phase would bake a surge in).
+    function surge() {
+      if (reduced) return 0;
+      return window.OrbUtils.surgeEnvelope(phase, { f1: 8 * (TAU / P), f2: 13 * (TAU / P) });
+    }
     function onRM(e) { reduced = e.matches; kick(); }
     if (mqRM) {
       if (mqRM.addEventListener) mqRM.addEventListener('change', onRM);
@@ -389,7 +406,7 @@
         gl.uniform1f(st.U.uTime, phase);
         gl.uniform1f(st.U.uSwirl, swirl);
         gl.uniform1f(st.U.uMode, modeCur);
-        gl.uniform1f(st.U.uEnergy, cur.energy * (1 + 0.4 * audioCur));
+        gl.uniform1f(st.U.uEnergy, cur.energy * (1 + 0.4 * audioCur) * (1 + 0.9 * surge()));
         gl.uniform1f(st.U.uTurb, cur.turb);
         gl.uniform1f(st.U.uPulse, cur.pulse);
         gl.uniform1f(st.U.uFade, fadeCur);
@@ -413,13 +430,10 @@
     function make2D() {
       var ctx = canvas.getContext('2d');
       if (!ctx) return null;
+      var fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
 
       // precomputed noise-displaced filament chords — deterministic LCG seed
-      var seed = 4107;
-      function srand() {
-        seed = (seed * 1664525 + 1013904223) >>> 0;
-        return seed / 4294967296;
-      }
+      var srand = window.OrbUtils.lcg(4107);
       var fils = [];
       for (var i = 0; i < 7; i++) {
         var a0 = srand() * TAU;
@@ -437,7 +451,7 @@
       st.draw = function () {
         var w = canvas.width, h = canvas.height;
         var W0 = TAU / P, t = phase;
-        var E = cur.energy * (1 + 0.4 * audioCur), m = modeCur, fade = fadeCur;
+        var E = cur.energy * (1 + 0.4 * audioCur) * (1 + 0.9 * surge()), m = modeCur, fade = fadeCur;
         var ph = 3 * W0 * t;
         var R = Math.min(w, h) * 0.28 * (1 + 0.018 * cur.pulse * Math.sin(24 * W0 * t));
         var c = ctx, g, i2, j2;
@@ -542,8 +556,17 @@
         c.arc(-R * 0.32, -R * 0.38, R * 0.30, 0, TAU);
         c.fill();
         c.globalCompositeOperation = 'source-over';
+
+        if (fx) {
+          fx.apply(c, {
+            t: t,
+            palette: m >= 0.5 ? 'gold' : 'obsidian',
+            intensity: fade,
+            reduced: reduced
+          });
+        }
       };
-      st.dispose = function () { };
+      st.dispose = function () { if (fx) { fx.destroy(); fx = null; } };
       return st;
     }
 

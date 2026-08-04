@@ -15,7 +15,23 @@
       this.resizeObserver.observe(canvas.parentElement);
       this.resize();
       this.createGeometry();
+      // Mark the loop as live before the first frame is scheduled: OrbHost calls
+      // setPaused(false) synchronously after construction, and its !_running guard
+      // would otherwise start a second permanent rAF chain.
+      this._running = true;
       requestAnimationFrame((time) => this.draw(time));
+      this._fx = window.OrbFX ? window.OrbFX.create(canvas) : null;
+      this._reduced = false;
+      try { this._reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+      // Stop burning CPU while the window is hidden.
+      this._hidden = false;
+      this._unbindVis = window.OrbUtils ? window.OrbUtils.bindVisibility(() => {
+        this._hidden = document.hidden;
+        if (!this._hidden && !this._paused && !this._running) {
+          this._running = true;
+          requestAnimationFrame((time) => this.draw(time));
+        }
+      }) : null;
     }
 
     random() {
@@ -216,7 +232,7 @@
 
     setPaused(paused) {
       this._paused = Boolean(paused);
-      if (!this._paused && !this._running) { this._running = true; requestAnimationFrame((time) => this.draw(time)); }
+      if (!this._paused && !this._hidden && !this._running) { this._running = true; requestAnimationFrame((time) => this.draw(time)); }
     }
 
     // Orb-skin contract: the original is amber by design; palette is accepted
@@ -225,11 +241,13 @@
 
     destroy() {
       this._paused = true;
+      if (this._unbindVis) { this._unbindVis(); this._unbindVis = null; }
+      if (this._fx) { this._fx.destroy(); this._fx = null; }
       this.resizeObserver.disconnect();
     }
 
     draw(time) {
-      if (this._paused) { this._running = false; return; }
+      if (this._paused || this._hidden) { this._running = false; return; }
       this._running = true;
       this.audioLevel += (this.targetAudio - this.audioLevel) * .16;
       this.explosion += (this.explosionTarget - this.explosion) * .11;
@@ -257,7 +275,9 @@
       this.drawSphereGrid(ctx, time, intensity);
       this.drawNodes(ctx, time, intensity);
       this.drawParticles(ctx, time, intensity);
-      this.drawCore(ctx, time, intensity);
+      // Rare dramatic core surge (suppressed under reduced motion).
+      const sg = (this._reduced || !window.OrbUtils) ? 0 : window.OrbUtils.surgeEnvelope(time / 1000);
+      this.drawCore(ctx, time, intensity * (1 + 0.6 * sg));
 
       const scanY = this.cy + Math.sin(time * .00062) * this.radius * .9;
       const scan = ctx.createLinearGradient(this.cx - this.radius, scanY, this.cx + this.radius, scanY);
@@ -269,6 +289,8 @@
       ctx.moveTo(this.cx - this.radius, scanY);
       ctx.lineTo(this.cx + this.radius, scanY);
       ctx.stroke();
+
+      if (this._fx) this._fx.apply(ctx, { t: time / 1000, palette: 'gold', intensity: 1, reduced: this._reduced });
 
       requestAnimationFrame((nextTime) => this.draw(nextTime));
     }
