@@ -69,7 +69,16 @@
     return [...session, ...ordered.flat()].join(eol);
   }
 
-  const api = { alignAnswerToOffer };
+  // The media kinds in order, e.g. ['application','video','audio']. Used to say
+  // out loud what did not line up when an answer is still rejected, because a
+  // count mismatch is a different bug from a shuffle and the two look identical
+  // from Chromium's error message alone.
+  function mediaKinds(sdp) {
+    if (typeof sdp !== 'string') return [];
+    return split(sdp.split(/\r?\n/)).sections.map(kind);
+  }
+
+  const api = { alignAnswerToOffer, mediaKinds };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.SdpAlign = api;
 })();

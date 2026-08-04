@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { alignAnswerToOffer } = require('../src/sdp-align');
+const { alignAnswerToOffer, mediaKinds } = require('../src/sdp-align');
 
 // Ring's live view failed on Adam's Front Door camera with:
 //   "Failed to set remote answer sdp: The order of m-lines in answer doesn't
@@ -134,4 +134,11 @@ test('sdp align: keeps CRLF line endings, which WebRTC requires', () => {
   const aligned = alignAnswerToOffer(offer(), ringAnswer());
   assert.ok(aligned.includes(CRLF), 'CRLF preserved');
   assert.ok(!/[^\r]\n/.test(aligned), 'no bare LF anywhere');
+});
+
+test('sdp align: names the media kinds in order, for the failure message', () => {
+  assert.deepEqual(mediaKinds(offer()), ['application', 'video', 'audio']);
+  assert.deepEqual(mediaKinds(ringAnswer()), ['audio', 'video', 'application']);
+  assert.deepEqual(mediaKinds(''), []);
+  assert.deepEqual(mediaKinds(undefined), []);
 });

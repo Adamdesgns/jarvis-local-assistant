@@ -208,9 +208,12 @@
     try {
       const peer = new RTCPeerConnection();
       livePeers.set(camera.key, peer);
-      // Nest's WebRTC endpoint requires a data channel in the offer; it is
-      // harmless for the go2rtc and Ring paths.
-      peer.createDataChannel('jarvis');
+      // Nest's WebRTC endpoint requires a data channel in the offer. It is NOT
+      // harmless elsewhere, which an older comment here claimed: Ring never
+      // answers a datachannel section, and an offered m-line the answer does
+      // not account for makes Chromium reject the entire answer. So it is
+      // offered only where it is actually needed.
+      if (camera.brand === 'nest') peer.createDataChannel('jarvis');
       peer.addTransceiver('video', { direction: 'recvonly' });
       peer.addTransceiver('audio', { direction: 'recvonly' });
       peer.ontrack = (event) => { video.srcObject = event.streams[0]; };
@@ -237,7 +240,19 @@
       const aligned = window.SdpAlign
         ? window.SdpAlign.alignAnswerToOffer(peer.localDescription.sdp, answerSdp)
         : answerSdp;
-      await peer.setRemoteDescription({ type: 'answer', sdp: aligned });
+      try {
+        await peer.setRemoteDescription({ type: 'answer', sdp: aligned });
+      } catch (error) {
+        // Say what actually failed to line up. Chromium reports a shuffled
+        // answer and a short one with the same sentence, and the difference
+        // decides the fix, so the card carries the shapes rather than needing
+        // devtools open to find out.
+        const shape = window.SdpAlign
+          ? `offer=[${window.SdpAlign.mediaKinds(peer.localDescription.sdp)}] `
+            + `answer=[${window.SdpAlign.mediaKinds(aligned)}]`
+          : 'sdp-align.js did not load';
+        throw new Error(`${error.message} (${shape})`);
+      }
       video.hidden = false; img.hidden = true;
       article.querySelector('.camera-view-empty').hidden = true;
       article.dataset.live = 'on';
