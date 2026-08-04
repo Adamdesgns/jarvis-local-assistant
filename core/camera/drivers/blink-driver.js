@@ -78,13 +78,42 @@ class BlinkDriver extends CameraDriver {
     return this.homescreenCache;
   }
 
+  // Blink's homescreen lists some devices TWICE — a Mini shows up in `cameras`
+  // AND in `owls`, a doorbell in `cameras` AND `doorbells`, each with its own id
+  // in its own id space. Taken at face value that showed Adam 8 tiles for 4
+  // cameras. De-duplicating on `id` cannot work (the two entries have different
+  // ids); the serial is the physical device, so that is the key.
+  //
+  // When a device appears twice, the specific kind wins: the thumbnail and
+  // liveview endpoints for owls and doorbells differ from the generic camera
+  // ones, and the specific pair is the one Blink's own app uses for that device.
   #allCameras(home) {
     const tag = (list, kind) => (list || []).map((camera) => ({ ...camera, kind }));
-    return [
+    // Listing order is preserved so a de-duplication fix cannot quietly
+    // rearrange a camera grid someone is used to.
+    const all = [
       ...tag(home.cameras, 'camera'),
       ...tag(home.owls, 'owl'),
       ...tag(home.doorbells, 'doorbell')
     ];
+    // No serial (older firmware, or a shape Blink changes later) means we cannot
+    // prove two entries are the same device, so each is kept — hiding a real
+    // camera would be worse than showing a duplicate.
+    const identity = (camera) => (camera.serial ? `serial:${camera.serial}` : `${camera.kind}:${camera.id}`);
+    const rank = { owl: 0, doorbell: 1, camera: 2 };
+    const winners = new Map();
+    for (const camera of all) {
+      const key = identity(camera);
+      const held = winners.get(key);
+      if (!held || rank[camera.kind] < rank[held.kind]) winners.set(key, camera);
+    }
+    const emitted = new Set();
+    return all.filter((camera) => {
+      const key = identity(camera);
+      if (emitted.has(key) || winners.get(key) !== camera) return false;
+      emitted.add(key);
+      return true;
+    });
   }
 
   async listCameras() {

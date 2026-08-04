@@ -1147,3 +1147,86 @@ test('camera service: duplicate accounts already saved still list each camera on
   const cameras = await service.listCameras();
   assert.equal(cameras.length, 3, 'one entry per physical camera, not one per account');
 });
+
+// Blink's homescreen lists some devices twice: a Mini appears in `cameras` AND
+// in `owls`, a doorbell in `cameras` AND `doorbells`, each with a different id in
+// its own id space. Adam saw the result as 8 tiles for 4 cameras. The serial is
+// the physical device, so that is what identity has to be built on — an id-based
+// guard cannot see it, because the two entries genuinely have different ids.
+test('blink driver: a device listed as both camera and owl appears once', async () => {
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
+    clientFactory: () => fakeBlinkClient({
+      homescreen: async () => ({
+        networks: [{ id: 55, name: 'Home', armed: false }],
+        // Same four physical devices Blink reports in two places at once.
+        cameras: [
+          { id: 900, name: 'Kitchen', network_id: 55, serial: 'S-KITCHEN', thumbnail: '/m/900' },
+          { id: 901, name: 'Front Door', network_id: 55, serial: 'S-DOOR', thumbnail: '/m/901' }
+        ],
+        owls: [
+          { id: 100, name: 'Kitchen', network_id: 55, serial: 'S-KITCHEN', thumbnail: '/m/100' }
+        ],
+        doorbells: [
+          { id: 200, name: 'Front Door', network_id: 55, serial: 'S-DOOR', thumbnail: '/m/200' }
+        ]
+      })
+    })
+  });
+  await driver.connect();
+  const cameras = await driver.listCameras();
+
+  assert.equal(cameras.length, 2, 'two physical devices, not four entries');
+  assert.deepEqual(cameras.map((c) => c.name).sort(), ['Front Door', 'Kitchen']);
+  // The specific kind must win: owl and doorbell thumbnail/liveview endpoints
+  // differ from the generic camera ones, and the specific pair is correct.
+  const kinds = Object.fromEntries(cameras.map((c) => [c.name, c.kind]));
+  assert.equal(kinds.Kitchen, 'owl');
+  assert.equal(kinds['Front Door'], 'doorbell');
+  const ids = Object.fromEntries(cameras.map((c) => [c.name, c.id]));
+  assert.equal(ids.Kitchen, '100', 'kept the owl id, which its endpoints expect');
+  assert.equal(ids['Front Door'], '200');
+});
+
+test('blink driver: genuinely different devices are all kept', async () => {
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
+    clientFactory: () => fakeBlinkClient({
+      homescreen: async () => ({
+        networks: [],
+        cameras: [
+          { id: 1, name: 'Living Room', network_id: 55, serial: 'S-A', thumbnail: '/m/1' },
+          { id: 2, name: 'Refrigerator Cam', network_id: 55, serial: 'S-B', thumbnail: '/m/2' },
+          { id: 3, name: 'Kitchen', network_id: 55, serial: 'S-C', thumbnail: '/m/3' },
+          { id: 4, name: 'Computer Room', network_id: 55, serial: 'S-D', thumbnail: '/m/4' }
+        ]
+      })
+    })
+  });
+  await driver.connect();
+  const cameras = await driver.listCameras();
+  assert.equal(cameras.length, 4, 'four distinct serials, four cameras');
+  assert.equal(new Set(cameras.map((c) => c.id)).size, 4);
+});
+
+// Hiding a real camera would be worse than showing a duplicate.
+test('blink driver: devices with no serial are never collapsed together', async () => {
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
+    clientFactory: () => fakeBlinkClient({
+      homescreen: async () => ({
+        networks: [],
+        cameras: [
+          { id: 7, name: 'Old Cam A', network_id: 55, thumbnail: '/m/7' },
+          { id: 8, name: 'Old Cam B', network_id: 55, thumbnail: '/m/8' }
+        ]
+      })
+    })
+  });
+  await driver.connect();
+  const cameras = await driver.listCameras();
+  assert.equal(cameras.length, 2, 'without serials each entry stands on its own');
+});
