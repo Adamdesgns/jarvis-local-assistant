@@ -25,41 +25,18 @@
     addStatus.textContent = '';
   }));
 
-  // Blink sign-in with the emailed-PIN step.
-  const blinkEmail = document.getElementById('blink-email');
-  const blinkPassword = document.getElementById('blink-password');
-  const blinkPinRow = document.getElementById('blink-pin-row');
-  const blinkPin = document.getElementById('blink-pin');
-  let pendingBlinkAccount = '';
-
-  document.getElementById('blink-cancel').addEventListener('click', () => {
-    blinkEmail.value = ''; blinkPassword.value = ''; blinkPinRow.hidden = true; pendingBlinkAccount = ''; addStatus.textContent = '';
-  });
-
-  document.getElementById('blink-signin').addEventListener('click', async () => {
-    addStatus.textContent = 'Signing in to Blink…';
-    const result = await window.jarvis.cameras.addBlink({ email: blinkEmail.value, password: blinkPassword.value });
-    blinkPassword.value = '';
-    if (!result.ok) { addStatus.textContent = result.message || 'Blink sign-in failed.'; return; }
-    if (result.needsPin) {
-      pendingBlinkAccount = result.accountId;
-      blinkPinRow.hidden = false;
-      addStatus.textContent = 'Blink emailed you a PIN. Type it here to finish.';
-      blinkPin.focus();
-      return;
-    }
-    addStatus.textContent = result.message || 'Blink is connected.';
-    render();
-  });
-
-  document.getElementById('blink-verify').addEventListener('click', async () => {
-    if (!pendingBlinkAccount) { addStatus.textContent = 'Sign in first, then enter the PIN.'; return; }
-    addStatus.textContent = 'Checking the PIN…';
-    const result = await window.jarvis.cameras.blinkPin(pendingBlinkAccount, blinkPin.value);
-    addStatus.textContent = result.message || '';
-    if (result.ok) {
-      blinkPin.value = ''; blinkPinRow.hidden = true; pendingBlinkAccount = '';
-      render();
+  // Blink sign-in happens on Blink's own page in a separate window, so there is
+  // nothing to type here and no PIN step — Blink handles its own 2FA.
+  const blinkButton = document.getElementById('blink-signin');
+  blinkButton.addEventListener('click', async () => {
+    blinkButton.disabled = true;
+    addStatus.textContent = 'Finish signing in on the Blink window that just opened…';
+    try {
+      const result = await window.jarvis.cameras.addBlink({});
+      addStatus.textContent = result.message || (result.ok ? 'Blink is connected.' : 'Blink sign-in failed.');
+      if (result.ok) render();
+    } finally {
+      blinkButton.disabled = false;
     }
   });
 

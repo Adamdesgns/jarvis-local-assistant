@@ -367,14 +367,8 @@
                 <div class="camera-add-actions"><button type="button" id="camera-scan">SCAN NETWORK</button><button type="button" id="camera-add-save">SAVE CAMERA</button><button type="button" id="camera-add-cancel">CLEAR</button></div>
               </div>
               <div id="camera-pane-blink" class="camera-pane" hidden>
-                <p class="camera-hint">Sign in with your Blink app email and password. They are stored encrypted on this computer, and Blink will email you a PIN to approve JARVIS.</p>
-                <input id="blink-email" type="email" placeholder="Blink account email" autocomplete="off">
-                <input id="blink-password" type="password" placeholder="Blink account password" autocomplete="off">
-                <div class="camera-add-actions"><button type="button" id="blink-signin">SIGN IN</button><button type="button" id="blink-cancel">CLEAR</button></div>
-                <div id="blink-pin-row" class="camera-add-actions" hidden>
-                  <input id="blink-pin" inputmode="numeric" placeholder="PIN from the Blink email">
-                  <button type="button" id="blink-verify">VERIFY PIN</button>
-                </div>
+                <p class="camera-hint">Opens Blink's own sign-in page in a window. Type your Blink password there — including any code Blink texts or emails you. JARVIS never sees your password; it only keeps the access Blink hands back, encrypted on this computer.</p>
+                <div class="camera-add-actions"><button type="button" id="blink-signin">SIGN IN WITH BLINK</button></div>
               </div>
               <div id="camera-pane-ring" class="camera-pane" hidden>
                 <p class="camera-hint">Sign in with your Ring app email and password. Ring will text or email you a code to approve JARVIS. Credentials are stored encrypted on this computer.</p>

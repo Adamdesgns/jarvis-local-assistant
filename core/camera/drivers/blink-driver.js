@@ -1,5 +1,5 @@
 const { CameraDriver } = require('../driver-interface');
-const { BlinkClient } = require('../blink-client');
+const { BlinkClient, REFRESH_MARGIN_MS } = require('../blink-client');
 
 const HOMESCREEN_CACHE_MS = 30000;
 
@@ -18,34 +18,45 @@ class BlinkDriver extends CameraDriver {
 
   get brand() { return 'blink'; }
 
-  #session() {
-    const { token, accountId, clientId, tier } = this.secrets;
-    return { token, accountId, clientId, tier };
+  // Blink rejects hardware ids that aren't UUIDs. Accounts linked before the
+  // OAuth switch stored theirs as uniqueId.
+  #hardwareId() {
+    const id = this.secrets.hardwareId || this.secrets.uniqueId || '';
+    return String(id).toUpperCase();
   }
 
+  #store(session) {
+    this.secrets = { ...this.secrets, ...session, hardwareId: this.#hardwareId() };
+    delete this.secrets.verificationRequired;
+    this.persistSecrets(this.secrets);
+  }
+
+  // Access tokens are short-lived, so every authenticated call goes through
+  // here and renews silently rather than making Adam sign in again.
+  async #session() {
+    const { token, refreshToken, expiresAt, accountId, tier } = this.secrets;
+    const stale = !token || (expiresAt && Date.now() > expiresAt - REFRESH_MARGIN_MS);
+    if (stale && refreshToken) {
+      this.#store(await this.client.refreshSession({ refreshToken, hardwareId: this.#hardwareId() }));
+      const renewed = this.secrets;
+      return { token: renewed.token, accountId: renewed.accountId, tier: renewed.tier };
+    }
+    return { token, accountId, tier };
+  }
+
+  // The interactive sign-in happens once, in camera-service, before this driver
+  // exists. From here on the stored refresh token is the whole story: there is
+  // no password to fall back on, so a dead token means signing in again.
   async connect() {
     try {
-      if (this.secrets.token) {
-        try {
-          await this.#homescreen(true);
-          this.setState('connected');
-          return;
-        } catch {
-          // Stored session expired — fall through to a fresh sign-in.
-        }
-      }
-      const session = await this.client.login({
-        email: this.secrets.email,
-        password: this.secrets.password,
-        uniqueId: this.secrets.uniqueId
-      });
-      this.secrets = { ...this.secrets, ...session };
-      delete this.secrets.verificationRequired;
-      this.persistSecrets(this.secrets);
-      if (session.verificationRequired) {
-        this.setState('verify', 'Enter the PIN Blink emailed you.');
+      if (!this.secrets.refreshToken) {
+        this.setState('error', 'Blink needs signing in again — open Settings → CAMERAS → BLINK.');
         return;
       }
+      this.#store(await this.client.refreshSession({
+        refreshToken: this.secrets.refreshToken,
+        hardwareId: this.#hardwareId()
+      }));
       await this.#homescreen(true);
       this.setState('connected');
     } catch (error) {
@@ -53,27 +64,11 @@ class BlinkDriver extends CameraDriver {
     }
   }
 
-  async submitPin(pin) {
-    try {
-      const result = await this.client.verifyPin(this.#session(), pin);
-      if (!result.ok) {
-        this.setState('verify', result.message || 'That PIN was not accepted. Check the newest email from Blink.');
-        return { ok: false, message: this.message };
-      }
-      await this.#homescreen(true);
-      this.setState('connected');
-      return { ok: true, message: 'Blink is connected.' };
-    } catch (error) {
-      this.setState('verify', `The PIN could not be checked: ${error.message}`);
-      return { ok: false, message: this.message };
-    }
-  }
-
   async #homescreen(force = false) {
     if (!force && this.homescreenCache && Date.now() - this.homescreenAt < HOMESCREEN_CACHE_MS) {
       return this.homescreenCache;
     }
-    this.homescreenCache = await this.client.homescreen(this.#session());
+    this.homescreenCache = await this.client.homescreen(await this.#session());
     this.homescreenAt = Date.now();
     return this.homescreenCache;
   }
@@ -115,7 +110,7 @@ class BlinkDriver extends CameraDriver {
     if (!camera) throw new Error('That Blink camera was not found on the account.');
     let thumbnail = camera.thumbnail;
     try {
-      await this.client.requestThumbnail(this.#session(), camera.network_id, camera.id, camera.kind);
+      await this.client.requestThumbnail(await this.#session(), camera.network_id, camera.id, camera.kind);
       await new Promise((resolve) => setTimeout(resolve, this.freshWaitMs));
       const fresh = await this.#homescreen(true);
       const updated = this.#allCameras(fresh).find((item) => String(item.id) === String(cameraId));
@@ -124,11 +119,11 @@ class BlinkDriver extends CameraDriver {
       // Busy or rate-limited — the last known picture is still useful.
     }
     if (!thumbnail) throw new Error('Blink has no picture for this camera yet.');
-    return this.client.getImage(this.#session(), thumbnail);
+    return this.client.getImage(await this.#session(), thumbnail);
   }
 
   async setArmed(networkId, armed) {
-    await this.client.setArmed(this.#session(), networkId, armed);
+    await this.client.setArmed(await this.#session(), networkId, armed);
     await this.#homescreen(true);
   }
 }

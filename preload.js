@@ -67,7 +67,6 @@ contextBridge.exposeInMainWorld('jarvis', {
     liveStop: (key) => ipcRenderer.invoke('cameras:live-stop', key),
     discover: () => ipcRenderer.invoke('cameras:discover'),
     addBlink: (payload) => ipcRenderer.invoke('cameras:add-blink', payload),
-    blinkPin: (accountId, pin) => ipcRenderer.invoke('cameras:blink-pin', { accountId, pin }),
     systems: () => ipcRenderer.invoke('cameras:systems'),
     setArmed: (key, armed) => ipcRenderer.invoke('cameras:set-armed', { key, armed }),
     addRing: (payload) => ipcRenderer.invoke('cameras:add-ring', payload),

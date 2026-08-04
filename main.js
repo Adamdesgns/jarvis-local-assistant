@@ -323,6 +323,51 @@ function openDriveStopWindow(onStop, onLost) {
   });
 }
 
+// Blink's sign-in page, in a real Chromium window. Blink's password POST cannot
+// be scripted (Cloudflare answers 406 — see core/camera/blink-client.js), so
+// Adam types his Blink password into Blink's own page and JARVIS only watches
+// for the redirect carrying the authorization code.
+//
+// Deliberately sandboxed with no preload: nothing in JARVIS is reachable from
+// that page, and JARVIS never reads the password out of it. The custom-scheme
+// redirect Chromium cannot load surfaces as a failed navigation, so the code is
+// caught from three events rather than assuming which one fires.
+function openBlinkSignInWindow({ url, onRedirect, onClosed }) {
+  const signInWindow = new BrowserWindow({
+    width: 520,
+    height: 760,
+    title: 'Sign in to Blink',
+    autoHideMenuBar: true,
+    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      partition: 'blink-signin'
+    }
+  });
+
+  const watch = (target) => { if (target) onRedirect?.(target); };
+  const contents = signInWindow.webContents;
+  contents.on('will-redirect', (_event, target) => watch(target));
+  contents.on('will-navigate', (_event, target) => watch(target));
+  contents.on('did-fail-load', (_event, _code, _desc, target) => watch(target));
+  // Chromium refuses to hand a custom scheme to an external app from here; the
+  // URL is all JARVIS wants anyway.
+  contents.setWindowOpenHandler(({ url: target }) => { watch(target); return { action: 'deny' }; });
+
+  let closedByUs = false;
+  signInWindow.on('closed', () => { if (!closedByUs) onClosed?.(); });
+  signInWindow.loadURL(url);
+
+  return {
+    close: () => {
+      closedByUs = true;
+      if (!signInWindow.isDestroyed()) signInWindow.close();
+    }
+  };
+}
+
 function updateDriveStopWindow(text) {
   if (driveStopWindow && !driveStopWindow.isDestroyed()) {
     driveStopWindow.webContents.send('drive:step', { text });
@@ -1077,8 +1122,8 @@ function setupIpc() {
   const cameraRefusal = () => (featureAllowed('camera', config.getSettings(), currentLicenseState())
     ? null
     : { ok: false, message: 'Cameras are a JARVIS Pro feature. Open Settings → PRO to unlock them.' });
-  ipcMain.handle('cameras:add-blink', (_event, payload) => cameraRefusal() || cameras.addBlinkAccount(payload || {}));
-  ipcMain.handle('cameras:blink-pin', (_event, payload) => cameras.submitBlinkPin(String(payload?.accountId || ''), String(payload?.pin || '')));
+  ipcMain.handle('cameras:add-blink', (_event, payload) => cameraRefusal()
+    || cameras.addBlinkAccount(payload || {}, { openWindow: openBlinkSignInWindow }));
   ipcMain.handle('cameras:systems', () => cameras.listSystems());
   ipcMain.handle('cameras:add-ring', (_event, payload) => cameraRefusal() || cameras.addRingAccount(payload || {}));
   ipcMain.handle('cameras:live-answer', (_event, payload) => cameras.answerLiveView(String(payload?.key || ''), String(payload?.offerSdp || '')));

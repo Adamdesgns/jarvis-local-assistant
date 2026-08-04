@@ -102,13 +102,20 @@ class CameraService {
     return { ok: true, message: `Added ${list.length} camera${list.length === 1 ? '' : 's'}.` };
   }
 
-  async addBlinkAccount({ email, password }) {
-    const cleanEmail = String(email || '').trim();
-    const cleanPassword = String(password || '');
-    if (!cleanEmail || !cleanPassword) return { ok: false, message: 'Enter your Blink email and password first.' };
-    const account = { id: crypto.randomUUID().slice(0, 8), brand: 'blink', name: cleanEmail };
+  // Blink sign-in happens on Blink's own page in a real browser window, so the
+  // account only exists once tokens come back. JARVIS never handles the
+  // password, which is why nothing here takes one.
+  async addBlinkAccount(_payload, { signInFlow, openWindow } = {}) {
+    const flow = signInFlow || ((args) => require('./blink-oauth').runBlinkSignIn(args));
+    let result;
+    try {
+      result = await flow({ openWindow, hardwareId: crypto.randomUUID().toUpperCase() });
+    } catch (error) {
+      return { ok: false, message: error.message || 'Blink sign-in did not finish.' };
+    }
+    const account = { id: crypto.randomUUID().slice(0, 8), brand: 'blink', name: 'Blink account' };
     this.config.setSecret(this.#secretKey(account.id), JSON.stringify({
-      email: cleanEmail, password: cleanPassword, uniqueId: crypto.randomUUID()
+      hardwareId: result.hardwareId, ...result.session
     }));
     const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
     this.config.updateSettings({ cameraAccounts: accounts });
@@ -120,16 +127,8 @@ class CameraService {
       return { ok: false, message: status.message };
     }
     this.emit('cameras:changed', {});
-    this.log.write({ type: 'camera', command: 'add blink account', response: `Connected Blink account ${cleanEmail}.`, source: 'cameras' });
-    return { ok: true, needsPin: status.state === 'verify', accountId: account.id, message: status.message || 'Blink is connected.' };
-  }
-
-  async submitBlinkPin(accountId, pin) {
-    const driver = this.drivers.get(accountId);
-    if (!driver || typeof driver.submitPin !== 'function') return { ok: false, message: 'That Blink account is no longer set up.' };
-    const result = await driver.submitPin(pin);
-    if (result.ok) this.emit('cameras:changed', {});
-    return result;
+    this.log.write({ type: 'camera', command: 'add blink account', response: 'Connected a Blink account.', source: 'cameras' });
+    return { ok: true, accountId: account.id, message: status.message || 'Blink is connected.' };
   }
 
   // Ring 2FA happens before the account exists: sign-in either yields a

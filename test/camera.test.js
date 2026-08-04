@@ -193,17 +193,12 @@ test('camera service: cooldown blocks automatic snapshots but not manual ones', 
   assert.equal(manual.ok, true);
 });
 
-test('camera service: blink account flow with PIN, systems, and arming', async () => {
+test('camera service: blink account flow via the browser sign-in, systems, and arming', async () => {
   const config = fakeConfig();
   const logged = [];
   class TestBlinkDriver extends BlinkDriver {
     constructor(options) {
-      super({
-        ...options,
-        clientFactory: () => fakeBlinkClient({
-          login: async () => ({ token: 't1', accountId: 1, clientId: 2, tier: 'u1', verificationRequired: true })
-        })
-      });
+      super({ ...options, clientFactory: () => fakeBlinkClient() });
       this.freshWaitMs = 0;
     }
   }
@@ -213,13 +208,11 @@ test('camera service: blink account flow with PIN, systems, and arming', async (
   });
   await service.init();
 
-  const added = await service.addBlinkAccount({ email: 'a@b.c', password: 'pw' });
+  const added = await service.addBlinkAccount({}, {
+    signInFlow: async ({ hardwareId }) => ({ hardwareId, session: { ...FAKE_SESSION } })
+  });
   assert.equal(added.ok, true);
-  assert.equal(added.needsPin, true);
-  assert.ok(!JSON.stringify(config.getSettings()).includes('pw'), 'password only in secrets');
-
-  const pinned = await service.submitBlinkPin(added.accountId, '4321');
-  assert.equal(pinned.ok, true);
+  assert.ok(!JSON.stringify(config.getSettings()).includes('r1'), 'tokens stay in secrets, never in settings');
 
   const cameras = await service.listCameras();
   assert.equal(cameras.length, 3);
@@ -567,69 +560,217 @@ const { BlinkClient } = require('../core/camera/blink-client');
 function blinkFetch(routes) {
   const calls = [];
   const fetchFn = async (url, options = {}) => {
-    calls.push({ url, method: options.method || 'GET', headers: options.headers || {}, body: options.body });
+    calls.push({
+      url,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      body: options.body,
+      redirect: options.redirect
+    });
     for (const route of routes) {
-      if (url.includes(route.match) && (!route.method || route.method === (options.method || 'GET'))) {
-        return {
-          ok: route.status ? route.status < 300 : true,
-          status: route.status || 200,
-          json: async () => route.json ?? {},
-          arrayBuffer: async () => route.buffer ?? new ArrayBuffer(4),
-          text: async () => JSON.stringify(route.json ?? {})
-        };
-      }
+      const matches = url.includes(route.match)
+        && (!route.method || route.method === (options.method || 'GET'))
+        && (!route.once || !route.spent);
+      if (!matches) continue;
+      route.spent = true;
+      const status = route.status || 200;
+      return {
+        ok: status < 300,
+        status,
+        headers: {
+          get: (name) => (route.headers || {})[String(name).toLowerCase()] ?? null,
+          getSetCookie: () => route.setCookie || []
+        },
+        json: async () => route.json ?? {},
+        arrayBuffer: async () => route.buffer ?? new ArrayBuffer(4),
+        text: async () => route.text ?? JSON.stringify(route.json ?? {})
+      };
     }
-    return { ok: false, status: 404, json: async () => ({ message: 'not found' }), text: async () => 'not found' };
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => null, getSetCookie: () => [] },
+      json: async () => ({ message: 'not found' }),
+      text: async () => 'not found'
+    };
   };
   return { fetchFn, calls };
 }
 
-test('blink client: login returns session and flags 2FA verification', async () => {
-  const { fetchFn, calls } = blinkFetch([{
-    match: '/api/v5/account/login', method: 'POST',
-    json: { account: { account_id: 111, client_id: 222, tier: 'u011', client_verification_required: true }, auth: { token: 'tok123' } }
-  }]);
-  const client = new BlinkClient({ fetchFn });
-  const session = await client.login({ email: 'a@b.c', password: 'pw', uniqueId: 'uid-1' });
-  assert.deepEqual(session, { token: 'tok123', accountId: 111, clientId: 222, tier: 'u011', verificationRequired: true });
-  const call = calls[0];
-  assert.match(call.url, /^https:\/\/rest-prod\.immedia-semi\.com\/api\/v5\/account\/login$/);
-  const body = JSON.parse(call.body);
-  assert.equal(body.email, 'a@b.c');
-  assert.equal(body.unique_id, 'uid-1');
-  assert.equal(body.reauth, 'true');
+const OAUTH_TOKENS = { access_token: 'tok123', refresh_token: 'ref456', expires_in: 3600 };
+
+test('blink client: builds an authorize URL a browser window can open', async () => {
+  const client = new BlinkClient({ fetchFn: blinkFetch([]).fetchFn });
+  const request = client.authorizeRequest({ hardwareId: 'HW-1' });
+
+  assert.match(request.url, /^https:\/\/api\.oauth\.blink\.com\/oauth\/v2\/authorize\?/);
+  const query = new URLSearchParams(request.url.split('?')[1]);
+  assert.equal(query.get('hardware_id'), 'HW-1');
+  assert.equal(query.get('code_challenge_method'), 'S256');
+  assert.equal(query.get('response_type'), 'code');
+  assert.equal(query.get('client_id'), 'ios');
+  assert.equal(query.get('redirect_uri'), 'immedia-blink://applinks.blink.com/signin/callback');
+  assert.ok(query.get('code_challenge'), 'sends the hashed challenge');
+  assert.ok(request.verifier, 'keeps the verifier for the exchange');
+  assert.ok(!request.url.includes(request.verifier), 'the verifier itself never goes to Blink');
 });
 
-test('blink client: authenticated calls hit the tier host with TOKEN-AUTH', async () => {
-  const session = { token: 'tok123', accountId: 111, clientId: 222, tier: 'u011' };
+test('blink client: reads the code only off Blink own redirect', () => {
+  assert.equal(
+    BlinkClient.codeFromRedirect('immedia-blink://applinks.blink.com/signin/callback?code=code-xyz&state=s'),
+    'code-xyz'
+  );
+  assert.equal(BlinkClient.codeFromRedirect('https://api.oauth.blink.com/oauth/v2/signin'), null);
+  assert.equal(BlinkClient.codeFromRedirect('https://evil.example/callback?code=stolen'), null, 'a lookalike is ignored');
+  assert.equal(BlinkClient.codeFromRedirect('immedia-blink://applinks.blink.com/signin/callback?error=denied'), null);
+  assert.equal(BlinkClient.codeFromRedirect(''), null);
+  assert.equal(BlinkClient.codeFromRedirect(undefined), null);
+});
+
+test('blink client: trades a code for a session', async () => {
   const { fetchFn, calls } = blinkFetch([
-    { match: '/pin/verify', method: 'POST', json: { valid: true, message: 'ok' } },
+    { match: '/oauth/token', method: 'POST', json: OAUTH_TOKENS },
+    { match: '/api/v1/users/tier_info', json: { tier: 'u011', account_id: 111 } }
+  ]);
+  const client = new BlinkClient({ fetchFn });
+  const session = await client.session(await client.exchangeCode({ code: 'code-xyz', verifier: 'ver-1', hardwareId: 'HW-1' }));
+
+  assert.equal(session.token, 'tok123');
+  assert.equal(session.refreshToken, 'ref456');
+  assert.equal(session.tier, 'u011');
+  assert.equal(session.accountId, 111);
+  assert.ok(session.expiresAt > Date.now(), 'session carries an expiry');
+
+  const body = new URLSearchParams(calls[0].body);
+  assert.equal(body.get('grant_type'), 'authorization_code');
+  assert.equal(body.get('code'), 'code-xyz');
+  assert.equal(body.get('code_verifier'), 'ver-1', 'proves possession of the PKCE verifier');
+  assert.equal(calls[1].headers.Authorization, 'Bearer tok123');
+});
+
+test('blink client: refreshing trades the refresh token for a new session', async () => {
+  const { fetchFn, calls } = blinkFetch([
+    { match: '/oauth/token', method: 'POST', json: { access_token: 'tok999', refresh_token: 'ref999', expires_in: 7200 } },
+    { match: '/api/v1/users/tier_info', json: { tier: 'u022', account_id: 222 } }
+  ]);
+  const client = new BlinkClient({ fetchFn });
+  const session = await client.refreshSession({ refreshToken: 'ref456', hardwareId: 'HW-1' });
+  assert.equal(session.token, 'tok999');
+  assert.equal(session.tier, 'u022');
+  assert.equal(session.accountId, 222);
+  const body = new URLSearchParams(calls[0].body);
+  assert.equal(body.get('grant_type'), 'refresh_token');
+  assert.equal(body.get('refresh_token'), 'ref456');
+});
+
+test('blink client: a refused token request surfaces the reason Blink gave', async () => {
+  const { fetchFn } = blinkFetch([{
+    match: '/oauth/token', method: 'POST', status: 401,
+    json: { error: 'invalid_grant', error_description: 'The provided authorization grant is invalid.' }
+  }]);
+  const client = new BlinkClient({ fetchFn });
+  await assert.rejects(
+    () => client.exchangeCode({ code: 'stale', verifier: 'v', hardwareId: 'HW-1' }),
+    /authorization grant is invalid/
+  );
+});
+
+test('blink client: authenticated calls hit the tier host with a Bearer token', async () => {
+  const session = { token: 'tok123', accountId: 111, tier: 'u011' };
+  const { fetchFn, calls } = blinkFetch([
     { match: '/homescreen', json: { networks: [], cameras: [] } },
     { match: '/state/arm', method: 'POST', json: {} },
     { match: '/media/production/', buffer: new ArrayBuffer(6) }
   ]);
   const client = new BlinkClient({ fetchFn });
-  const pin = await client.verifyPin(session, '1234');
-  assert.equal(pin.ok, true);
   await client.homescreen(session);
   await client.setArmed(session, 55, true);
   const image = await client.getImage(session, '/media/production/account/111/thumb');
   assert.ok(Buffer.isBuffer(image) && image.length === 6);
   for (const call of calls) {
     assert.match(call.url, /^https:\/\/rest-u011\.immedia-semi\.com/);
-    assert.equal(call.headers['TOKEN-AUTH'], 'tok123');
+    assert.equal(call.headers.Authorization, 'Bearer tok123');
+    assert.equal(call.headers['TOKEN-AUTH'], undefined, 'the dead auth header is gone');
   }
-  assert.match(calls[0].url, /\/api\/v4\/account\/111\/client\/222\/pin\/verify$/);
-  assert.match(calls[2].url, /\/api\/v1\/accounts\/111\/networks\/55\/state\/arm$/);
-  assert.match(calls[3].url, /\/media\/production\/account\/111\/thumb\.jpg$/);
+  assert.match(calls[0].url, /\/api\/v3\/accounts\/111\/homescreen$/);
+  assert.match(calls[1].url, /\/api\/v1\/accounts\/111\/networks\/55\/state\/arm$/);
+  assert.match(calls[2].url, /\/media\/production\/account\/111\/thumb\.jpg$/);
 });
+
+// Both of these were tried against Blink's live servers and are permanently
+// dead ends; a future "simplification" back to either one would break sign-in.
+test('blink client: the retired login endpoint and blocked password POST are gone for good', async () => {
+  const source = require('fs').readFileSync(require.resolve('../core/camera/blink-client.js'), 'utf8');
+  const live = source.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+  assert.ok(!live.includes('/api/v5/account/login'), 'nothing still calls the endpoint Blink retired');
+  assert.ok(!live.includes('TOKEN-AUTH'), 'nothing still sends the retired auth header');
+  assert.ok(!live.includes('/oauth/v2/signin'), 'nothing posts the password itself — Cloudflare answers 406');
+  assert.ok(!live.includes('password'), 'the client never handles a Blink password at all');
+});
+
+const { runBlinkSignIn } = require('../core/camera/blink-oauth');
+
+// A stand-in for the Electron window: replays the navigations a real sign-in
+// would make, ending on Blink's redirect.
+function fakeWindow(navigations, { closes = false } = {}) {
+  const opened = [];
+  const state = { closed: false };
+  const openWindow = ({ url, onRedirect, onClosed }) => {
+    opened.push(url);
+    setImmediate(() => {
+      for (const target of navigations) onRedirect(target);
+      if (closes) onClosed();
+    });
+    return { close: () => { state.closed = true; } };
+  };
+  return { openWindow, opened, state };
+}
+
+test('blink sign-in: catches the code off the redirect and closes the window', async () => {
+  const { fetchFn } = blinkFetch([
+    { match: '/oauth/token', method: 'POST', json: OAUTH_TOKENS },
+    { match: '/api/v1/users/tier_info', json: { tier: 'u011', account_id: 111 } }
+  ]);
+  const win = fakeWindow([
+    'https://api.oauth.blink.com/oauth/v2/signin',
+    'https://api.oauth.blink.com/oauth/v2/2fa',
+    'immedia-blink://applinks.blink.com/signin/callback?code=code-xyz&state=s'
+  ]);
+  const result = await runBlinkSignIn({
+    openWindow: win.openWindow,
+    hardwareId: 'HW-1',
+    client: new BlinkClient({ fetchFn })
+  });
+  assert.equal(result.session.token, 'tok123');
+  assert.equal(result.hardwareId, 'HW-1');
+  assert.match(win.opened[0], /oauth\/v2\/authorize\?/);
+  assert.equal(win.state.closed, true, 'the sign-in window does not linger');
+});
+
+test('blink sign-in: closing the window cancels instead of hanging', async () => {
+  const win = fakeWindow([], { closes: true });
+  await assert.rejects(
+    () => runBlinkSignIn({ openWindow: win.openWindow, hardwareId: 'HW-1', client: new BlinkClient({ fetchFn: blinkFetch([]).fetchFn }) }),
+    /cancelled/
+  );
+});
+
+test('blink sign-in: gives up rather than waiting forever', async () => {
+  const win = fakeWindow(['https://api.oauth.blink.com/oauth/v2/signin']);
+  await assert.rejects(
+    () => runBlinkSignIn({ openWindow: win.openWindow, hardwareId: 'HW-1', timeoutMs: 30, client: new BlinkClient({ fetchFn: blinkFetch([]).fetchFn }) }),
+    /timed out/
+  );
+});
+
 
 const { BlinkDriver } = require('../core/camera/drivers/blink-driver');
 
+const FAKE_SESSION = { token: 't1', refreshToken: 'r1', expiresAt: Date.now() + 3600000, accountId: 1, tier: 'u1' };
+
 function fakeBlinkClient(overrides = {}) {
   return {
-    login: async () => ({ token: 't1', accountId: 1, clientId: 2, tier: 'u1', verificationRequired: false }),
-    verifyPin: async () => ({ ok: true, message: '' }),
+    refreshSession: async () => ({ ...FAKE_SESSION, token: 't2' }),
     homescreen: async () => ({
       networks: [{ id: 55, name: 'Home', armed: false }],
       cameras: [{ id: 9, name: 'Garage', network_id: 55, thumbnail: '/media/thumb9' }],
@@ -646,8 +787,8 @@ function fakeBlinkClient(overrides = {}) {
 test('blink driver: connects, merges camera kinds, lists systems, snapshots', async () => {
   const persisted = [];
   const driver = new BlinkDriver({
-    account: { id: 'b1', name: 'a@b.c' },
-    secrets: { email: 'a@b.c', password: 'pw', uniqueId: 'u1' },
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
     persistSecrets: (secrets) => persisted.push(secrets),
     clientFactory: () => fakeBlinkClient()
   });
@@ -655,7 +796,8 @@ test('blink driver: connects, merges camera kinds, lists systems, snapshots', as
   assert.equal(driver.brand, 'blink');
   assert.equal(driver.status().state, 'connected');
   assert.equal(driver.snapshotCooldownMs, 600000);
-  assert.ok(persisted.length >= 1 && persisted[0].token === 't1', 'session persisted after login');
+  assert.ok(persisted.length >= 1 && persisted[0].token === 't2', 'renewed session persisted');
+  assert.equal(persisted[0].refreshToken, 'r1', 'the refresh token is kept for silent renewal');
 
   const cameras = await driver.listCameras();
   assert.deepEqual(cameras.map((c) => `${c.kind}:${c.name}`), ['camera:Garage', 'owl:Mini', 'doorbell:Front Door']);
@@ -669,29 +811,10 @@ test('blink driver: connects, merges camera kinds, lists systems, snapshots', as
   await driver.setArmed(55, true);
 });
 
-test('blink driver: 2FA flow pauses in verify state until the PIN arrives', async () => {
-  let pinChecked = '';
-  const driver = new BlinkDriver({
-    account: { id: 'b1', name: 'a@b.c' },
-    secrets: { email: 'a@b.c', password: 'pw', uniqueId: 'u1' },
-    clientFactory: () => fakeBlinkClient({
-      login: async () => ({ token: 't1', accountId: 1, clientId: 2, tier: 'u1', verificationRequired: true }),
-      verifyPin: async (_session, pin) => { pinChecked = pin; return { ok: true, message: '' }; }
-    })
-  });
-  await driver.connect();
-  assert.equal(driver.status().state, 'verify');
-  assert.match(driver.status().message, /PIN/);
-  const result = await driver.submitPin('4321');
-  assert.equal(result.ok, true);
-  assert.equal(pinChecked, '4321');
-  assert.equal(driver.status().state, 'connected');
-});
-
 test('blink driver: falls back to the current thumbnail when a fresh one fails', async () => {
   const driver = new BlinkDriver({
-    account: { id: 'b1', name: 'a@b.c' },
-    secrets: { email: 'a@b.c', password: 'pw', uniqueId: 'u1', token: 't1', accountId: 1, clientId: 2, tier: 'u1' },
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', ...FAKE_SESSION },
     clientFactory: () => fakeBlinkClient({
       requestThumbnail: async () => { throw new Error('busy'); }
     })
@@ -702,8 +825,77 @@ test('blink driver: falls back to the current thumbnail when a fresh one fails',
   assert.ok(Buffer.isBuffer(jpeg), 'still returns the last known picture');
 });
 
-test('blink client: surfaces server error messages', async () => {
-  const { fetchFn } = blinkFetch([{ match: '/api/v5/account/login', method: 'POST', status: 401, json: { message: 'Invalid credentials' } }]);
-  const client = new BlinkClient({ fetchFn });
-  await assert.rejects(() => client.login({ email: 'a@b.c', password: 'bad', uniqueId: 'u' }), /Invalid credentials/);
+test('blink driver: a stored refresh token reconnects with no sign-in window', async () => {
+  const persisted = [];
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', refreshToken: 'r1' },
+    persistSecrets: (secrets) => persisted.push(secrets),
+    clientFactory: () => fakeBlinkClient()
+  });
+  await driver.connect();
+  assert.equal(driver.status().state, 'connected');
+  assert.equal(persisted.at(-1).token, 't2', 'the renewed token is saved');
+});
+
+// There is no password stored to retry with, so this has to say so plainly
+// rather than failing silently or looking like a broken camera.
+test('blink driver: a dead refresh token asks for a fresh sign-in', async () => {
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1', refreshToken: 'stale' },
+    clientFactory: () => fakeBlinkClient({
+      refreshSession: async () => { throw new Error('revoked'); }
+    })
+  });
+  await driver.connect();
+  assert.equal(driver.status().state, 'error');
+  assert.match(driver.status().message, /revoked/);
+});
+
+test('blink driver: with no stored session at all it points at the BLINK tab', async () => {
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { hardwareId: 'hw-1' },
+    clientFactory: () => fakeBlinkClient()
+  });
+  await driver.connect();
+  assert.equal(driver.status().state, 'error');
+  assert.match(driver.status().message, /signing in again/);
+});
+
+test('blink driver: an expiring token is renewed before the next camera call', async () => {
+  let refreshes = 0;
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: {
+      hardwareId: 'hw-1',
+      token: 'old', refreshToken: 'r1', accountId: 1, tier: 'u1',
+      expiresAt: Date.now() + 5000 // inside the refresh margin
+    },
+    clientFactory: () => fakeBlinkClient({
+      refreshSession: async () => { refreshes += 1; return { ...FAKE_SESSION, token: 't2' }; }
+    })
+  });
+  await driver.connect();
+  const before = refreshes;
+  driver.secrets.expiresAt = Date.now() + 5000; // expire it again mid-session
+  await driver.listCameras();
+  await driver.getSnapshot('9');
+  assert.ok(refreshes > before, 'renewed rather than failing the call');
+  assert.equal(driver.status().state, 'connected');
+});
+
+test('blink driver: an old account stored as uniqueId still reconnects', async () => {
+  let seenHardwareId = '';
+  const driver = new BlinkDriver({
+    account: { id: 'b1', name: 'Blink account' },
+    secrets: { uniqueId: 'abc-def', refreshToken: 'r1' },
+    clientFactory: () => fakeBlinkClient({
+      refreshSession: async ({ hardwareId }) => { seenHardwareId = hardwareId; return { ...FAKE_SESSION, token: 't2' }; }
+    })
+  });
+  await driver.connect();
+  assert.equal(seenHardwareId, 'ABC-DEF', 'reuses the old id, uppercased the way Blink wants');
+  assert.equal(driver.status().state, 'connected');
 });

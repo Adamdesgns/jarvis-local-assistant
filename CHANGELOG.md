@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Fixed — Blink cameras can sign in again ("An app update is required")
+- Blink sign-in had stopped working entirely: **"Blink sign-in failed: An app
+  update is required."** Amazon retired the `/api/v5/account/login` endpoint the
+  app used, and it now answers **426** to every request before it even looks at
+  the password. Nothing about the account was wrong.
+- Rebuilt on Blink's current OAuth 2.0 flow (authorization code + PKCE), the one
+  the phone apps use. Access tokens are short-lived now, so JARVIS **renews the
+  session silently** in the background instead of asking for a password again.
+- **The password step happens on Blink's own page, in its own window.** Posting
+  credentials from code is not possible at all: `api.oauth.blink.com` sits behind
+  Cloudflare bot management, which answers **406** to any scripted POST while
+  GETs pass. Verified invariant across csrf/password/header/Accept variations and
+  from two different HTTP clients, so it is an edge block, not a request-shape
+  bug — do not try to "fix" it with headers.
+- Consequences, all improvements: **JARVIS never sees the Blink password** (it is
+  typed into Blink's page and never stored), Blink handles its own 2FA so the
+  emailed-PIN step is gone, and Settings → CAMERAS → BLINK is now a single
+  SIGN IN WITH BLINK button instead of email/password fields.
+- The sign-in window is sandboxed with no preload and its own session partition,
+  so that page can reach nothing inside JARVIS.
+
 ### Added — FAMILY CALLS: video-call JARVIS JR over Tailscale
 - Pair once in Settings → CALLS (show a 6-digit code on one PC, type it on the
   other), then call from the strip above the camera grid. Two-way video +
