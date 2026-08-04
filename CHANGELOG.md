@@ -7,11 +7,11 @@
   applied after their final composite: a faint chromatic-aberration fringe at
   the orb's edge, a warm (gold) / cool (obsidian) color grade, a subtle ±1%
   flicker, and a soft vignette on large canvases. Adapted from the
-  MIT-licensed ULTRON orb by Sagar Tamang. The aberration disables itself on
-  tiny canvases (floating widget at minimum size, defense sentinel) and
-  everything scales down with the dim/error state; the flicker is suppressed
-  under reduced motion. Plasma's WebGL renderer does the equivalent pass
-  in-shader.
+  MIT-licensed ULTRON orb by Sagar Tamang. The floating widget keeps the full
+  effect at every size it can reach; only the 64px defense sentinel drops to
+  grade-only. Everything scales down with the dim/error state and the flicker
+  is suppressed under reduced motion. Plasma's WebGL renderer does the
+  equivalent pass in-shader.
 - Every skin's brightness now rides a rare "surge" envelope — mostly calm
   with occasional dramatic swells, noticeably livelier while thinking.
   Starfield also gains a scan ring sweeping the sphere's latitudes.
