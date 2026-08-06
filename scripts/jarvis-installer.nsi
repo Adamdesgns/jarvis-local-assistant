@@ -4,7 +4,7 @@ Unicode True
 ; fails the build if these two ever drift apart again — they were 0.11.2 vs
 ; 0.18.0 for seven releases, so Windows reported the wrong version in
 ; "Installed apps" the whole time.
-!define JARVIS_VERSION "0.18.0"
+!define JARVIS_VERSION "0.20.0"
 
 Name "JARVIS Local Assistant"
 OutFile "..\dist\JARVIS-FREE-SETUP.exe"

@@ -1,6 +1,6 @@
 # JARVIS Changelog
 
-## Unreleased
+## 0.20.0 — August 6, 2026
 
 ### Added — the ULTRON orb, and voices that actually move the orbs
 - A ninth skin: **Ultron** — a rotating holographic wireframe sphere with four
@@ -40,6 +40,8 @@
   animating at full rate while their window was hidden; they now stop on
   `visibilitychange` and resume on return, like halation and plasma always
   did.
+
+## 0.19.0 — August 3, 2026
 
 ### Added — FAMILY CALLS: video-call JARVIS JR over Tailscale
 - Pair once in Settings → CALLS (show a 6-digit code on one PC, type it on the
