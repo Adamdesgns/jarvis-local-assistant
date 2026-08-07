@@ -140,6 +140,13 @@ class VoiceService:
         self.wake_mode = _wake_mode(self.assistant_name)
         self.vad = None
         self._wake_pass_busy = False
+        # 'wake' or 'meeting'. One audio queue feeds one consumer: if both the
+        # wake loop and the meeting loop called audio_queue.get(), each frame
+        # would land in only one of them and both would hear half a room. Every
+        # loop therefore checks this BEFORE consuming.
+        self.mode = "wake"
+        self._meeting_pass_busy = False
+        self._meeting_dropped = 0
 
     def initialize_wake(self) -> None:
         try:
@@ -191,6 +198,9 @@ class VoiceService:
 
     def wake_loop(self) -> None:
         while self.running:
+            if self.mode != "wake":
+                time.sleep(0.05)
+                continue
             try:
                 frame = self.audio_queue.get(timeout=0.25)
             except queue.Empty:
@@ -283,6 +293,9 @@ class VoiceService:
         silent_blocks = 0
 
         while self.running:
+            if self.mode != "wake":
+                time.sleep(0.05)
+                continue
             try:
                 frame = self.audio_queue.get(timeout=0.25)
             except queue.Empty:
@@ -328,6 +341,102 @@ class VoiceService:
                 speech_blocks = 0
                 silent_blocks = 0
 
+    def meeting_loop(self) -> None:
+        """Same VAD segmentation as the wake loop, but every segment is
+        transcribed and emitted rather than matched against a name.
+
+        Difference that matters: the wake loop DROPS a segment when a pass is
+        already running, because a missed wake word gets said again. A missed
+        sentence in a meeting is gone. We still refuse to queue passes (a
+        backlog is how a noisy room becomes a hot CPU), but we count every drop
+        and ship the count so the app can tell the user it is falling behind.
+        """
+        PRE_ROLL = 8
+        END_SILENCE = 9
+        MAX_BLOCKS = 50
+        MIN_SPEECH = 5
+        VAD_THRESHOLD = 0.5
+
+        pre_roll: deque = deque(maxlen=PRE_ROLL)
+        capturing: list = []
+        speech_blocks = 0
+        silent_blocks = 0
+
+        while self.running:
+            if self.mode != "meeting":
+                time.sleep(0.05)
+                continue
+            try:
+                frame = self.audio_queue.get(timeout=0.25)
+            except queue.Empty:
+                continue
+            if self.vad is None:
+                continue
+            try:
+                speech = float(self.vad.predict(frame, frame_size=640)) >= VAD_THRESHOLD
+            except Exception as exc:
+                log(f"VAD error: {exc}")
+                continue
+
+            if not capturing:
+                pre_roll.append(frame)
+                if speech:
+                    capturing = list(pre_roll)
+                    speech_blocks = 1
+                    silent_blocks = 0
+                continue
+
+            capturing.append(frame)
+            if speech:
+                speech_blocks += 1
+                silent_blocks = 0
+            else:
+                silent_blocks += 1
+
+            if silent_blocks >= END_SILENCE or len(capturing) >= MAX_BLOCKS:
+                segment = capturing
+                capturing = []
+                pre_roll.clear()
+                try:
+                    self.vad.reset_states()
+                except Exception:
+                    pass
+                if speech_blocks >= MIN_SPEECH:
+                    if self._meeting_pass_busy:
+                        self._meeting_dropped += 1
+                        log(f"meeting: transcription behind, dropped {self._meeting_dropped}")
+                    else:
+                        self._meeting_pass_busy = True
+                        threading.Thread(
+                            target=self._run_meeting_pass, args=(segment,), daemon=True
+                        ).start()
+                speech_blocks = 0
+                silent_blocks = 0
+
+    def _run_meeting_pass(self, blocks) -> None:
+        import numpy as np
+
+        try:
+            audio = np.concatenate(blocks).astype(np.float32) / 32768.0
+            model = self.get_wake_whisper()
+            segments, _info = model.transcribe(
+                audio,
+                beam_size=1,
+                language="en",
+                vad_filter=False,
+                condition_on_previous_text=False,
+                without_timestamps=True,
+            )
+            text = " ".join(segment.text.strip() for segment in segments).strip()
+            if text:
+                # Counts only in the log — never the transcript. An always-on
+                # log of everything said in the room is not the privacy posture.
+                emit("meeting-segment", text=text, dropped=self._meeting_dropped)
+        except Exception as exc:
+            log(f"Meeting transcription error: {exc}")
+        finally:
+            self._meeting_pass_busy = False
+
     # ── command transcription (unchanged) ──────────────────────────────────
 
     def get_whisper(self):
@@ -361,6 +470,7 @@ class VoiceService:
             threading.Thread(target=target, daemon=True).start()
         else:
             emit("ready", wakeReady=False, message="Push-to-talk ready; wake word is disabled")
+        threading.Thread(target=self.meeting_loop, daemon=True).start()
         for line in sys.stdin:
             if not self.running:
                 break
@@ -377,6 +487,21 @@ class VoiceService:
                     args=(command.get("id", ""), command.get("filePath", "")),
                     daemon=True,
                 ).start()
+            if command.get("type") == "meeting-start":
+                self.mode = "meeting"
+                self._meeting_dropped = 0
+                # Frames captured while the wake loop owned the queue are stale
+                # by the time the mode flips; starting clean beats transcribing
+                # the tail of whatever was said before the meeting began.
+                while True:
+                    try:
+                        self.audio_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                emit("meeting-started")
+            if command.get("type") == "meeting-stop":
+                self.mode = "wake"
+                emit("meeting-stopped", dropped=self._meeting_dropped)
         try:
             self.stream.stop()
             self.stream.close()
