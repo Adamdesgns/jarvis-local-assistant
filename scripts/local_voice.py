@@ -341,6 +341,45 @@ class VoiceService:
                 speech_blocks = 0
                 silent_blocks = 0
 
+    def ensure_meeting_ready(self) -> bool:
+        """meeting_loop reads self.vad on every frame and needs the mic
+        stream running — but both are normally set up inside
+        initialize_wake(), and only on ONE of its two branches.
+
+        The default assistant name ("JARVIS") resolves to wake_mode ==
+        "openwakeword", whose branch builds a wake-word Model and never
+        touches self.vad — that only happens in the "else" (transcribe)
+        branch, for a custom assistant name. And if JARVIS_WAKE_ENABLED=0,
+        initialize_wake() is never called at all, so there is no audio
+        stream either. Meeting mode must not depend on which wake path (if
+        any) happened to run — do NOT delete this thinking self.vad is
+        "already handled elsewhere"; on the default path it is not, and
+        meeting_loop would silently spin forever on `if self.vad is None:
+        continue`, dropping every frame with no error.
+
+        Idempotent: safe to call on every meeting-start. Returns True once
+        the stream and VAD both exist; on failure it logs and emits
+        "meeting-error" (never raises, so a bad mic/import can't take down
+        the whole stdin command loop) and returns False so the caller skips
+        emitting "meeting-started".
+        """
+        try:
+            if not hasattr(self, "stream"):
+                self.initialize_wake()
+            if self.vad is None:
+                # Same Silero wrapper the transcribe-mode branch of
+                # initialize_wake() uses — see the comment there.
+                from openwakeword.vad import VAD
+
+                self.vad = VAD()
+            if not hasattr(self, "stream") or self.vad is None:
+                raise RuntimeError("Microphone stream or VAD did not initialize")
+            return True
+        except Exception as exc:
+            log(f"Meeting mode prerequisites failed: {exc}")
+            emit("meeting-error", message=f"Meeting mode could not start: {exc}")
+            return False
+
     def meeting_loop(self) -> None:
         """Same VAD segmentation as the wake loop, but every segment is
         transcribed and emitted rather than matched against a name.
@@ -488,6 +527,8 @@ class VoiceService:
                     daemon=True,
                 ).start()
             if command.get("type") == "meeting-start":
+                if not self.ensure_meeting_ready():
+                    continue
                 self.mode = "meeting"
                 self._meeting_dropped = 0
                 # Frames captured while the wake loop owned the queue are stale
