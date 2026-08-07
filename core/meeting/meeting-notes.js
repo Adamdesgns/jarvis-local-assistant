@@ -27,15 +27,17 @@ class MeetingNotes {
     this.lastRunAt = this.now();
     this.lastSegmentCount = this.transcript.segmentCount;
 
-    const prompt = [
+    const systemOverride = [
       'You are keeping live notes on a call that is still happening.',
       '',
       'Rewrite the notes below to take account of what has been said since.',
       'Keep it to three short sections and nothing else:',
       'COVERED — what has been discussed.',
       'COMMITTED — anything I said I would do.',
-      'OPEN — questions asked that have not been answered yet.',
-      '',
+      'OPEN — questions asked that have not been answered yet.'
+    ].join('\n');
+
+    const prompt = [
       'Notes so far:',
       this.latest || '(nothing yet)',
       '',
@@ -44,7 +46,21 @@ class MeetingNotes {
     ].join('\n');
 
     try {
-      const result = await this.ai.cloudReply(prompt, { skipHistory: true });
+      // Two real AIService flags stand in for the invented `skipHistory`,
+      // which AIService never read — it was silently ignored, so both of
+      // these leaks were live against the real service:
+      //   1. `systemOverride` makes ai-service.js use this string as the
+      //      system prompt and skip prepending `#history(project)`
+      //      (ai-service.js:202-204). Without it, whatever the user was
+      //      chatting about earlier leaks into the notes prompt.
+      //   2. `untrustedContent: true` is what actually makes `#remember`
+      //      skip writing this exchange into the shared history
+      //      (ai-service.js:56-64). Without it, another person's
+      //      transcribed speech gets pushed into the general assistant's
+      //      capped session and evicts the user's real conversation. It is
+      //      also just correct: transcript text is someone else's speech,
+      //      i.e. untrusted input, regardless of it coming from our own mic.
+      const result = await this.ai.cloudReply(prompt, { systemOverride, untrustedContent: true });
       if (result && result.ok !== false && result.text) {
         this.latest = String(result.text).trim();
         this.lastError = null;
