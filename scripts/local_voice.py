@@ -147,8 +147,25 @@ class VoiceService:
         self.mode = "wake"
         self._meeting_pass_busy = False
         self._meeting_dropped = 0
+        # Set True only when ensure_meeting_ready() is the one that opens
+        # self.stream (i.e. JARVIS_WAKE_ENABLED=0, so the wake word never
+        # opened a stream of its own). meeting-stop uses this to decide
+        # whether it owns the microphone and must release it, or whether the
+        # wake word owns it and must keep it running.
+        self._meeting_opened_stream = False
 
-    def initialize_wake(self) -> None:
+    def initialize_wake(self, announce: bool = True) -> None:
+        """announce=False is used by ensure_meeting_ready(), which only wants
+        the microphone stream this method opens — it does NOT want the
+        wake-word system considered armed. No thread here ever sets
+        wake_ready or listens for the wake word when announce is False, so
+        telling the app "ready, wakeReady=True, say Hey <name>" would be a
+        lie: with JARVIS_WAKE_ENABLED=0 nothing is listening for the wake
+        word at all. Do NOT simplify this back to always announcing; every
+        existing caller (run(), the default path) still gets the exact same
+        behaviour because it passes no argument and announce defaults to
+        True.
+        """
         try:
             import numpy as np
             import sounddevice as sd
@@ -187,12 +204,23 @@ class VoiceService:
                 callback=callback,
             )
             self.stream.start()
-            self.wake_ready = True
-            emit("ready", wakeReady=True, wakeMode=self.wake_mode, message=f"Say Hey {self.assistant_name}")
+            if announce:
+                self.wake_ready = True
+                emit("ready", wakeReady=True, wakeMode=self.wake_mode, message=f"Say Hey {self.assistant_name}")
+            # else: meeting mode borrowed this method for its microphone
+            # stream only. Leaving wake_ready alone (it is already False in
+            # this configuration) and skipping the "ready" emit keeps the app
+            # from being told the wake word is armed when nothing is
+            # listening for it.
         except Exception as exc:
             self.wake_ready = False
-            emit("ready", wakeReady=False, wakeMode=self.wake_mode,
-                 message=f"Push-to-talk ready; wake word needs attention: {exc}")
+            if announce:
+                emit("ready", wakeReady=False, wakeMode=self.wake_mode,
+                     message=f"Push-to-talk ready; wake word needs attention: {exc}")
+            else:
+                # Still surface the failure — just not as a "ready" event,
+                # since announce=False means nothing was ever promised ready.
+                log(f"Meeting mode microphone init failed: {exc}")
 
     # ── openwakeword mode ──────────────────────────────────────────────────
 
@@ -365,7 +393,13 @@ class VoiceService:
         """
         try:
             if not hasattr(self, "stream"):
-                self.initialize_wake()
+                # No stream existed yet, so meeting mode — not the wake
+                # word — is the one opening the microphone here. Remember
+                # that so meeting-stop knows it is safe (and necessary) to
+                # close the stream again; if the wake word had already
+                # opened it, meeting-stop must leave it alone.
+                self._meeting_opened_stream = True
+                self.initialize_wake(announce=False)
             if self.vad is None:
                 # Same Silero wrapper the transcribe-mode branch of
                 # initialize_wake() uses — see the comment there.
@@ -542,6 +576,30 @@ class VoiceService:
                 emit("meeting-started")
             if command.get("type") == "meeting-stop":
                 self.mode = "wake"
+                if self._meeting_opened_stream:
+                    # The meeting opened this mic stream itself (wake word is
+                    # disabled, so nothing else needs it) — release it now.
+                    # Do NOT delete this as "redundant with run()'s teardown
+                    # at shutdown": without it the microphone stays open and
+                    # streaming for the rest of the process's life every time
+                    # someone runs a meeting with the wake word off, which is
+                    # exactly the always-listening behaviour this privacy-
+                    # first product promises NOT to do. Guarded so a mic
+                    # error here can never take down the stdin command loop.
+                    try:
+                        self.stream.stop()
+                        self.stream.close()
+                        # Also drop the attribute, not just the flag: this is
+                        # what ensure_meeting_ready() checks via hasattr() to
+                        # decide whether a stream already exists. Leaving a
+                        # closed stream object in place would make the NEXT
+                        # meeting-start believe the mic is already open and
+                        # skip reinitializing it, silently breaking meeting
+                        # mode's second run.
+                        del self.stream
+                    except Exception as exc:
+                        log(f"Meeting mode stream teardown failed: {exc}")
+                    self._meeting_opened_stream = False
                 emit("meeting-stopped", dropped=self._meeting_dropped)
         try:
             self.stream.stop()
