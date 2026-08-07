@@ -412,6 +412,23 @@ class VoiceService:
         except Exception as exc:
             log(f"Meeting mode prerequisites failed: {exc}")
             emit("meeting-error", message=f"Meeting mode could not start: {exc}")
+            if self._meeting_opened_stream:
+                # This call opened the mic stream and then failed before
+                # meeting mode actually started (e.g. VAD construction blew
+                # up). The caller only sees False and has no meeting to stop,
+                # so it will never send meeting-stop — without this, the
+                # stream leaked here would stay open and capturing for the
+                # rest of the process's life, exactly the always-listening
+                # behaviour this privacy-first product promises NOT to do.
+                # Same exception-guarded teardown as the meeting-stop handler,
+                # so cleanup itself can never take down the stdin command loop.
+                try:
+                    self.stream.stop()
+                    self.stream.close()
+                    del self.stream
+                except Exception as teardown_exc:
+                    log(f"Meeting mode stream teardown failed: {teardown_exc}")
+                self._meeting_opened_stream = False
             return False
 
     def meeting_loop(self) -> None:
