@@ -62,3 +62,25 @@ test('store: an untitled meeting still gets a folder', () => {
   const m = new MeetingStore({ root }).open(new Date('2026-08-07T14:30:00'), '');
   assert.match(path.basename(m.dir), /^2026-08-07-1430-meeting$/);
 });
+
+// The governing rule for this feature is that nothing takes down the
+// meeting: a write failure here must not throw out of appendSegment and
+// through the session that calls it. It also must not vanish silently — the
+// user has to be told the transcript stopped being written. Removing the
+// meeting directory after open() gives a genuinely missing path, so the
+// append hits a real ENOENT rather than a mocked one.
+test('store: appendSegment does not throw when the write fails, and the failure is visible', () => {
+  const root = tmpRoot();
+  const m = new MeetingStore({ root }).open(new Date('2026-08-07T14:30:00'), 'Dave call');
+  fs.rmSync(m.dir, { recursive: true, force: true });
+  assert.doesNotThrow(() => m.appendSegment('lost sentence'), 'a disk error must not end the meeting');
+  assert.equal(typeof m.lastError, 'string', 'the caller can see the write failed');
+  assert.ok(m.lastError.length > 0);
+});
+
+test('store: a healthy write leaves no error recorded', () => {
+  const root = tmpRoot();
+  const m = new MeetingStore({ root }).open(new Date('2026-08-07T14:30:00'), 'Dave call');
+  m.appendSegment('all is well');
+  assert.equal(m.lastError, null, 'nothing failed, so nothing should be recorded');
+});

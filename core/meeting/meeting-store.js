@@ -31,27 +31,67 @@ class MeetingStore {
 
   open(startedAt, title) {
     const dir = path.join(this.root, folderName(startedAt, title));
+    // Deliberately NOT contained: if the meeting folder itself can't be
+    // created, there is nowhere to put a transcript, notes, or a prep sheet.
+    // Starting a meeting that silently records nothing would be worse than
+    // failing loudly right here, before the user starts talking.
     fs.mkdirSync(dir, { recursive: true });
     const transcriptPath = path.join(dir, 'transcript.txt');
     const notesPath = path.join(dir, 'notes.md');
     const prepPath = path.join(dir, 'prep-sheet.md');
 
-    return {
+    const handle = {
       dir,
+      lastError: null,
       // Appended on arrival rather than buffered: a crash mid-call should cost
       // the last sentence, not the meeting.
+      //
+      // The write itself is guarded for the same reason: the spec's rule is
+      // that nothing takes down the meeting. A full disk, a permissions
+      // error, or a Windows path-too-long failure here must not throw out of
+      // this call and end a session that is still perfectly capable of
+      // continuing — but it must not be swallowed silently either, since a
+      // transcript that has stopped being written is something the user
+      // needs to be told about. So: catch it, log it, and surface it via
+      // `lastError` for the caller to report.
       appendSegment(text) {
-        fs.appendFileSync(transcriptPath, `${text}\n`, 'utf8');
+        try {
+          fs.appendFileSync(transcriptPath, `${text}\n`, 'utf8');
+          handle.lastError = null;
+          return true;
+        } catch (error) {
+          handle.lastError = error.message || String(error);
+          console.error('meeting-store: failed to append transcript segment:', handle.lastError);
+          return false;
+        }
       },
       writePrepSheet(text) {
-        fs.writeFileSync(prepPath, `${CONSENT_LINE}\n${text}\n`, 'utf8');
+        try {
+          fs.writeFileSync(prepPath, `${CONSENT_LINE}\n${text}\n`, 'utf8');
+          handle.lastError = null;
+          return true;
+        } catch (error) {
+          handle.lastError = error.message || String(error);
+          console.error('meeting-store: failed to write prep sheet:', handle.lastError);
+          return false;
+        }
       },
       // Rewritten whole each refresh — the rolling summary supersedes itself,
       // and appending would leave the reader to work out which version is current.
       writeNotes(text) {
-        fs.writeFileSync(notesPath, `${CONSENT_LINE}\n${text}\n`, 'utf8');
+        try {
+          fs.writeFileSync(notesPath, `${CONSENT_LINE}\n${text}\n`, 'utf8');
+          handle.lastError = null;
+          return true;
+        } catch (error) {
+          handle.lastError = error.message || String(error);
+          console.error('meeting-store: failed to write notes:', handle.lastError);
+          return false;
+        }
       }
     };
+
+    return handle;
   }
 }
 
