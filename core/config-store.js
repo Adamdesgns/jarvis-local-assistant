@@ -123,6 +123,8 @@ class ConfigStore {
       // silently reset on save until test/settings-persistence.test.js began
       // asserting every key the settings dialog sends actually persists.
       'orbSkin', 'orbColor', 'windowGlass',
+      // Local-brain tuning (keep-alive, context size, thinking on/off).
+      'localKeepAlive', 'localNumCtx', 'localThinking',
       // Night Shift, heartbeat, and the Defense Mode setup (county, feeds,
       // auto-triggers) — same silent-reset bug, same guard.
       'nightShiftEnabled', 'nightShiftStart', 'nightShiftEnd', 'nightShiftMaxJobs',

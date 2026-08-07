@@ -1890,9 +1890,9 @@ function openSettings(tab = 'general') {
       option.textContent = skin.label.toUpperCase();
       return option;
     }));
-    orbSkinSelect.value = state.settings.orbSkin || 'original';
+    orbSkinSelect.value = state.settings.orbSkin || 'plasma';
   }
-  $('setting-orb-color').value = state.settings.orbColor || 'gold';
+  $('setting-orb-color').value = state.settings.orbColor || 'obsidian';
   const glassSelect = $('setting-glass');
   if (glassSelect && window.JarvisGlass) {
     glassSelect.replaceChildren(...window.JarvisGlass.GLASS_LEVELS.map((level) => {
@@ -1956,8 +1956,8 @@ async function saveSettings(event) {
     startWithWindows: $('setting-startup').checked,
     motionMode: $('setting-motion').value,
     skin: $('setting-skin').value,
-    orbSkin: $('setting-orb-skin').value || 'original',
-    orbColor: $('setting-orb-color').value || 'gold',
+    orbSkin: $('setting-orb-skin').value || 'plasma',
+    orbColor: $('setting-orb-color').value || 'obsidian',
     windowGlass: $('setting-glass').value || 'glass',
     nightShiftEnabled: $('setting-nightshift').checked,
     heartbeatEnabled: $('setting-heartbeat').checked,

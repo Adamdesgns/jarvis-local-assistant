@@ -1061,7 +1061,7 @@ function setupIpc() {
       });
     }
     if (previous.orbSkin !== updated.orbSkin || previous.orbColor !== updated.orbColor) {
-      sendEverywhere('orb:prefs', { orbSkin: updated.orbSkin || 'original', orbColor: updated.orbColor || 'gold' });
+      sendEverywhere('orb:prefs', { orbSkin: updated.orbSkin || 'plasma', orbColor: updated.orbColor || 'obsidian' });
     }
     if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
       return setupNightShift(updated);
@@ -1070,7 +1070,7 @@ function setupIpc() {
   });
   ipcMain.handle('orb:prefs', () => {
     const settings = config.getSettings();
-    return { orbSkin: settings.orbSkin || 'original', orbColor: settings.orbColor || 'gold' };
+    return { orbSkin: settings.orbSkin || 'plasma', orbColor: settings.orbColor || 'obsidian' };
   });
   ipcMain.handle('nightshift:status', () => ({
     enabled: config.getSettings().nightShiftEnabled === true,
