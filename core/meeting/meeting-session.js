@@ -38,6 +38,12 @@ class MeetingSession {
     this.notes = null;
     this.brief = null;
     this.warning = '';
+    // Latches `handle.lastError` at the moment `stop()` nulls the handle.
+    // Without this, the instant the user presses stop the only evidence that
+    // the disk was failing disappears with the handle — right when "did this
+    // actually save?" is the question that matters most. Do not "simplify"
+    // this back to reading `this.handle.lastError` directly.
+    this.storeErrorLatch = null;
   }
 
   get active() { return this.handle !== null; }
@@ -56,7 +62,9 @@ class MeetingSession {
       dir: this.handle ? this.handle.dir : '',
       notes: this.notes ? this.notes.latest : '',
       notesError: this.notes ? this.notes.lastError : null,
-      storeError: this.handle ? this.handle.lastError : null,
+      // Live handle while a meeting is active; latched value afterwards, so a
+      // disk failure survives the `stop()` call that nulls `this.handle`.
+      storeError: this.handle ? this.handle.lastError : this.storeErrorLatch,
       segments: this.transcript ? this.transcript.segmentCount : 0,
       warning: this.warning
     };
@@ -67,6 +75,9 @@ class MeetingSession {
   async start({ briefName, prospect, title }) {
     if (this.active) return;
     this.warning = '';
+    // A new meeting starts clean — last meeting's disk failure must not
+    // appear to belong to this one.
+    this.storeErrorLatch = null;
     this.transcript = new MeetingTranscript();
 
     // The brief is optional on purpose. Losing the recording because a file was
@@ -167,6 +178,10 @@ class MeetingSession {
     if (this.notes && this.notes.latest && this.handle) {
       try { this.handle.writeNotes(this.notes.latest); } catch { /* already reported via lastError */ }
     }
+    // Capture before nulling the handle — otherwise a disk failure mid-meeting
+    // vanishes the instant stop() completes, exactly when a UI would want to
+    // ask "did this actually save?".
+    if (this.handle) this.storeErrorLatch = this.handle.lastError;
     this.handle = null;
     this.#publish();
   }

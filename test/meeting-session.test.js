@@ -176,3 +176,44 @@ test('session: state exposes notesError and storeError as independent fields whe
   assert.equal(s.state.notesError, null);
   assert.equal(s.state.storeError, null);
 });
+
+// --- Correction 3: storeError must survive stop(), which nulls the handle ---
+// it reads from. Otherwise the one question a post-meeting UI most needs to
+// answer — "did this recording actually save?" — becomes unanswerable the
+// instant the user presses stop.
+
+test('session: storeError survives stop(), so a disk failure is still visible after the meeting ends', async () => {
+  const root = tmpRoot();
+  const store = new MeetingStore({ root });
+  const s = session({ store });
+  await s.start({ briefName: 'default', prospect: 'Dave', title: 'Dave call' });
+  fs.rmSync(s.state.dir, { recursive: true, force: true });
+  s.handleSegment({ text: 'this will fail to write', dropped: 0 });
+  assert.ok(s.state.storeError, 'sanity check: the failure is visible while the meeting is still active');
+  await s.stop();
+  assert.equal(s.active, false);
+  assert.ok(s.state.storeError, 'the disk failure must still be visible after stop() nulls the handle');
+});
+
+test('session: starting a new meeting clears the previous meeting\'s storeError', async () => {
+  const root = tmpRoot();
+  const store = new MeetingStore({ root });
+  const s = session({ store });
+  await s.start({ briefName: 'default', prospect: 'Dave', title: 'Dave call' });
+  fs.rmSync(s.state.dir, { recursive: true, force: true });
+  s.handleSegment({ text: 'this will fail to write', dropped: 0 });
+  await s.stop();
+  assert.ok(s.state.storeError, 'sanity check: the latch is holding the failure from the first meeting');
+
+  await s.start({ briefName: 'default', prospect: 'Dave', title: 'Second call' });
+  assert.equal(s.state.storeError, null, 'a new meeting must not inherit the previous one\'s disk failure');
+});
+
+test('session: a healthy meeting reports no storeError before or after stop()', async () => {
+  const s = session();
+  await s.start({ briefName: 'default', prospect: 'Dave', title: 'Dave call' });
+  s.handleSegment({ text: 'all good', dropped: 0 });
+  assert.equal(s.state.storeError, null, 'no storeError while active and writes are succeeding');
+  await s.stop();
+  assert.equal(s.state.storeError, null, 'no storeError after a clean stop()');
+});
