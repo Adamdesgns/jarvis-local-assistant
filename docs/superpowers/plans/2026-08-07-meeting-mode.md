@@ -1716,3 +1716,46 @@ reintroduces them:
    the intended failing-test step rather than a surprise at `npm test`.
 3. **Task 9's tab step was prose, not code.** Rewritten with the actual `TABS`
    entry, section markup, and renderer wiring.
+
+---
+
+## Corrections applied during execution (2026-08-07)
+
+Tasks 1-6 were executed and reviewed. Three defects **in this plan's own code**
+were caught by review and fixed in the implementation. The task text above is
+left as written for the record; where it conflicts with this section, **this
+section is correct**.
+
+1. **Task 1 — `meeting_loop` depended on a VAD that is never created in the
+   default configuration.** `initialize_wake()` only assigns `self.vad` in its
+   `else` branch, taken when the assistant name is *not* Jarvis-like. With the
+   default name, `self.vad` stays `None` forever and meeting mode would have
+   emitted zero segments while reporting success. Fixed with an
+   `ensure_meeting_ready()` method that establishes a VAD and a microphone
+   stream regardless of which wake path ran. Two privacy leaks in that area
+   were closed at the same time: a meeting started with the wake word disabled
+   falsely announced `wakeReady: true` and never released the microphone, and a
+   start that failed after opening the stream leaked it.
+
+2. **Tasks 5 and 6 — `{ skipHistory: true }` does not exist.** This plan
+   invented the flag; `core/ai-service.js` has no such option and ignores it.
+   The real consequences were that meeting transcripts would be written into
+   the shared `'general'` conversation history via `#remember`, and unrelated
+   chat history would be read *into* meeting prompts. The real mechanisms are
+   `systemOverride` (suppresses the history read, `ai-service.js:202-204`) and
+   `untrustedContent: true` (suppresses `#remember`, `ai-service.js:60`). All
+   three `cloudReply` call sites now pass both.
+
+3. **Task 4 — unguarded filesystem writes.** `appendFileSync` / `writeFileSync`
+   would throw out of `appendSegment` and end the meeting, contradicting this
+   spec's own "nothing takes down the meeting" rule. The store now contains
+   write failures and exposes `lastError`; `open()`'s `mkdirSync` deliberately
+   still throws, because a missing folder means recording nowhere.
+
+**Interface changes for Task 7.** The Python service can now also emit
+`{"type": "meeting-error", "message": str}` — the JS side must handle it. The
+session's `state` exposes `notesError` and `storeError` as separate fields, not
+the single `error` field shown in Task 7's Step 6 expected output.
+
+**Outstanding:** Task 1's microphone smoke test has never been run — no agent
+had a microphone. It remains the real gate on the Python layer.
