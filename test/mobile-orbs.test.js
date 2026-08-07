@@ -100,5 +100,5 @@ test('GET /api/orb-prefs falls back to defaults when settings are missing them',
   const key = await pairedKey(server, auth);
   const ok = fakeRes();
   await server.handleRequest(jsonReq('GET', '/api/orb-prefs', null, { authorization: `Bearer ${key}` }), ok);
-  assert.deepEqual(JSON.parse(ok.body), { orbSkin: 'original', orbColor: 'gold' });
+  assert.deepEqual(JSON.parse(ok.body), { orbSkin: 'plasma', orbColor: 'obsidian' });
 });

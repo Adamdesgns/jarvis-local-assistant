@@ -110,7 +110,7 @@ class MobileServer {
         if (pathname === '/api/last') return this.json(res, 200, this.lastReply.get(device.id) || { reply: null });
         if (pathname === '/api/orb-prefs' && req.method === 'GET') {
           const settings = this.config.getSettings();
-          return this.json(res, 200, { orbSkin: settings.orbSkin || 'original', orbColor: settings.orbColor || 'gold' });
+          return this.json(res, 200, { orbSkin: settings.orbSkin || 'plasma', orbColor: settings.orbColor || 'obsidian' });
         }
         if (pathname === '/api/folders' && req.method === 'GET') {
           return this.json(res, 200, { folders: this.documents.approvedRoots() });

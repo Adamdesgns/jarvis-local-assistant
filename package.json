@@ -13,6 +13,7 @@
     "fast-xml-parser": "^5.7.0",
     "kokoro-js": "^1.2.1",
     "mammoth": "^1.11.0",
+    "mpegts.js": "^1.8.0",
     "onvif": "^0.8.1",
     "pdf-parse": "^1.1.1",
     "qrcode": "^1.5.4",
@@ -63,7 +64,8 @@
       "LICENSE",
       "package.json",
       "!node_modules/ffmpeg-for-homebridge/ffmpeg.exe",
-      "!node_modules/ffmpeg-for-homebridge/.build/**"
+      "!node_modules/ffmpeg-for-homebridge/.build/**",
+      "!node_modules/mpegts.js/dist/*.map"
     ],
     "win": {
       "target": "nsis",

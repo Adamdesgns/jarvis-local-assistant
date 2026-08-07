@@ -23,6 +23,8 @@ class CameraService {
     this.lastAutoSnapshot = new Map(); // camera key -> timestamp
     this.liveViews = new Set(); // go2rtc stream names
     this.sdpViews = new Map(); // camera key -> {driver, cameraId, session}
+    this.blinkViews = new Map(); // camera key -> {handle, driver, cameraId}
+    this.blinkStreamServer = null; // started lazily, only if a Blink view opens
     this.lastAlert = new Map(); // camera key -> timestamp
     this.describeFrame = null; // Phase 4 assigns: async (jpegBase64, context) => text|null
   }
@@ -102,16 +104,36 @@ class CameraService {
     return { ok: true, message: `Added ${list.length} camera${list.length === 1 ? '' : 's'}.` };
   }
 
-  async addBlinkAccount({ email, password }) {
-    const cleanEmail = String(email || '').trim();
-    const cleanPassword = String(password || '');
-    if (!cleanEmail || !cleanPassword) return { ok: false, message: 'Enter your Blink email and password first.' };
-    const account = { id: crypto.randomUUID().slice(0, 8), brand: 'blink', name: cleanEmail };
+  // Blink sign-in happens on Blink's own page in a real browser window, so the
+  // account only exists once tokens come back. JARVIS never handles the
+  // password, which is why nothing here takes one.
+  async addBlinkAccount(_payload, { signInFlow, openWindow } = {}) {
+    const flow = signInFlow || ((args) => require('./blink-oauth').runBlinkSignIn(args));
+    let result;
+    try {
+      result = await flow({ openWindow, hardwareId: crypto.randomUUID().toUpperCase() });
+    } catch (error) {
+      return { ok: false, message: error.message || 'Blink sign-in did not finish.' };
+    }
+    // Signing in again must REPLACE the existing link, never add a second one.
+    // Two accounts for one Blink login listed every camera twice, and removing
+    // either took its whole account with it — while Blink had already revoked
+    // the older session at the second sign-in, so the survivor was dead too.
+    // Matched on Blink's own account id, which is stable across sign-ins.
+    const existing = this.#findBlinkAccount(result.session.accountId);
+    const account = existing || { id: crypto.randomUUID().slice(0, 8), brand: 'blink', name: 'Blink account' };
     this.config.setSecret(this.#secretKey(account.id), JSON.stringify({
-      email: cleanEmail, password: cleanPassword, uniqueId: crypto.randomUUID()
+      hardwareId: result.hardwareId, ...result.session
     }));
-    const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
-    this.config.updateSettings({ cameraAccounts: accounts });
+    if (existing) {
+      // Drop the old driver so it cannot keep using the revoked session.
+      const stale = this.drivers.get(account.id);
+      if (stale) { try { await stale.disconnect?.(); } catch { /* already gone */ } }
+      this.drivers.delete(account.id);
+    } else {
+      const accounts = [...(this.config.getSettings().cameraAccounts || []), account];
+      this.config.updateSettings({ cameraAccounts: accounts });
+    }
     await this.#instantiate(account);
     const driver = this.drivers.get(account.id);
     const status = driver?.status() || { state: 'error', message: 'The Blink connection could not start.' };
@@ -120,16 +142,30 @@ class CameraService {
       return { ok: false, message: status.message };
     }
     this.emit('cameras:changed', {});
-    this.log.write({ type: 'camera', command: 'add blink account', response: `Connected Blink account ${cleanEmail}.`, source: 'cameras' });
-    return { ok: true, needsPin: status.state === 'verify', accountId: account.id, message: status.message || 'Blink is connected.' };
+    this.log.write({ type: 'camera', command: 'add blink account', response: 'Connected a Blink account.', source: 'cameras' });
+    return {
+      ok: true,
+      accountId: account.id,
+      replaced: Boolean(existing),
+      message: existing
+        ? 'Blink was already connected — that sign-in was refreshed, not added again.'
+        : (status.message || 'Blink is connected.')
+    };
   }
 
-  async submitBlinkPin(accountId, pin) {
-    const driver = this.drivers.get(accountId);
-    if (!driver || typeof driver.submitPin !== 'function') return { ok: false, message: 'That Blink account is no longer set up.' };
-    const result = await driver.submitPin(pin);
-    if (result.ok) this.emit('cameras:changed', {});
-    return result;
+  // The stored Blink account carrying this Blink account id, if any. Reads the
+  // secret rather than the settings, because the Blink id is a credential detail
+  // and never belongs in settings.json.
+  #findBlinkAccount(blinkAccountId) {
+    if (blinkAccountId === undefined || blinkAccountId === null) return null;
+    for (const account of this.config.getSettings().cameraAccounts || []) {
+      if (account.brand !== 'blink') continue;
+      try {
+        const secrets = JSON.parse(this.config.getSecret(this.#secretKey(account.id)) || '{}');
+        if (String(secrets.accountId) === String(blinkAccountId)) return account;
+      } catch { /* unreadable secret: treat as not a match */ }
+    }
+    return null;
   }
 
   // Ring 2FA happens before the account exists: sign-in either yields a
@@ -232,9 +268,17 @@ class CameraService {
 
   async listCameras() {
     const cameras = [];
+    // A second guard behind the one in addBlinkAccount: if two accounts for the
+    // same login ever reach disk again, the same physical camera must still
+    // appear once. Keyed by brand + the camera's own id, which is the camera
+    // itself rather than which account happened to list it.
+    const seen = new Set();
     for (const [accountId, driver] of this.drivers) {
       try {
         for (const camera of await driver.listCameras()) {
+          const identity = `${camera.brand}:${camera.id}`;
+          if (seen.has(identity)) continue;
+          seen.add(identity);
           cameras.push({ ...camera, accountId, key: `${accountId}:${camera.id}` });
         }
       } catch {}
@@ -290,6 +334,10 @@ class CameraService {
         this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
         return { ok: true, mode: 'sdp-bridge', key };
       }
+      // Blink speaks its own MPEG-TS protocol rather than RTSP or WebRTC, so it
+      // is neither bridgeable nor something go2rtc can ingest; the bytes go to
+      // the renderer over a localhost-only carrier instead.
+      if (typeof driver.startLiveStream === 'function') return this.#openBlinkLiveView(key, driver, cameraId);
       const source = await driver.getStreamSource(cameraId);
       if (!source) return { ok: false, message: 'This camera does not support live view — snapshots only.' };
       const started = await this.go2rtc.start();
@@ -302,6 +350,37 @@ class CameraService {
     } catch (error) {
       return { ok: false, message: `Could not start live view: ${error.message}` };
     }
+  }
+
+  // Blink live view: open the stream, hand its chunks to a localhost token URL,
+  // and make sure either side going away tears down the other so a battery
+  // camera is never left awake.
+  async #openBlinkLiveView(key, driver, cameraId) {
+    const server = await this.#blinkServer();
+    let stream = null;
+    const handle = server.register({
+      onStop: () => { try { stream?.stop(); } catch { /* already gone */ } }
+    });
+    try {
+      stream = await driver.startLiveStream(cameraId, {
+        onVideo: (chunk) => handle.push(chunk),
+        onEnd: () => handle.close()
+      });
+    } catch (error) {
+      handle.close();
+      throw error;
+    }
+    this.blinkViews.set(key, { handle, driver, cameraId });
+    this.log.write({ type: 'camera', command: 'live view', response: `Opened live view for camera ${key}.`, source: 'cameras' });
+    return { ok: true, mode: 'mpegts', key, streamUrl: handle.url };
+  }
+
+  async #blinkServer() {
+    if (!this.blinkStreamServer) {
+      const { BlinkStreamServer } = require('./blink-stream-server');
+      this.blinkStreamServer = new BlinkStreamServer({});
+    }
+    return this.blinkStreamServer.start();
   }
 
   async answerLiveView(key, offerSdp) {
@@ -318,6 +397,13 @@ class CameraService {
   }
 
   async closeLiveView(key) {
+    const blink = this.blinkViews.get(key);
+    if (blink) {
+      this.blinkViews.delete(key);
+      try { blink.driver.stopLiveStream(blink.cameraId); } catch {}
+      try { blink.handle.close(); } catch {}
+      return { ok: true };
+    }
     const view = this.sdpViews.get(key);
     if (view) {
       this.sdpViews.delete(key);
@@ -336,6 +422,14 @@ class CameraService {
   }
 
   async shutdown() {
+    // Blink first: an unreleased live view leaves a battery camera awake.
+    for (const [, view] of this.blinkViews) {
+      try { view.driver.stopLiveStream(view.cameraId); } catch {}
+      try { view.handle.close(); } catch {}
+    }
+    this.blinkViews.clear();
+    try { await this.blinkStreamServer?.stop(); } catch {}
+    this.blinkStreamServer = null;
     for (const [, view] of this.sdpViews) { try { view.session?.close(); } catch {} }
     this.sdpViews.clear();
     for (const name of this.liveViews) { try { await this.go2rtc.removeStream(name); } catch {} }

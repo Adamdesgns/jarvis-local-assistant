@@ -68,8 +68,25 @@ const DEFAULT_SETTINGS = {
   autonomyNightStart: 21,
   autonomyNightEnd: 7,
   skin: 'classic',
-  orbSkin: 'original',
-  orbColor: 'gold',
+  // Local-brain speed. Measured on an RTX 5060 (8 GB) with qwen3:8b:
+  //   - Cold start cost 17s of model load before a single token. keep_alive
+  //     pins him in VRAM so only the first question of a session pays it.
+  //   - num_ctx is a VRAM cliff, not a dial. Measured, f16 KV cache:
+  //        4096 -> 46.4 tok/s, 100% GPU
+  //        8192 -> 47.6 tok/s, 100% GPU   <- the sweet spot, and free
+  //       12288 -> 39.2 tok/s,  87% GPU
+  //       16384 -> 31.7 tok/s,  80% GPU   <- SLOWER than 4096. Don't.
+  //     8192 is the largest context that still fits entirely in 8 GB. With
+  //     OLLAMA_KV_CACHE_TYPE=q8_0 the cache halves and the cliff moves out,
+  //     so 16384 becomes reachable — re-measure before raising it.
+  //   - qwen3 is a reasoning model and reasons about everything, including
+  //     "what time is it" (642 characters of it). Off by default because most
+  //     of what JARVIS is asked is a short command, not a hard problem.
+  localKeepAlive: '30m',
+  localNumCtx: 8192,
+  localThinking: false,
+  orbSkin: 'plasma',
+  orbColor: 'obsidian',
   windowGlass: 'glass',
   nightShiftEnabled: false,
   nightShiftStart: 0,
@@ -105,6 +122,17 @@ const DEFAULT_SETTINGS = {
   // The Windows SAPI voice, used by the fallback path.
   voiceName: '',
   orbBounds: null,
+  // JARVIS owns the whole screen — no taskbar — until minimized to the orb.
+  // The titlebar's □ button toggles out to a normal window and remembers.
+  fullScreen: true,
+  // Pop-out camera windows: where each one sits, per camera key, so a
+  // multi-monitor arrangement survives a restart. `open` lists the cameras that
+  // were popped out, so they reopen on launch.
+  cameraWindows: { bounds: {}, open: [] },
+  // Cameras hidden from the grid by hand, as "brand:cameraId". Display-only:
+  // a hidden camera still exists, still alerts, and can still be popped out
+  // again after SHOW ALL — nothing about the account is touched.
+  hiddenCameras: [],
   moduleLayout: {
     tasks: { x: 74, y: 8, w: 24, h: 58 },
     performance: { x: 2, y: 8, w: 22, h: 44 },
