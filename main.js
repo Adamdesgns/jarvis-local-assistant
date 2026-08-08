@@ -1209,6 +1209,16 @@ function setupIpc() {
       sendEverywhere('orb:prefs', { orbSkin: updated.orbSkin || 'plasma', orbColor: updated.orbColor || 'obsidian' });
     }
     if (previous.meetingHotkey !== updated.meetingHotkey) registerMeetingHotkey();
+    // Read once at whenReady and otherwise never revisited, so without this
+    // the setting would persist to disk and then silently do nothing until
+    // the app restarted — exactly the "tune it on a real call" case the
+    // setting exists for. MeetingSession.start() reads `intervalMs` fresh
+    // for every meeting (main.js meetingSession construction), so updating
+    // the live session's field here is enough; it only reaches a meeting
+    // that starts after this save, never one already in progress.
+    if (previous.meetingNotesIntervalMs !== updated.meetingNotesIntervalMs && meetingSession) {
+      meetingSession.intervalMs = updated.meetingNotesIntervalMs || 120000;
+    }
     if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
       return setupNightShift(updated);
     }
@@ -1957,6 +1967,16 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // Stop the meeting before anything else so the final writeNotes() happens
+  // while the process is still alive — that write is where the decisions and
+  // action items from the end of the call live. MeetingSession.stop() has no
+  // `await` in its body (every step is synchronous fs/voice work guarded by
+  // try/catch), so this call's side effects are done before it returns here,
+  // even though the caught `.catch` is only there to silence an unhandled
+  // rejection, not to wait on anything. Guarded so a failure here — however
+  // unlikely now that stop() catches its own errors — can never block quit;
+  // the microphone still gets released below by localVoice.stop() either way.
+  try { meetingSession?.stop().catch(() => {}); } catch { /* never block quit */ }
   localVoice?.stop();
   voiceService?.stop();
   mobileServer?.stop();

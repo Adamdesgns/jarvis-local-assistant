@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { MeetingSession } = require('../core/meeting/meeting-session');
-const { MeetingStore } = require('../core/meeting/meeting-store');
+const { MeetingStore, CONSENT_LINE } = require('../core/meeting/meeting-store');
 
 // The whole chain, exercised with a fake microphone and a fake model. The
 // wake-word tests are the ones that matter most: a regression there means
@@ -216,4 +216,103 @@ test('session: a healthy meeting reports no storeError before or after stop()', 
   assert.equal(s.state.storeError, null, 'no storeError while active and writes are succeeding');
   await s.stop();
   assert.equal(s.state.storeError, null, 'no storeError after a clean stop()');
+});
+
+// --- Whole-branch review, Finding 1: local-voice-service.js:169 throws
+// 'Local voice is not running.' whenever Python isn't writable — the normal
+// state when Python isn't installed, the spawn watchdog gave up, or the
+// process died mid-call. Both calls into it were unguarded, so a throw from
+// either one used to wedge the session permanently: start() left `active`
+// true with Python never told to enter meeting mode, and stop() threw again
+// before ever nulling the handle, so there was no way back short of
+// restarting the app. These two tests are the fix's contract: start() must
+// roll back and rethrow, and stop() must always finish tearing down.
+
+test('session: a failing startMeeting rolls back cleanly and leaves the session restartable', async () => {
+  const brokenVoice = {
+    startMeeting() { throw new Error('Local voice is not running.'); },
+    stopMeeting() {}
+  };
+  const s = session({ voice: brokenVoice });
+  await assert.rejects(
+    () => s.start({ briefName: 'default', prospect: 'Dave', title: 'Dave call' }),
+    /Local voice is not running/,
+    'the caller (meeting:start\'s IPC handler) needs the failure, not a silent no-op'
+  );
+  assert.equal(s.active, false, 'a failed start must not wedge the session as active');
+  assert.equal(s.handle, null, 'the handle must be released, not left dangling');
+
+  // Recover without restarting the app: swap in a working voice service (the
+  // real-world equivalent of Python getting installed or the watchdog
+  // succeeding on retry) and confirm start() is not permanently stuck
+  // bailing out at its "already active" guard.
+  const workingVoice = fakeVoice();
+  s.voice = workingVoice;
+  await s.start({ briefName: 'default', prospect: 'Dave', title: 'Dave call' });
+  assert.ok(s.active, 'a subsequent start with a working voice must succeed');
+  assert.equal(workingVoice.started, 1);
+});
+
+test('session: a failing stopMeeting still lets stop() complete teardown, including the final notes write', async () => {
+  const voice = fakeVoice();
+  const s = session({ voice });
+  await s.start({ briefName: 'default', prospect: 'Dave', title: 'Dave call' });
+  s.handleSegment({ text: 'said something', dropped: 0 });
+  const dir = s.state.dir;
+  // This suite's fixed `now: () => 0` clock means a real notes refresh never
+  // fires (see the dedicated refresh test below), so setting `latest`
+  // directly is the direct way to put stop() in the state it needs to be in
+  // to exercise its final-write branch.
+  s.notes.latest = 'COVERED: pricing discussion';
+
+  voice.stopMeeting = () => { throw new Error('Local voice is not running.'); };
+  await s.stop();
+
+  assert.equal(s.active, false, 'the handle must still be released even though stopMeeting threw');
+  assert.equal(s.handle, null);
+  assert.match(s.state.warning, /stopped/i, 'the failure is surfaced, not swallowed');
+  const onDisk = fs.readFileSync(path.join(dir, 'notes.md'), 'utf8');
+  assert.ok(onDisk.startsWith(CONSENT_LINE), 'the final notes write still ran, consent line first');
+  assert.match(onDisk, /pricing discussion/);
+});
+
+// --- Whole-branch review: every test above pins `now: () => 0`, which makes
+// MeetingNotes.maybeRefresh()'s interval check (`now() - lastRunAt <
+// intervalMs`) permanently true, so a refresh never actually runs anywhere
+// in this suite. That left handleSegment's writeNotes-on-refresh call, and
+// therefore stop()'s final writeNotes guard too (`this.notes.latest` never
+// became truthy), never exercised by real refresh timing. This test
+// advances an injected clock past the interval so both paths genuinely run.
+
+test('session: notes refresh writes to disk mid-call, and stop() writes the final notes', async () => {
+  let clock = 0;
+  const ai = fakeAi('COVERED: pricing discussion');
+  // readBrief returns '' so the brief is not "ok" and the fire-and-forget
+  // prep sheet call is skipped — keeps this test's single ai call
+  // unambiguously the notes refresh, not the prep sheet.
+  const s = session({ ai, now: () => clock, intervalMs: 1000, readBrief: () => '' });
+  await s.start({ briefName: 'default', prospect: 'Dave', title: 'Dave call' });
+  const notesPath = path.join(s.state.dir, 'notes.md');
+
+  s.handleSegment({ text: 'first segment', dropped: 0 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(!fs.existsSync(notesPath), 'sanity check: interval has not elapsed, no refresh yet');
+
+  clock = 1000;
+  s.handleSegment({ text: 'second segment', dropped: 0 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ai.calls.length, 1, 'the interval elapsed, so maybeRefresh actually called the model');
+  assert.ok(fs.existsSync(notesPath), 'the refresh wrote notes.md mid-call, not just at stop()');
+  const midCall = fs.readFileSync(notesPath, 'utf8');
+  assert.ok(midCall.startsWith(CONSENT_LINE), 'consent line first, before any content');
+  assert.match(midCall, /pricing discussion/);
+
+  // Prove stop() performs its own write rather than the file merely
+  // surviving from the refresh above: delete it, then confirm stop()
+  // recreates it.
+  fs.unlinkSync(notesPath);
+  await s.stop();
+  assert.ok(fs.existsSync(notesPath), 'stop() wrote the final notes even though nothing else would have');
+  const final = fs.readFileSync(notesPath, 'utf8');
+  assert.ok(final.startsWith(CONSENT_LINE), 'consent line first in the final notes too');
 });

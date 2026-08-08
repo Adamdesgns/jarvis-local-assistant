@@ -43,6 +43,14 @@ class MeetingStore {
     const handle = {
       dir,
       lastError: null,
+      // Monotonic — incremented on every failed write, never reset by a
+      // success. `lastError` alone cannot be trusted to mean "no failures
+      // happened": a successful append two seconds after a failed one clears
+      // `lastError` right back to null, and the only evidence a segment was
+      // silently dropped disappears with it. This is the count that has to
+      // survive that, so the panel can still say "3 writes failed this
+      // meeting" even after the very next write succeeds.
+      failureCount: 0,
       // Appended on arrival rather than buffered: a crash mid-call should cost
       // the last sentence, not the meeting.
       //
@@ -61,6 +69,7 @@ class MeetingStore {
           return true;
         } catch (error) {
           handle.lastError = error.message || String(error);
+          handle.failureCount += 1;
           console.error('meeting-store: failed to append transcript segment:', handle.lastError);
           return false;
         }
@@ -72,6 +81,7 @@ class MeetingStore {
           return true;
         } catch (error) {
           handle.lastError = error.message || String(error);
+          handle.failureCount += 1;
           console.error('meeting-store: failed to write prep sheet:', handle.lastError);
           return false;
         }
@@ -85,6 +95,7 @@ class MeetingStore {
           return true;
         } catch (error) {
           handle.lastError = error.message || String(error);
+          handle.failureCount += 1;
           console.error('meeting-store: failed to write notes:', handle.lastError);
           return false;
         }

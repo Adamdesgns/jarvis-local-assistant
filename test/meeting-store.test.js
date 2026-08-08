@@ -84,3 +84,31 @@ test('store: a healthy write leaves no error recorded', () => {
   m.appendSegment('all is well');
   assert.equal(m.lastError, null, 'nothing failed, so nothing should be recorded');
 });
+
+// Whole-branch review, Finding 4: `lastError` alone cannot answer "did any
+// part of this recording fail to save?" — every success sets it back to
+// null, so a transient failure that happens to be followed by a successful
+// append two seconds later erases the only evidence a segment was lost. The
+// spec's rule is that audio is never lost *silently*, so a count that
+// survives success is what has to carry that evidence instead.
+test('store: failureCount survives a later successful write', () => {
+  const root = tmpRoot();
+  const m = new MeetingStore({ root }).open(new Date('2026-08-07T14:30:00'), 'Dave call');
+  fs.rmSync(m.dir, { recursive: true, force: true });
+  m.appendSegment('lost sentence');
+  assert.equal(m.failureCount, 1, 'the failed write is counted');
+
+  fs.mkdirSync(m.dir, { recursive: true });
+  m.appendSegment('recovered sentence');
+  assert.equal(m.lastError, null, 'lastError still reflects only the most recent write, as before');
+  assert.equal(m.failureCount, 1, 'but the failure count must not be cleared by the success that follows it');
+});
+
+test('store: writePrepSheet opens with the consent line, same as notes', () => {
+  const root = tmpRoot();
+  const m = new MeetingStore({ root }).open(new Date('2026-08-07T14:30:00'), 'Dave call');
+  m.writePrepSheet('1. Open with...\n2. Objections...\n3. Ask...');
+  const onDisk = fs.readFileSync(path.join(m.dir, 'prep-sheet.md'), 'utf8');
+  assert.ok(onDisk.startsWith(CONSENT_LINE), 'consent first, before any content');
+  assert.match(onDisk, /Open with/);
+});

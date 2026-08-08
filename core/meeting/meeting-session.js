@@ -38,12 +38,14 @@ class MeetingSession {
     this.notes = null;
     this.brief = null;
     this.warning = '';
-    // Latches `handle.lastError` at the moment `stop()` nulls the handle.
-    // Without this, the instant the user presses stop the only evidence that
-    // the disk was failing disappears with the handle — right when "did this
-    // actually save?" is the question that matters most. Do not "simplify"
-    // this back to reading `this.handle.lastError` directly.
+    // Latches `handle.lastError` (and `handle.failureCount`) at the moment
+    // `stop()` nulls the handle. Without this, the instant the user presses
+    // stop the only evidence that the disk was failing disappears with the
+    // handle — right when "did this actually save?" is the question that
+    // matters most. Do not "simplify" this back to reading `this.handle.*`
+    // directly.
     this.storeErrorLatch = null;
+    this.storeFailureCountLatch = 0;
   }
 
   get active() { return this.handle !== null; }
@@ -65,6 +67,12 @@ class MeetingSession {
       // Live handle while a meeting is active; latched value afterwards, so a
       // disk failure survives the `stop()` call that nulls `this.handle`.
       storeError: this.handle ? this.handle.lastError : this.storeErrorLatch,
+      // `storeError` alone can go back to null the moment a failing write is
+      // followed by a successful one — the message is about the most recent
+      // write, not the meeting as a whole. This count is monotonic on the
+      // handle (meeting-store.js never resets it on success), so it is what
+      // actually answers "did any part of this recording fail to save?".
+      storeFailureCount: this.handle ? this.handle.failureCount : this.storeFailureCountLatch,
       segments: this.transcript ? this.transcript.segmentCount : 0,
       warning: this.warning
     };
@@ -78,6 +86,7 @@ class MeetingSession {
     // A new meeting starts clean — last meeting's disk failure must not
     // appear to belong to this one.
     this.storeErrorLatch = null;
+    this.storeFailureCountLatch = 0;
     this.transcript = new MeetingTranscript();
 
     // The brief is optional on purpose. Losing the recording because a file was
@@ -101,7 +110,24 @@ class MeetingSession {
       now: this.now
     });
 
-    this.voice.startMeeting();
+    try {
+      this.voice.startMeeting();
+    } catch (error) {
+      // Python never entered meeting mode. `handle` was assigned above but
+      // never published as active (that happens right below, only on
+      // success), so no listener has seen this meeting exist yet — rolling
+      // back here is invisible to the outside world. Skipping the rollback
+      // would wedge the session forever: `active` would read true, start()
+      // bails out early for an already-active session (see the guard at the
+      // top of this method), and stop() would call stopMeeting() again,
+      // which throws the same way, before ever nulling the handle. Rethrow
+      // so the caller (meeting:start's IPC handler) can report the failure
+      // instead of the renderer believing the meeting started.
+      this.handle = null;
+      this.notes = null;
+      this.transcript = null;
+      throw error;
+    }
     this.#publish();
 
     // Fire-and-forget: the prep sheet is useful, but waiting on a model round
@@ -174,14 +200,27 @@ class MeetingSession {
     if (!this.active) return;
     // Restored first, before anything that can throw. A meeting that ends with
     // the wake word still suspended leaves JARVIS deaf until a restart.
-    this.voice.stopMeeting();
+    try {
+      this.voice.stopMeeting();
+    } catch (error) {
+      // Python is gone or already out of meeting mode. Releasing local state
+      // matters more than this doomed IPC call: without this guard, the
+      // throw would abort stop() before the handle is ever nulled, wedging
+      // `active` at true forever — the panel would show "Recording" for a
+      // call that is not recording and that stop() can never finish tearing
+      // down, since every retry hits the same throw.
+      this.warning = `Could not confirm the recording stopped: ${error.message}`;
+    }
     if (this.notes && this.notes.latest && this.handle) {
       try { this.handle.writeNotes(this.notes.latest); } catch { /* already reported via lastError */ }
     }
     // Capture before nulling the handle — otherwise a disk failure mid-meeting
     // vanishes the instant stop() completes, exactly when a UI would want to
     // ask "did this actually save?".
-    if (this.handle) this.storeErrorLatch = this.handle.lastError;
+    if (this.handle) {
+      this.storeErrorLatch = this.handle.lastError;
+      this.storeFailureCountLatch = this.handle.failureCount;
+    }
     this.handle = null;
     this.#publish();
   }
