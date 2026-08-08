@@ -23,6 +23,8 @@ const { classifyCommand } = require('./src/command-guard');
 const { AIService } = require('./core/ai-service');
 const { OllamaService } = require('./core/ollama-service');
 const { LocalVoiceService, shouldRestartVoice } = require('./core/local-voice-service');
+const { MeetingSession } = require('./core/meeting/meeting-session');
+const { MeetingStore } = require('./core/meeting/meeting-store');
 const { VoiceService } = require('./core/voice-service');
 const { Go2RtcManager } = require('./core/camera/go2rtc-manager');
 const { CameraService } = require('./core/camera/camera-service');
@@ -98,6 +100,7 @@ const terminalRunner = createCommandRunner({
 let ai;
 let ollama;
 let localVoice;
+let meetingSession;
 let voiceService;
 let folderWatch;
 let router;
@@ -604,6 +607,16 @@ function voiceDataRoot() {
   return path.join(app.getPath('userData'), 'voice');
 }
 
+// Lazy, like packagedScript/voiceDataRoot above — read at call time so a
+// settings change takes effect without a restart. Used both when a meeting
+// starts (readBrief) and by the meeting:briefs IPC handler, which lives in
+// setupIpc() — a separate top-level function that can't see a `const`
+// declared inside the whenReady callback, so this has to be hoisted here
+// rather than sitting next to meetingSession's construction.
+function briefsRoot() {
+  return config.getSettings().meetingBriefsDir || path.join(app.getPath('userData'), 'briefs');
+}
+
 let voiceSetupChild = null;
 
 function runLocalVoiceSetup() {
@@ -877,6 +890,38 @@ function setupIpc() {
   });
   ipcMain.handle('voice:setup', () => runLocalVoiceSetup());
   ipcMain.handle('voice:restart', () => { localVoice.stop(); setTimeout(() => localVoice.start(), 1700); return { ok: true }; });
+  ipcMain.handle('meeting:start', async (_event, options) => {
+    try {
+      await meetingSession.start(options || {});
+      return { ...meetingSession.state, error: null };
+    } catch (error) {
+      // store.open()'s mkdirSync deliberately still throws if the meetings
+      // folder can't be created (disk full, permissions, etc.), and
+      // voice.startMeeting() can throw the same way if local voice isn't
+      // running yet. Either way this must resolve to something the renderer
+      // can show, not reach it as an unhandled IPC rejection.
+      return { ...meetingSession.state, error: error.message };
+    }
+  });
+  ipcMain.handle('meeting:stop', async () => {
+    try {
+      await meetingSession.stop();
+      return { ...meetingSession.state, error: null };
+    } catch (error) {
+      return { ...meetingSession.state, error: error.message };
+    }
+  });
+  ipcMain.handle('meeting:ask', async (_event, question) => meetingSession.ask(String(question || '')));
+  ipcMain.handle('meeting:state', async () => meetingSession.state);
+  ipcMain.handle('meeting:briefs', async () => {
+    try {
+      return fs.readdirSync(briefsRoot())
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => f.replace(/\.md$/, ''));
+    } catch {
+      return [];
+    }
+  });
   ipcMain.handle('mobile:status', () => mobileServer.status());
   ipcMain.handle('mobile:devices', () => mobileAuth.listDevices());
   ipcMain.handle('mobile:revoke', (_event, id) => { const ok = mobileAuth.revoke(id); if (ok) saveMobileDevices(); return { ok }; });
@@ -1656,7 +1701,35 @@ app.whenReady().then(async () => {
     voiceRoot: voiceDataRoot(),
     scriptPath: packagedScript('local_voice.py'),
     config,
-    emit: sendEverywhere
+    // LocalVoiceService has no EventEmitter interface — `emit` here is the one
+    // callback it calls for every internal event (see wake:detected,
+    // voice:status, etc. above), same shape as CameraService's `emit` below.
+    // Same trick as that one: forward everything to the renderer, then add a
+    // side effect for the one channel meetingSession needs to see. The
+    // `meetingSession &&` guard covers the moment this fires before that
+    // `let` is assigned a few lines down.
+    emit: (channel, payload) => {
+      sendEverywhere(channel, payload);
+      if (channel === 'meeting:segment' && meetingSession) meetingSession.handleSegment(payload);
+    }
+  });
+  // Meeting mode: one session, start to finish, wired to the same local-voice
+  // process and the same AI service everything else in JARVIS uses. Briefs
+  // live in their own folder (default: the app's own userData/briefs) so a
+  // renamed or missing brief can't take the transcript down with it — that
+  // failure is handled inside MeetingSession.start, not here. A start that
+  // never gets a microphone or VAD going emits `meeting-error` from the
+  // Python side; local-voice-service.js turns that into a `meeting:error`
+  // event, which the `emit` wrapper above already forwards to the renderer
+  // via sendEverywhere — otherwise a failed start would be invisible.
+  const meetingRoot = path.join(app.getPath('userData'), 'meetings');
+  meetingSession = new MeetingSession({
+    voice: localVoice,
+    ai,
+    store: new MeetingStore({ root: meetingRoot }),
+    readBrief: (name) => fs.readFileSync(path.join(briefsRoot(), `${name}.md`), 'utf8'),
+    onState: (state) => sendEverywhere('meeting:state', state),
+    intervalMs: config.getSettings().meetingNotesIntervalMs || 120000
   });
   // JARVIS's speaking voice. localVoice above is the opposite direction —
   // that one hears (Whisper), this one talks (Kokoro).

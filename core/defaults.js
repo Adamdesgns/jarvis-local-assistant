@@ -26,6 +26,9 @@ const DEFAULT_SETTINGS = {
   localVoiceEnabled: true,
   localVoiceModel: 'small.en',
   wakeWordEnabled: true,
+  meetingHotkey: 'Ctrl+Shift+J',
+  meetingNotesIntervalMs: 120000,
+  meetingBriefsDir: '',
   // 0.55 matches the threshold that was hardcoded in local_voice.py before
   // this setting was wired through — wiring it must not shift behavior.
   wakeSensitivity: 0.55,

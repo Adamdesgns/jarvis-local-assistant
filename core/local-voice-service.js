@@ -153,6 +153,15 @@ class LocalVoiceService {
     } else if (message.type === 'status') {
       this.status = { ...this.status, message: message.message || this.status.message };
       this.emit('voice:status', { ...this.getStatus(), message: message.message });
+    } else if (message.type === 'meeting-segment') {
+      this.emit('meeting:segment', { text: message.text || '', dropped: message.dropped || 0 });
+    } else if (message.type === 'meeting-started' || message.type === 'meeting-stopped') {
+      this.emit('meeting:mode', { active: message.type === 'meeting-started' });
+    } else if (message.type === 'meeting-error') {
+      // Meeting mode failed to get a microphone or VAD going. Without this the
+      // renderer has no way to know the start it requested silently didn't
+      // happen — surfaced the same way voice:status carries other failures.
+      this.emit('meeting:error', { message: message.message || 'Meeting mode could not start.' });
     }
   }
 
@@ -229,6 +238,10 @@ class LocalVoiceService {
       this.#send({ type: 'transcribe', id, filePath });
     });
   }
+
+  startMeeting() { this.#send({ type: 'meeting-start' }); }
+
+  stopMeeting() { this.#send({ type: 'meeting-stop' }); }
 }
 
 const REPORT_ROWS = [
