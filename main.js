@@ -556,6 +556,12 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open JARVIS', click: restoreMainWindow },
     { label: 'Show Floating Orb', click: showOrb },
+    // The fallback path into the meeting panel when the hotkey is unavailable
+    // (see registerMeetingHotkey) — always present, not conditional on a
+    // failed registration, since it's useful regardless of collisions. Reuses
+    // openMeetingPanel() so there is exactly one place that creates/reuses the
+    // window, whether reached by hotkey or tray.
+    { label: 'Open Meeting Panel', click: () => openMeetingPanel() },
     { type: 'separator' },
     { label: 'Exit JARVIS', click: () => { isQuitting = true; app.quit(); } }
   ]));
@@ -570,7 +576,7 @@ function createTray() {
 function openMeetingPanel() {
   if (meetingWindow && !meetingWindow.isDestroyed()) {
     meetingWindow.show();
-    meetingWindow.setAlwaysOnTop(true);
+    meetingWindow.setAlwaysOnTop(true, 'screen-saver');
     meetingWindow.focus();
     return meetingWindow;
   }
@@ -597,16 +603,18 @@ function openMeetingPanel() {
   // because the drop was observed to happen at varying points in the
   // window's lifecycle, not only at creation. This window's whole reason to
   // exist is staying visible over Zoom/Chrome during a live call, so this is
-  // not optional.
-  meetingWindow.setAlwaysOnTop(true);
-  meetingWindow.on('show', () => { if (meetingWindow && !meetingWindow.isDestroyed()) meetingWindow.setAlwaysOnTop(true); });
-  meetingWindow.on('focus', () => { if (meetingWindow && !meetingWindow.isDestroyed()) meetingWindow.setAlwaysOnTop(true); });
+  // not optional. 'screen-saver' is used (not the default 'floating' level)
+  // for the same reason driveStopWindow uses it: it outranks ordinary
+  // always-on-top windows, and Zoom/Teams set their own topmost windows.
+  meetingWindow.setAlwaysOnTop(true, 'screen-saver');
+  meetingWindow.on('show', () => { if (meetingWindow && !meetingWindow.isDestroyed()) meetingWindow.setAlwaysOnTop(true, 'screen-saver'); });
+  meetingWindow.on('focus', () => { if (meetingWindow && !meetingWindow.isDestroyed()) meetingWindow.setAlwaysOnTop(true, 'screen-saver'); });
   meetingWindow.loadFile(path.join(__dirname, 'src', 'meeting-window.html'));
   attachEditingShortcuts(meetingWindow);
   meetingWindow.once('ready-to-show', () => {
     if (meetingWindow && !meetingWindow.isDestroyed()) {
       meetingWindow.show();
-      meetingWindow.setAlwaysOnTop(true);
+      meetingWindow.setAlwaysOnTop(true, 'screen-saver');
     }
   });
   meetingWindow.on('closed', () => { meetingWindow = null; });
@@ -614,8 +622,9 @@ function openMeetingPanel() {
 }
 
 // Registers the global hotkey from settings (default Ctrl+Shift+J). Also
-// called again if the setting changes, which is why unregisterAll() runs
-// first rather than trying to diff old vs. new.
+// called again when the meetingHotkey setting changes (see settings:save),
+// which is why unregisterAll() runs first rather than trying to diff old vs.
+// new — that also guarantees a stale binding never lingers past a rebind.
 function registerMeetingHotkey() {
   const wanted = config.getSettings().meetingHotkey || 'Ctrl+Shift+J';
   globalShortcut.unregisterAll();
@@ -628,11 +637,21 @@ function registerMeetingHotkey() {
     // the combination. The meeting must still work — this only means the
     // panel can't be raised by hotkey — so this reports rather than throws.
     // meetingSession is guaranteed to exist by the time this is called (see
-    // call site in app.whenReady). Broadcasting through meeting:state, not a
-    // one-off dialog, is deliberate: it's the same channel the panel and the
-    // eventual settings UI already listen on, so the message lands wherever
-    // the user is looking rather than only in a toast that vanishes.
+    // call site in app.whenReady). meeting:state only reaches meetingWindow,
+    // which is exactly the window the user has no way to open right now, so
+    // that broadcast alone would land on zero listeners. A system notification
+    // is the surface guaranteed to be visible regardless of which window (if
+    // any) is open, and the tray's "Open Meeting Panel" item is the fallback
+    // path in — same openMeetingPanel() the hotkey uses, no duplicate window
+    // logic.
     sendEverywhere('meeting:state', { ...meetingSession.state, warning: `Hotkey ${wanted} is taken by another app.` });
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'JARVIS meeting hotkey unavailable',
+        body: `${wanted} is already used by another app. Open the meeting panel from the tray icon instead.`,
+        icon: path.join(__dirname, 'assets', 'icon.png')
+      }).show();
+    }
   }
   return ok;
 }
@@ -1189,6 +1208,7 @@ function setupIpc() {
     if (previous.orbSkin !== updated.orbSkin || previous.orbColor !== updated.orbColor) {
       sendEverywhere('orb:prefs', { orbSkin: updated.orbSkin || 'plasma', orbColor: updated.orbColor || 'obsidian' });
     }
+    if (previous.meetingHotkey !== updated.meetingHotkey) registerMeetingHotkey();
     if (updated.nightShiftEnabled === true && previous.nightShiftEnabled !== true) {
       return setupNightShift(updated);
     }
