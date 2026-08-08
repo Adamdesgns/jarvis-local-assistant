@@ -1823,6 +1823,27 @@ app.whenReady().then(async () => {
   // Python side; local-voice-service.js turns that into a `meeting:error`
   // event, which the `emit` wrapper above already forwards to the renderer
   // via sendEverywhere — otherwise a failed start would be invisible.
+  // Starter brief, first run only: if the folder doesn't exist yet, create it
+  // with one example so the picker in Settings → MEETINGS is never empty.
+  // Gated on the folder's existence, not the file's, so a brief the user has
+  // since edited or deleted is never overwritten or recreated out from under
+  // them.
+  const starterBriefsDir = briefsRoot();
+  if (!fs.existsSync(starterBriefsDir)) {
+    fs.mkdirSync(starterBriefsDir, { recursive: true });
+    fs.writeFileSync(path.join(starterBriefsDir, 'example.md'), [
+      '# Business',
+      'What you sell, in a sentence or two.',
+      '',
+      '# Pricing',
+      'Your real numbers. JARVIS will not invent any that are not here.',
+      '',
+      '# Objections',
+      '"Too expensive" - the answer that has worked.',
+      '"We already have X" - the answer that has worked.',
+      ''
+    ].join('\n'), 'utf8');
+  }
   const meetingRoot = path.join(app.getPath('userData'), 'meetings');
   meetingSession = new MeetingSession({
     voice: localVoice,

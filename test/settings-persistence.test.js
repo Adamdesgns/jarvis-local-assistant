@@ -50,6 +50,8 @@ const SAMPLES = {
   mobilePort: 27999,
   mobilePublicUrl: 'https://example.test',
   callEnabled: true,
+  meetingHotkey: 'Ctrl+Shift+M',
+  meetingNotesIntervalMs: 90000,
   claudeBridgeEnabled: true,
   screenControlEnabled: true,
   screenDriveEnabled: true,

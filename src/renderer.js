@@ -1865,6 +1865,58 @@ function initSettingsTabs() {
   }));
 }
 
+// MEETINGS tab: fills the brief picker once, wires start/stop, and renders
+// live state pushed from the main process. `notesError` (the model is
+// failing, recording is fine) and `storeError` (the transcript has stopped
+// reaching disk) are two different emergencies and are kept on separate
+// lines rather than collapsed into one message — same rule meeting-window.js
+// follows for the always-on-top panel.
+async function initMeetingsTab() {
+  const briefSel = $('meeting-brief');
+  const statusEl = $('meeting-status');
+  if (!briefSel || !statusEl || !window.jarvis?.startMeeting) return;
+
+  const briefs = await window.jarvis.meetingBriefs();
+  briefSel.innerHTML = '';
+  for (const name of briefs) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    briefSel.appendChild(option);
+  }
+
+  function renderMeetingStatus(meetingState) {
+    if (!meetingState) return;
+    if (!meetingState.active) { statusEl.textContent = 'Not recording.'; return; }
+    const lines = [`Recording — ${meetingState.segments || 0} segment(s).`];
+    if (meetingState.storeError) lines.push(`Not saving to disk: ${meetingState.storeError}`);
+    if (meetingState.notesError) lines.push(`Notes paused: ${meetingState.notesError}`);
+    if (meetingState.warning) lines.push(meetingState.warning);
+    statusEl.textContent = lines.join(' ');
+  }
+
+  $('meeting-start').addEventListener('click', async () => {
+    const prospect = $('meeting-prospect').value.trim();
+    const result = await window.jarvis.startMeeting({ briefName: briefSel.value, prospect, title: prospect });
+    // startMeeting's return value carries an `error` field the pushed state
+    // never has — a start that never got a microphone or VAD going must not
+    // look like a quiet meeting where nobody has spoken yet.
+    if (result && result.error) { statusEl.textContent = `Could not start: ${result.error}`; return; }
+    renderMeetingStatus(result);
+  });
+  $('meeting-stop').addEventListener('click', async () => {
+    const result = await window.jarvis.stopMeeting();
+    renderMeetingStatus(result);
+  });
+
+  window.jarvis.onMeetingState(renderMeetingStatus);
+  window.jarvis.onMeetingError((payload) => {
+    statusEl.textContent = `Meeting error: ${(payload && payload.message) || 'could not start.'}`;
+  });
+
+  renderMeetingStatus(await window.jarvis.meetingState());
+}
+
 function openSettings(tab = 'general') {
   $('setting-ollama-model').value = state.settings.ollamaModel || 'qwen3:8b';
   const presets = ['qwen3:4b', 'qwen3:8b', 'qwen3:14b'];
@@ -1927,6 +1979,11 @@ function openSettings(tab = 'general') {
   $('setting-mobile-port').value = state.settings.mobilePort || 27183;
   $('setting-mobile-public-url').value = state.settings.mobilePublicUrl || '';
   $('call-enabled').checked = Boolean(state.settings.callEnabled);
+  $('meeting-hotkey').value = state.settings.meetingHotkey || 'Ctrl+Shift+J';
+  // Stored in milliseconds; shown in seconds — divide on load, multiply on
+  // save (see saveSettings). Getting this backwards gives a two-millisecond
+  // refresh interval and hammers the API.
+  $('meeting-interval').value = Math.round((state.settings.meetingNotesIntervalMs || 120000) / 1000);
   $('setting-claude-bridge').checked = Boolean(state.settings.claudeBridgeEnabled);
   $('setting-screen-control').checked = Boolean(state.settings.screenControlEnabled);
   $('setting-screen-drive').checked = Boolean(state.settings.screenDriveEnabled);
@@ -1982,6 +2039,11 @@ async function saveSettings(event) {
     mobilePort: Number($('setting-mobile-port').value) || 27183,
     mobilePublicUrl: $('setting-mobile-public-url').value.trim(),
     callEnabled: $('call-enabled').checked,
+    meetingHotkey: $('meeting-hotkey').value.trim() || 'Ctrl+Shift+J',
+    // Field is seconds, setting is milliseconds — multiply here, divide in
+    // openSettings. min="30" in the markup keeps a stray 0/blank from
+    // producing a near-zero interval that would hammer the API.
+    meetingNotesIntervalMs: Math.max(30, Number($('meeting-interval').value) || 120) * 1000,
     claudeBridgeEnabled: $('setting-claude-bridge').checked,
     screenControlEnabled: $('setting-screen-control').checked,
     screenDriveEnabled: $('setting-screen-drive').checked,
@@ -2221,6 +2283,7 @@ function bindEvents() {
   });
 
   initSettingsTabs();
+  initMeetingsTab();
   $('settings-button').addEventListener('click', () => openSettings());
   // Cameras module: ＋ ADD sends you to the one place linking happens.
   $('camera-add-toggle')?.addEventListener('click', () => openSettings('cameras'));

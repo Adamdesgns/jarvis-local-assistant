@@ -519,6 +519,27 @@
             <button type="button" id="call-unpair" class="outline-action">FORGET THE OTHER PC</button>
             <small>Pair once: show a code on one PC, type it on the other within 2 minutes. Calls never leave your Tailscale line.</small>
           </section>
+          <section data-tab="meetings">
+            <h3>MEETING MODE</h3>
+            <p>JARVIS listens, keeps notes, and answers on your hotkey. The wake word is
+               off while a meeting runs.</p>
+
+            <label for="meeting-brief">Brief</label>
+            <select id="meeting-brief"></select>
+
+            <label for="meeting-prospect">Who are you talking to?</label>
+            <input id="meeting-prospect" type="text" placeholder="Dave at Lucedale Auto" />
+
+            <button type="button" id="meeting-start" class="primary-action">START MEETING</button>
+            <button type="button" id="meeting-stop" class="outline-action">STOP MEETING</button>
+            <p id="meeting-status"></p>
+
+            <label for="meeting-hotkey">Hotkey</label>
+            <input id="meeting-hotkey" type="text" />
+
+            <label for="meeting-interval">Notes refresh (seconds)</label>
+            <input id="meeting-interval" type="number" min="30" step="30" />
+          </section>
           <section data-tab="system">
             <h3>PROJECT WORKSPACES</h3>
             <div class="folder-setting"><span><b>ANVIL</b><small id="folder-anvil">Not assigned</small></span><button type="button" data-folder="anvil">CHOOSE</button></div>

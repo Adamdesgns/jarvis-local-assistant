@@ -129,7 +129,13 @@ class ConfigStore {
       // auto-triggers) — same silent-reset bug, same guard.
       'nightShiftEnabled', 'nightShiftStart', 'nightShiftEnd', 'nightShiftMaxJobs',
       'nightShiftMaxMinutes', 'nightShiftCloudBudgetUsd', 'nightShiftFolder',
-      'heartbeatEnabled', 'heartbeatMinutes', 'defense'
+      'heartbeatEnabled', 'heartbeatMinutes', 'defense',
+      // Meeting mode: the hotkey (re-registered live on save, see main.js's
+      // settings:save handler) and the notes-refresh interval. Same
+      // silent-reset trap as the keys above — both existed in defaults.js
+      // since Task 7 but were never added here, so Settings → MEETINGS would
+      // have applied them live and then silently reverted on save.
+      'meetingHotkey', 'meetingNotesIntervalMs'
       // 'license' is intentionally NOT in this list: settings:save is
       // renderer-reachable, and license state must only ever be written by
       // the main-process LicenseService through setLicenseState below.
