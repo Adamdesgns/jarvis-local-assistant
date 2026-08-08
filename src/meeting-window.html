@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Meeting</title>
+    <style>
+      body { margin: 0; padding: 12px; font-size: 13px; font-family: var(--font-ui, system-ui), sans-serif; background: var(--bg, #000); color: var(--text-primary, #ece7db); }
+      /* Two separate emergencies (notesError vs storeError) plus meeting-error
+         and the plain "warning" field all land in this one line, joined so
+         none of them silently overwrite another — see meeting-window.js. */
+      #warning { color: #f0a93b; margin-bottom: 8px; white-space: pre-wrap; }
+      #warning:empty { display: none; }
+      #notes { white-space: pre-wrap; line-height: 1.5; }
+      #answer { white-space: pre-wrap; margin-top: 12px; border-top: 1px solid #333; padding-top: 8px; }
+      #answer:empty { display: none; }
+      #question {
+        width: 100%; box-sizing: border-box; margin-top: 8px;
+        background: var(--bg-raise, #0b0c0d); color: inherit;
+        border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 4px;
+        padding: 6px 8px; font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="warning"></div>
+    <div id="notes">Waiting for the meeting to start…</div>
+    <div id="answer"></div>
+    <input id="question" type="text" placeholder="Ask JARVIS… (Enter)" />
+    <script src="meeting-window.js"></script>
+  </body>
+</html>

@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const {
   app, BrowserWindow, ipcMain, dialog, shell, safeStorage, session,
-  Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor
+  Menu, clipboard, Tray, nativeImage, Notification, screen, systemPreferences, desktopCapturer, powerMonitor,
+  globalShortcut
 } = require('electron');
 const { ConfigStore } = require('./core/config-store');
 const { PRO_FEATURES, isPro, gateSettingsPatch, applyLicenseToSettings, featureAllowed } = require('./core/license-gate');
@@ -101,6 +102,7 @@ let ai;
 let ollama;
 let localVoice;
 let meetingSession;
+let meetingWindow = null;
 let voiceService;
 let folderWatch;
 let router;
@@ -133,7 +135,11 @@ const gotLock = captureMode ? true : app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
 function sendEverywhere(channel, payload) {
-  for (const window of [mainWindow, widgetWindow]) {
+  // meetingWindow is in this list because it is the only surface `meeting:state`
+  // and `meeting:error` need to reach beyond the main window: without it the
+  // panel would show its one-time `meetingState()` snapshot and then never
+  // update again for the rest of the call.
+  for (const window of [mainWindow, widgetWindow, meetingWindow]) {
     if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
   }
 }
@@ -554,6 +560,81 @@ function createTray() {
     { label: 'Exit JARVIS', click: () => { isQuitting = true; app.quit(); } }
   ]));
   tray.on('double-click', restoreMainWindow);
+}
+
+// The one way to reach JARVIS mid-call: the user is on a live sales call and
+// cannot say the wake word out loud (meeting mode suspends it for exactly
+// that reason), so this window and the hotkey that raises it are the only
+// path in. Always-on-top and reused rather than recreated so a second press
+// of the hotkey focuses the existing panel instead of stacking a new one.
+function openMeetingPanel() {
+  if (meetingWindow && !meetingWindow.isDestroyed()) {
+    meetingWindow.show();
+    meetingWindow.setAlwaysOnTop(true);
+    meetingWindow.focus();
+    return meetingWindow;
+  }
+  meetingWindow = new BrowserWindow({
+    width: 380,
+    height: 520,
+    show: false,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    title: 'Meeting',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false
+    }
+  });
+  // The `alwaysOnTop: true` constructor option alone was observed (during
+  // manual verification) to be dropped unpredictably once the window later
+  // goes through show()/focus() on this Windows build — the same reason
+  // driveStopWindow above pairs its constructor option with an explicit
+  // setAlwaysOnTop() call. Re-asserted on every show/focus rather than once,
+  // because the drop was observed to happen at varying points in the
+  // window's lifecycle, not only at creation. This window's whole reason to
+  // exist is staying visible over Zoom/Chrome during a live call, so this is
+  // not optional.
+  meetingWindow.setAlwaysOnTop(true);
+  meetingWindow.on('show', () => { if (meetingWindow && !meetingWindow.isDestroyed()) meetingWindow.setAlwaysOnTop(true); });
+  meetingWindow.on('focus', () => { if (meetingWindow && !meetingWindow.isDestroyed()) meetingWindow.setAlwaysOnTop(true); });
+  meetingWindow.loadFile(path.join(__dirname, 'src', 'meeting-window.html'));
+  attachEditingShortcuts(meetingWindow);
+  meetingWindow.once('ready-to-show', () => {
+    if (meetingWindow && !meetingWindow.isDestroyed()) {
+      meetingWindow.show();
+      meetingWindow.setAlwaysOnTop(true);
+    }
+  });
+  meetingWindow.on('closed', () => { meetingWindow = null; });
+  return meetingWindow;
+}
+
+// Registers the global hotkey from settings (default Ctrl+Shift+J). Also
+// called again if the setting changes, which is why unregisterAll() runs
+// first rather than trying to diff old vs. new.
+function registerMeetingHotkey() {
+  const wanted = config.getSettings().meetingHotkey || 'Ctrl+Shift+J';
+  globalShortcut.unregisterAll();
+  const ok = globalShortcut.register(wanted, () => {
+    const win = openMeetingPanel();
+    win.focus();
+  });
+  if (!ok) {
+    // Registration fails when another app (Zoom, Chrome, etc.) already owns
+    // the combination. The meeting must still work — this only means the
+    // panel can't be raised by hotkey — so this reports rather than throws.
+    // meetingSession is guaranteed to exist by the time this is called (see
+    // call site in app.whenReady). Broadcasting through meeting:state, not a
+    // one-off dialog, is deliberate: it's the same channel the panel and the
+    // eventual settings UI already listen on, so the message lands wherever
+    // the user is looking rather than only in a toast that vanishes.
+    sendEverywhere('meeting:state', { ...meetingSession.state, warning: `Hotkey ${wanted} is taken by another app.` });
+  }
+  return ok;
 }
 
 function isAllowedPath(target) {
@@ -1793,6 +1874,7 @@ app.whenReady().then(async () => {
   setupIpc();
   createMainWindow();
   createTray();
+  registerMeetingHotkey();
   // A camera wall should survive a restart: reopen whatever was popped out, on
   // the monitor it was left on. Deferred so the main window paints first, and so
   // a camera account that fails to reconnect cannot delay startup.
@@ -1841,3 +1923,4 @@ app.on('before-quit', () => {
   cameras?.shutdown();
 });
 app.on('window-all-closed', () => { if (isQuitting) app.quit(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); });
