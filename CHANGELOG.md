@@ -40,6 +40,7 @@
   animating at full rate while their window was hidden; they now stop on
   `visibilitychange` and resume on return, like halation and plasma always
   did.
+
 ### Added — Blink live view
 - Blink cameras used to say *"This camera does not support live view — snapshots
   only."* They can now be watched live.
