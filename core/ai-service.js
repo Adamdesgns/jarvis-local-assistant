@@ -11,6 +11,25 @@ const { normalizeOllama, normalizeAnthropic, anthropicTools, OpenAIResponsesSess
 // registry later (like open_application) is denied unattended by default
 // until someone explicitly marks it unattendedSafe: true.
 
+// The local brain's speed knobs, in ONE place. Both /api/chat call sites in
+// this file used to hardcode their own options object and had already drifted
+// apart (num_ctx 4096 in one, 8192 in the other) — same shape of bug as the
+// installer version string. Everything reads from settings so a user can tune
+// it without a rebuild. Exported for tests.
+function localTuning(settings = {}) {
+  const ctx = Number(settings.localNumCtx);
+  return {
+    keep_alive: settings.localKeepAlive || '30m',
+    // Ollama treats `think` as opt-in per request; only reasoning models read
+    // it, and a non-reasoning model ignores it rather than erroring.
+    think: settings.localThinking === true,
+    options: {
+      temperature: 0.35,
+      num_ctx: Number.isFinite(ctx) && ctx > 0 ? ctx : 8192
+    }
+  };
+}
+
 // Folds one parsed NDJSON chunk from Ollama's streaming chat API into an
 // accumulator of { content, toolCalls }. Exported for tests.
 function accumulateStreamChunk(state, chunk) {
@@ -234,7 +253,7 @@ class AIService {
           body: JSON.stringify({
             model, stream: true, messages,
             ...(withTools && this.registry ? { tools: toolSpecs(this.#registryFor(context)) } : {}),
-            options: { temperature: 0.35, num_ctx: 4096 }
+            ...localTuning(settings)
           }),
           signal: controller.signal
         });
@@ -490,7 +509,7 @@ class AIService {
     const response = await fetch('http://127.0.0.1:11434/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, stream: true, messages: wire, ...(specs && specs.length ? { tools: specs } : {}), options: { temperature: 0.35, num_ctx: 8192 } }),
+      body: JSON.stringify({ model, stream: true, messages: wire, ...(specs && specs.length ? { tools: specs } : {}), ...localTuning(this.config.getSettings()) }),
       signal: controller.signal
     });
     if (!response.ok) {
@@ -643,4 +662,4 @@ class AIService {
   }
 }
 
-module.exports = { AIService, accumulateStreamChunk };
+module.exports = { AIService, accumulateStreamChunk, localTuning };

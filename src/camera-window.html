@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob: http://127.0.0.1:*; connect-src http://127.0.0.1:*; frame-src 'none'">
+  <title>Camera</title>
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    /* Frameless, so the top bar is the only way to move the window. Kept slim
+       and dark so a wall of these reads as video, not as chrome. */
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    body { display: flex; flex-direction: column; font-family: var(--font-ui, system-ui), sans-serif; }
+
+    #bar {
+      -webkit-app-region: drag;
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; background: rgba(12, 12, 14, 0.96);
+      border-bottom: 1px solid rgba(255, 176, 32, 0.18);
+      color: #f5c86a; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+      flex: 0 0 auto; user-select: none;
+    }
+    #dot { width: 7px; height: 7px; border-radius: 50%; background: #4ad07a; flex: 0 0 auto; }
+    #dot[data-live="off"] { background: #6b6b70; }
+    #name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #bar button {
+      -webkit-app-region: no-drag;
+      background: transparent; border: 1px solid rgba(255, 176, 32, 0.28); border-radius: 4px;
+      color: #f5c86a; cursor: pointer; font: inherit; padding: 2px 8px;
+    }
+    #bar button:hover { background: rgba(255, 176, 32, 0.14); }
+
+    #stage { position: relative; flex: 1 1 auto; min-height: 0; background: #000; }
+    video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+    #status {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      padding: 16px; text-align: center; color: #cbb68a; font-size: 12px; line-height: 1.5;
+    }
+    #status[hidden] { display: none; }
+    #status.error { color: #ff9a8a; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <i id="dot" data-live="off"></i>
+    <span id="name">Camera</span>
+    <button id="retry" type="button" hidden>RETRY</button>
+    <button id="close" type="button" aria-label="Close this camera window">CLOSE</button>
+  </div>
+  <div id="stage">
+    <video muted autoplay playsinline></video>
+    <p id="status">Connecting…</p>
+  </div>
+
+  <!-- Same player the grid uses, so there is one implementation of the WebRTC
+       and MPEG-TS paths rather than two that drift apart. -->
+  <script src="../node_modules/mpegts.js/dist/mpegts.js"></script>
+  <script src="sdp-align.js"></script>
+  <script src="live-player.js"></script>
+  <script src="camera-window.js"></script>
+</body>
+</html>

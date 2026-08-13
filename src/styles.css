@@ -91,7 +91,12 @@ button { cursor: pointer; }
 .reforming #hologram { animation: reform .8s var(--ease); }
 
 /* ---------- floating modules ---------- */
-.module-layer { position: absolute; inset: 0 0 132px; z-index: 10; pointer-events: none; }
+/* Modules use the whole workspace, right to the bottom edge (Adam,
+   2026-08-04: "all the windows lock at that level they need to move full
+   screen. everything"). The 132px that used to be reserved here was for the
+   command bar, but that dock sits at z-index 40 -- above this layer -- and can
+   be closed outright, so reserving drag space for it only cost usable screen. */
+.module-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
 .module { position: absolute; min-width: 260px; min-height: 190px; display: flex; flex-direction: column; pointer-events: auto; background: var(--surface-glass); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-soft), var(--inset-highlight); backdrop-filter: blur(20px); overflow: hidden; transition: opacity .25s, transform var(--dur-med) var(--ease), border-color var(--dur-fast), box-shadow var(--dur-med) var(--ease); }
 .module.hidden-module { display: none; }
 .module.collapsed { min-height: 56px !important; height: 56px !important; }
@@ -349,7 +354,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(10px) }
 @media(max-width:1100px) { .brand { min-width: 220px } .hud-button { padding: 0 8px } .stage-label { display: none } .response-dock { width: calc(100vw - 36px) } .settings-grid { grid-template-columns: 1fr } .wide-setting { grid-column: auto } }
 /* On a short screen the bands give up what little they hold — the sphere's own
    inscribed margin is doing the clearance work, and every pixel here is orb. */
-@media(max-height:720px) { .topbar { height: 52px } .workspace { height: calc(100vh - 52px) } .module-drawer { top: 52px } .jarvis-stage, .module-layer { bottom: 110px } .jarvis-stage { --stage-top-band: 16px; --stage-bottom-band: 20px } .central-copy { top: 4px } .response-dock { height: 96px } .response-line { height: 34px } .command-form { height: 40px } .voice-line { height: 18px } }
+@media(max-height:720px) { .topbar { height: 52px } .workspace { height: calc(100vh - 52px) } .module-drawer { top: 52px } .jarvis-stage { bottom: 110px } .jarvis-stage { --stage-top-band: 16px; --stage-bottom-band: 20px } .central-copy { top: 4px } .response-dock { height: 96px } .response-line { height: 34px } .command-form { height: 40px } .voice-line { height: 18px } }
 
 #connect-ollama { margin-right: 5px }
 #connect-ollama:disabled { opacity: .65; cursor: wait }
@@ -904,3 +909,20 @@ body.defense #autonomy-cards { display: none; }
 #call-controls { display: flex; gap: 12px; align-items: center; }
 #call-timer { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-muted, #9aa); min-width: 44px; }
 #call-status-line { margin: 0; font-size: 13px; color: var(--text-muted, #9aa); }
+
+/* A camera playing in its own window: the tile is a signpost, not a player, so
+   it recedes rather than looking like a dead picture. */
+.camera-tile[data-popped-out='yes'] .camera-view { opacity: 0.55; }
+.camera-tile[data-popped-out='yes'] .camera-view-empty {
+  color: var(--amber, #f5c86a);
+  letter-spacing: 0.08em;
+}
+.camera-tile[data-popped-out='yes'] .camera-live { opacity: 0.3; cursor: default; }
+
+/* Hide is the calm option above the red one, and the SHOW ALL line brings
+   hidden cameras back without a trip into settings. */
+.camera-hide { display: block; width: 100%; text-align: left; border: 0; border-radius: 6px; background: transparent; color: var(--text-dim, #cbb68a); font: 500 var(--text-xs)/1.4 var(--ui); padding: 8px 10px; cursor: pointer }
+.camera-hide:hover { background: rgba(255, 176, 32, 0.12) }
+.camera-hidden-note { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; color: var(--text-dim, #cbb68a); font: 500 var(--text-xs)/1.4 var(--ui); padding: 4px 2px }
+.camera-hidden-note .camera-show-all { border: 1px solid rgba(255, 176, 32, 0.3); border-radius: 6px; background: transparent; color: var(--amber, #f5c86a); font: inherit; padding: 3px 10px; cursor: pointer }
+.camera-hidden-note .camera-show-all:hover { background: rgba(255, 176, 32, 0.12) }

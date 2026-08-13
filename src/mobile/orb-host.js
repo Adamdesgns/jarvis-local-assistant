@@ -17,11 +17,11 @@
     constructor(stage) {
       this.stage = stage;
       this.state = 'ready';
-      this.skin = 'original';
-      this.color = 'gold';
+      this.skin = 'plasma';
+      this.color = 'obsidian';
       this.canvas = null;
       this.instance = null;
-      this.desktop = { orbSkin: 'original', orbColor: 'gold' };
+      this.desktop = { orbSkin: 'plasma', orbColor: 'obsidian' };
     }
 
     apply({ skin, color }) {
@@ -65,7 +65,7 @@
       const res = await fetch('/api/orb-prefs', { headers: { Authorization: `Bearer ${key}` } });
       if (!res.ok) return;
       const prefs = await res.json();
-      host.desktop = { orbSkin: prefs.orbSkin || 'original', orbColor: prefs.orbColor || 'gold' };
+      host.desktop = { orbSkin: prefs.orbSkin || 'plasma', orbColor: prefs.orbColor || 'obsidian' };
       const pick = chosen();
       host.apply({ skin: pick.skin, color: pick.color });
     } catch {
