@@ -1,6 +1,6 @@
 # JARVIS Changelog
 
-## 0.20.0 — August 6, 2026
+## 0.20.0 — August 13, 2026
 
 ### Added — the ULTRON orb, and voices that actually move the orbs
 - A ninth skin: **Ultron** — a rotating holographic wireframe sphere with four
