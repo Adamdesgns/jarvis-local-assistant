@@ -19,6 +19,8 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
 
 ## NOW
 
+Everything in NOW is done — the live queue starts at NEXT.
+
 - [x] **THE TERMINAL, stage 1: the module** — an in-app terminal panel, matrix-rain
       styled, themed to the active skin AND the chosen orb accent (gold/obsidian —
       read `orbSkin`/`orbColor` settings). Stage 1 is a JARVIS console: live feed of
@@ -121,8 +123,8 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
 
 ## NEXT
 
-- [x] **THE BROWSER, stage 1: surf inside JARVIS** — **BUILT 2026-07-25** (branch
-      `browser-stage1`, unmerged). `<webview>` (NOT WebContentsView — it would paint
+- [x] **THE BROWSER, stage 1: surf inside JARVIS** — **BUILT 2026-07-25, merged and
+      shipped in the 0.19.0 installer.** `<webview>` (NOT WebContentsView — it would paint
       over approval cards) + main-process wall: `core/browser-guard.js` rewrites
       every attach (no preload, forced `persist:jarvis-browser` partition, no node),
       permissions deny-all, downloads blocked, http/https only, new windows → tabs,
@@ -145,11 +147,15 @@ screenshot or a 15-second clip, plus quiet fixes underneath.
       ferrofluid, glass caustics, storm core w/ lightning, galaxy spiral.
       (Electron offscreen rendering: NO bufferless gl_VertexID draws — a prior
       WebGL variant hard-crashed the renderer. Conventional WebGL or canvas-2D.)
-- [ ] **Kokoro voice wiring** — Voicebox v0.5.0 is installed; wire it, pick preset.
+- [x] **Kokoro voice wiring** — shipped: Kokoro is the default TTS engine
+      (`core/defaults.js`: `ttsEngine: 'kokoro'`, `kokoroVoice: 'bm_daniel'`).
+      The Voicebox plan this entry described was superseded by the in-process
+      kokoro-js path.
 
 ## LATER
 
-- [x] **DEFENSE MODE phases 1–3 BUILT** *(2026-07-25, branch `defense-mode`, unmerged)* — the
+- [x] **DEFENSE MODE phases 1–3 BUILT** *(2026-07-25; merged, shipped in the 0.19.0
+      installer)* — the
       situation-board posture: every camera live on a fullscreen wall, banner naming the
       trigger + time, Esc/"stand down" always exits. NWS county alerts (warning tier only)
       + opt-in auto-triggers with the 15-second announce-and-wave-off, RSS headlines, and
