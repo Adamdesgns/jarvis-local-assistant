@@ -7,6 +7,10 @@ function on(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('jarvis', {
+  // Real window visibility, pushed from the main process because the
+  // occlusion-tracking disable pins document.hidden to false in every page.
+  // Consumed by src/visibility-shim.js before any orb script runs.
+  onWindowVisibility: (callback) => on('window:visibility', callback),
   bootstrap: () => ipcRenderer.invoke('bootstrap'),
   telemetry: () => ipcRenderer.invoke('telemetry'),
   submitCommand: (text, project) => ipcRenderer.invoke('command:submit', { text, project }),

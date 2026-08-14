@@ -14,6 +14,7 @@ const { LicenseService } = require('./core/license-service');
 const { ActivityLog } = require('./core/activity-log');
 const { Transcript } = require('./core/transcript');
 const { CrashLog, installProcessHandlers } = require('./core/crash-log');
+const { wireVisibilitySignal } = require('./core/window-visibility');
 const { MemoryStore } = require('./core/memory-store');
 const { TaskStore } = require('./core/task-store');
 const { ToolService } = require('./core/tool-service');
@@ -233,6 +234,11 @@ function createMainWindow() {
   });
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   attachEditingShortcuts(mainWindow);
+  // Occlusion tracking is off app-wide (see the disable-features switch at the
+  // top), so document.hidden never fires in the page. This pushes the window's
+  // real visibility over IPC instead; without it a hidden JARVIS renders the
+  // orb at full framerate forever.
+  wireVisibilitySignal(mainWindow);
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     if (process.argv.includes('--dev')) mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -514,6 +520,7 @@ function createWidgetWindow() {
     }
   });
   widgetWindow.loadFile(path.join(__dirname, 'src', 'widget.html'));
+  wireVisibilitySignal(widgetWindow);
   widgetWindow.webContents.on('did-finish-load', () => {
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('ui:skin', currentSkin);
   });
