@@ -231,8 +231,18 @@ test('kills a process that outruns its timeout and reports it', async () => {
   const { runner, children } = harness();
   const promise = runner.run({ command: 'dir', cwd: APPROVED, timeoutMs: 10 });
   await tick();
-  // Never emit close — this is the hung case.
-  const result = await promise;
+  // Never emit close — this is the hung case. The runner's timeout timer is
+  // deliberately unref'd (a hung child must not hold the app open), so with a
+  // fake child there is nothing else keeping the event loop alive and newer
+  // Node exits before the 10ms fires, cancelling this test and everything
+  // after it in the file. Hold the loop open until the promise settles.
+  const hold = setInterval(() => {}, 20);
+  let result;
+  try {
+    result = await promise;
+  } finally {
+    clearInterval(hold);
+  }
 
   assert.equal(result.timedOut, true);
   assert.equal(children[0].killed, true, 'the child must actually be killed, not just reported');
