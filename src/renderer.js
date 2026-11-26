@@ -62,10 +62,20 @@ function showToast(message, duration = 3200) {
   showToast.timer = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
-function friendlyError(error) {
+// Voice errors used to collapse into one "not ready — install it" line, so a
+// buyer whose voice WAS installed (all diagnostics green) got told to install
+// it while the real cause — a crashed engine, a failed decode, a timeout —
+// was thrown away. Only say "install" when it genuinely isn't installed;
+// otherwise show the actual reason so it can be reported and fixed.
+function friendlyError(error, voiceStatus = (typeof state !== 'undefined' ? state.voiceStatus : undefined)) {
   const message = String(error?.message || error || 'Something went wrong.');
   if (/openai|api key|cloud brain|quota|billing/i.test(message)) return message;
-  if (/local voice|transcription|python|whisper/i.test(message)) return 'Local voice is not ready yet. Open Settings and select Install Local Voice.';
+  if (/local voice|transcription|python|whisper/i.test(message)) {
+    const notInstalled = /install local voice/i.test(message) || voiceStatus?.installed === false;
+    if (notInstalled) return 'Local voice is not installed yet. Open Settings and select Install Local Voice.';
+    const detail = message.replace(/^Error:\s*/i, '').replace(/[.\s]+$/, '').slice(0, 220);
+    return `Local voice hit a problem: ${detail}. If it keeps happening, open Voice Diagnostics and select Repair Voice.`;
+  }
   if (/ollama|fetch failed|ECONNREFUSED/i.test(message)) return 'Ollama is offline. Your tasks and file tools still work normally.';
   if (/permission|microphone|media/i.test(message)) return 'Windows is not allowing microphone access. Check Microphone Privacy settings.';
   return 'That command did not finish. Try it again or check Settings.';
@@ -2636,5 +2646,5 @@ async function initialize() {
 // Dual export, same pattern as src/skins.js: node:test can require this file
 // to unit-test isInterrupt() directly; the browser loads it as a classic
 // <script> where `module` is never defined, so this line is a no-op there.
-if (typeof module !== 'undefined' && module.exports) module.exports = { isInterrupt, INTERRUPT_PHRASES, shouldAttemptResume };
+if (typeof module !== 'undefined' && module.exports) module.exports = { isInterrupt, INTERRUPT_PHRASES, shouldAttemptResume, friendlyError };
 if (typeof window !== 'undefined') window.addEventListener('DOMContentLoaded', initialize);

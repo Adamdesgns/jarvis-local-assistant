@@ -5,7 +5,7 @@ account, no telemetry. Say **"Hey Jarvis"** — the wake word and speech
 recognition run 100% locally. An animated amber holographic interface with a
 floating orb when minimized.
 
-**[⬇ Download the latest JARVIS-FREE-SETUP.exe](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest)**
+**[⬇ Download the latest JARVIS installer](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest)** · **[📘 Step-by-step install guide](INSTALL.md)** · Help: [steamercook@yahoo.com](mailto:steamercook@yahoo.com?subject=JARVIS%20help)
 
 > Windows SmartScreen will warn about an unknown publisher — this is a free,
 > unsigned app. Click **More info → Run anyway**. Verify your download against
@@ -49,7 +49,11 @@ floating orb when minimized.
 
 ## Install
 
-1. Download **JARVIS-FREE-SETUP.exe** from [Releases](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest) and run it.
+**New to this? Follow the [step-by-step install guide](INSTALL.md)** — about 15 minutes, everything included.
+
+Short version:
+
+1. Download the JARVIS **`.exe`** under Assets on [Releases](https://github.com/Adamdesgns/jarvis-local-assistant/releases/latest) and run it.
 2. In Settings, click **INSTALL / REPAIR LOCAL VOICE** and watch the progress line (needs [Python 3.12](https://www.python.org/downloads/) — the installer fetches it via winget if missing).
 3. Optional: install [Ollama for Windows](https://ollama.com/download/windows) and click **CONNECT / REPAIR OLLAMA** for local conversation.
 4. Optional: add a Claude or OpenAI API key for the cloud brain and screen vision.
