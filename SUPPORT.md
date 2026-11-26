@@ -1,7 +1,7 @@
 # JARVIS Support
 
 Short, practical fixes for the most common issues. JARVIS is free software
-provided as-is (see LICENSE); there is no paid support line.
+provided as-is (see LICENSE). New here? Start with [INSTALL.md](INSTALL.md).
 
 ## Voice does not work
 
@@ -11,7 +11,7 @@ exactly what to fix. Then:
 1. Press **REPAIR VOICE** and wait for it to finish (it installs a small Python
    environment and the free models — a few minutes the first time).
 2. Press **TEST MICROPHONE** and say a short phrase; it plays back what it heard.
-3. Press **TEST "HEY JARVIS"** to confirm the wake word.
+3. Press **TEST THE WAKE WORD** to confirm the wake word.
 4. If anything is still red, press **COPY DIAGNOSTIC REPORT** and keep it — it
    describes the failing layer and contains no personal data or secrets.
 
@@ -32,13 +32,15 @@ then in Settings press **CONNECT / REPAIR OLLAMA**.
 
 ## Modules moved somewhere I can't reach
 
-Open the **MODULES** menu → **RESET DEFAULT LAYOUT**.
+Open the **＋ Modules** menu → **RESET DEFAULT LAYOUT**.
 
 ## Where is my data?
 
 See PRIVACY.md. Everything is under `%APPDATA%\jarvis-local-assistant`.
 
 ## Reporting a problem
+
+Email **[steamercook@yahoo.com](mailto:steamercook@yahoo.com?subject=JARVIS%20help)**, or open an issue on GitHub.
 
 Note the JARVIS version (Settings footer), what you did, and what happened. If it
 is voice-related, include the diagnostic report. Keep a backup of your data via
