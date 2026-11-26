@@ -1,5 +1,16 @@
 # JARVIS Changelog
 
+## 0.20.1 — November 26, 2026
+
+### Fixed — voice errors no longer pretend voice isn't installed
+- When voice was installed and every Voice Diagnostics row passed, any voice
+  failure (the engine stopping, a transcription error, a timeout) still showed
+  "Local voice is not ready yet. Open Settings and select Install Local Voice."
+  The real reason was thrown away. Now the "install" message only appears when
+  voice genuinely isn't installed; every other failure shows the actual cause
+  ("Local voice hit a problem: …") so it can be reported and fixed.
+  Reported in issue #3.
+
 ## 0.20.0 — August 13, 2026
 
 ### Added — the ULTRON orb, and voices that actually move the orbs
